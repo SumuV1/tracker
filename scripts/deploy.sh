@@ -22,7 +22,7 @@ podman container exists postgres || podman run -d --pod db-pod --name postgres -
   -e POSTGRES_PASSWORD="$DB_PASSWORD" \
   -e POSTGRES_DB="$DB_NAME" \
   -v pgdata:/var/lib/postgresql/data:Z \
-  -v "$PWD/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,Z" \
+  -v "$PWD/db/init:/docker-entrypoint-initdb.d:ro,Z" \
   docker.io/library/postgres:16-alpine
 
 echo "▶ Budowa obrazu aplikacji"
