@@ -8,7 +8,7 @@ na świat:
 
 ```
            Sieć lokalna / firmowa
-                   │  :80 / :443
+                   │  :8080 / :8443  (rootless Podman)
           ┌────────▼─────────┐
           │    nginx-pod      │   nginx (TLS self-signed, reverse proxy)
           │  alias: web       │
@@ -25,9 +25,9 @@ na świat:
           └──────────────────┘
 ```
 
-Przeglądarka nie łączy się bezpośrednio z Postgresem, więc pod `app` zawiera cienkie API,
-które udostępnia takie samo interfejs klucz–wartość jak `window.storage` z Claude.ai.
-Dzięki temu Twój komponent React działa **bez zmian**.
+Przeglądarka nie łączy się bezpośrednio z Postgresem, więc pod `app` serwuje
+zbudowany frontend i wystawia API nad tabelami — z logowaniem i danymi
+rozdzielonymi per konto (patrz sekcje 2 i 3).
 
 ---
 
@@ -41,22 +41,33 @@ tracker/
 │   ├── fullchain.pem
 │   └── privkey.pem
 ├── db/
-│   └── init.sql
+│   ├── init/                     # wykonywane przy tworzeniu pustej bazy
+│   │   ├── 01_schema.sql
+│   │   └── 02_seed_foods.sql     # generowany z FOOD_DB, nie edytować ręcznie
+│   └── migrate_kv.sql            # przeniesienie danych ze starego kv_store
 ├── nginx/
 │   └── default.conf.template     # HTTPS (self-signed) + proxy do app
 ├── server/
 │   ├── package.json
-│   └── server.js
+│   ├── server.js                 # montowanie tras, SPA, obsługa błędów
+│   ├── db.js                     # pula połączeń i parsery typów
+│   ├── auth.js                   # scrypt, sesje, limiter logowania
+│   ├── http.js                   # walidacja wejścia
+│   └── routes/                   # habits, profile, foods, meals, anchors
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.js
 │   ├── index.html
 │   └── src/
 │       ├── main.jsx
-│       ├── storage.js         # shim: window.storage → API
-│       └── App.jsx            # ⟵ TWÓJ istniejący komponent, bez zmian
+│       ├── api.js            # klient API (zastąpił shim window.storage)
+│       └── App.jsx
 └── scripts/
     ├── deploy.sh
+    ├── teardown.sh              # odwrotność deploy.sh
+    ├── db-init.sh               # schemat na już działającej bazie
+    ├── create-user.sh           # zakłada konto (rejestracja jest zamknięta)
+    ├── migrate-kv.sh            # kv_store → tabele, dla wskazanego konta
     └── gen-self-signed-cert.sh
 ```
 
@@ -114,42 +125,15 @@ export default defineConfig({
 </html>
 ```
 
-### `frontend/src/storage.js`  ← kluczowa zmiana
-```js
-// Zastępuje window.storage z Claude.ai wywołaniami do własnego API.
-// Zachowuje identyczny interfejs: get / set / delete / list.
-const API = "/api/kv";
+### `frontend/src/api.js`
 
-window.storage = {
-  async get(key) {
-    const r = await fetch(`${API}/${encodeURIComponent(key)}`);
-    if (r.status === 404) return null;
-    if (!r.ok) throw new Error("storage.get failed");
-    return r.json(); // { key, value }
-  },
-  async set(key, value) {
-    const r = await fetch(API, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, value }),
-    });
-    if (!r.ok) throw new Error("storage.set failed");
-    return r.json(); // { key, value }
-  },
-  async delete(key) {
-    const r = await fetch(`${API}/${encodeURIComponent(key)}`, { method: "DELETE" });
-    return r.json(); // { key, deleted }
-  },
-  async list(prefix = "") {
-    const r = await fetch(`${API}?prefix=${encodeURIComponent(prefix)}`);
-    return r.json(); // { keys: [...] }
-  },
-};
-```
+Klient API. Zastąpił shim `window.storage` z czasów artefaktu Claude.ai — dane
+nie są już jednym blobem JSON, tylko zwykłymi zasobami. Wszystkie żądania idą
+z `credentials: "same-origin"`, żeby ciasteczko sesji dojechało do serwera,
+a błędy wracają jako `ApiError` z kodem HTTP.
 
 ### `frontend/src/main.jsx`
 ```js
-import "./storage.js"; // WAŻNE: przed App, aby window.storage istniało
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
@@ -158,11 +142,31 @@ createRoot(document.getElementById("root")).render(<App />);
 ```
 
 ### `frontend/src/App.jsx`
-Wklej tutaj **swój obecny komponent** (ten z zakładkami Nawyki / Kalorie & BMI / Mięśnie / Z dołka) —
-działa bez modyfikacji, bo używa `window.storage`, które dostarcza `storage.js`.
 
-> Uwaga: zakładka „🌍 Wyszukaj online" korzystała z API Claude (`api.anthropic.com`) i **nie zadziała**
-> w samodzielnym wdrożeniu. Zostaw ją wyłączoną lub podepnij własne API wartości odżywczych.
+Cały interfejs w jednym komponencie. Warstwa danych trzyma się kilku zasad:
+
+- **Logowanie jest bramką** — bez ważnej sesji renderuje się `LoginScreen`,
+  reszta aplikacji w ogóle się nie montuje.
+- **Odhaczenie nawyku jest optymistyczne**: stan zmienia się natychmiast,
+  a błąd zapytania cofa go, dociągając odhaczenia z serwera.
+- **Dziennik posiłków nie jest trzymany w całości** — wybrany dzień pobierany
+  jest osobno, a mapa roku dostaje gotowe sumy dzienne policzone w SQL.
+- **Wzorów nie ma po stronie przeglądarki.** BMI, PPM i CPM przychodzą razem
+  z profilem; komponent je wyłącznie wyświetla.
+
+#### Mapa mięśni
+
+Sylwetka jest rysowana wyłącznie dla prawej połowy ciała, lewa powstaje przez
+odbicie względem osi — symetria wynika więc z konstrukcji, nie z pilnowania
+współrzędnych. Kształt mięśnia jest **jednocześnie grafiką i obszarem
+klikalnym**; wcześniej były to dwie niezależne warstwy, które do siebie nie
+pasowały, przez co klikało się obok tego, co widać.
+
+Mięśnie mają przypisaną warstwę anatomiczną (`MUSCLE_LAYER`): 18 powierzchownych
+i 6 głębokich. Przełącznik pokazuje jedną naraz — mięśnie spoza wybranej warstwy
+zostają ledwie widocznym tłem i **nie reagują na kliknięcia**. To rozwiązuje
+problem zasłaniania: zębaty przedni schowany pod piersiowym czy prostownik
+grzbietu pod najszerszym są dostępne bez walki z tym, co leży na wierzchu.
 
 ---
 
@@ -182,97 +186,142 @@ działa bez modyfikacji, bo używa `window.storage`, które dostarcza `storage.j
 }
 ```
 
-### `server/server.js`
-```js
-import express from "express";
-import pg from "pg";
-import path from "path";
-import { fileURLToPath } from "url";
+### Struktura serwera
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const app = express();
-app.use(express.json({ limit: "6mb" }));
-
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-
-async function initDb(retries = 15) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS kv_store (
-          key        text PRIMARY KEY,
-          value      text NOT NULL,
-          updated_at timestamptz NOT NULL DEFAULT now()
-        )`);
-      console.log("DB gotowa");
-      return;
-    } catch (e) {
-      console.log("DB niedostępna, ponawiam...", e.message);
-      await new Promise((r) => setTimeout(r, 3000));
-    }
-  }
-  throw new Error("Nie udało się połączyć z bazą");
-}
-
-// --- API klucz–wartość (odpowiednik window.storage) ---
-app.get("/api/health", (_req, res) => res.json({ ok: true }));
-
-app.get("/api/kv", async (req, res) => {
-  const prefix = req.query.prefix || "";
-  const { rows } = await pool.query(
-    "SELECT key FROM kv_store WHERE key LIKE $1 ORDER BY key",
-    [prefix + "%"]
-  );
-  res.json({ keys: rows.map((r) => r.key) });
-});
-
-app.get("/api/kv/:key", async (req, res) => {
-  const { rows } = await pool.query(
-    "SELECT key, value FROM kv_store WHERE key = $1",
-    [req.params.key]
-  );
-  if (!rows.length) return res.status(404).json({ error: "not found" });
-  res.json(rows[0]);
-});
-
-app.put("/api/kv", async (req, res) => {
-  const { key, value } = req.body || {};
-  if (!key) return res.status(400).json({ error: "key required" });
-  await pool.query(
-    `INSERT INTO kv_store (key, value, updated_at) VALUES ($1, $2, now())
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-    [key, String(value ?? "")]
-  );
-  res.json({ key, value });
-});
-
-app.delete("/api/kv/:key", async (req, res) => {
-  await pool.query("DELETE FROM kv_store WHERE key = $1", [req.params.key]);
-  res.json({ key: req.params.key, deleted: true });
-});
-
-// --- serwowanie zbudowanego frontendu (SPA) ---
-app.use(express.static(path.join(__dirname, "public")));
-app.get("*", (_req, res) =>
-  res.sendFile(path.join(__dirname, "public", "index.html"))
-);
-
-const PORT = process.env.PORT || 3000;
-initDb().then(() => app.listen(PORT, () => console.log("API na :" + PORT)));
 ```
+server/
+├── server.js          # montowanie tras, serwowanie SPA, obsługa błędów
+├── db.js              # pula połączeń, parsery typów, czekanie na bazę
+├── auth.js            # scrypt, sesje, limiter logowania, requireAuth
+├── http.js            # walidacja wejścia i opakowanie handlerów async
+└── routes/
+    ├── habits.js  profile.js  foods.js  meals.js  anchors.js
+```
+
+### Trasy
+
+Wszystko poza `/api/health` i `/api/auth/login` wymaga zalogowania. Każde
+zapytanie filtruje po `user_id` z sesji — próba sięgnięcia po cudzy rekord
+kończy się `404`, a nie `403`, żeby nie potwierdzać, że dany identyfikator
+w ogóle istnieje.
+
+| Metoda | Ścieżka | Działanie |
+|---|---|---|
+| POST | `/api/auth/login` | logowanie, ustawia ciasteczko sesji |
+| POST | `/api/auth/logout` | kasuje bieżącą sesję (pozostałe zostają) |
+| GET | `/api/auth/me` | kim jestem |
+| GET/POST | `/api/habits` | lista / dodanie nawyku |
+| PATCH/DELETE | `/api/habits/:id` | zmiana / usunięcie |
+| GET | `/api/habits/logs?from=&to=` | odhaczenia w zakresie dat |
+| PUT/DELETE | `/api/habits/:id/logs/:day` | odhaczenie / cofnięcie |
+| GET/PUT | `/api/profile` | profil wraz z BMI, PPM i CPM |
+| GET | `/api/foods?q=&category=` | katalog: wspólne + własne |
+| GET | `/api/foods/categories` | kategorie z licznikami |
+| POST/DELETE | `/api/foods`, `/api/foods/:id` | własne produkty |
+| GET/POST | `/api/meals?day=` | dziennik dnia |
+| GET | `/api/meals/daily-totals?year=` | sumy kalorii per dzień |
+| DELETE | `/api/meals/:id` | usunięcie wpisu |
+| GET/POST/DELETE | `/api/anchors` | kotwice |
+| GET | `/api/off/search?q=` | wyszukiwanie w Open Food Facts |
+| POST | `/api/off/import` | pobranie produktu po kodzie i zapis do katalogu |
+
+### Uwierzytelnianie
+
+Sesja to losowy token (32 bajty) w ciasteczku `HttpOnly`, `Secure`,
+`SameSite=Lax`, ważny 30 dni. W bazie leży wyłącznie jego skrót SHA-256 —
+podejrzenie tabeli `sessions` nie wystarczy, żeby podszyć się pod konto.
+Hasła weryfikuje scrypt z wbudowanego `crypto` (zero dodatkowych zależności),
+porównanie przez `timingSafeEqual`.
+
+Logowanie ma limiter: 10 nieudanych prób z jednego adresu w 15 minut i kolejne
+dostają `429`. Odpowiedź jest identyczna dla złego loginu i złego hasła, więc
+formularz nie zdradza, które konta istnieją. Serwer ma ustawione
+`trust proxy`, bo inaczej za nginx-em wszystkie żądania miałyby jeden adres
+i limiter obejmowałby wszystkich naraz.
+
+### Open Food Facts
+
+Wyszukiwanie pełnotekstowe **nie istnieje w API v2** Open Food Facts — służy do
+niego osobna usługa `search.openfoodfacts.org`. Odczyt pojedynczego produktu
+idzie już przez zwykłe API produktowe na `world.openfoodfacts.org`.
+
+Ruch jest reglamentowany po ich stronie: **10 zapytań wyszukiwania i 15 odczytów
+produktu na minutę z adresu IP**. Serwer pyta w imieniu wszystkich użytkowników
+naraz, więc budżet jest wspólny i pilnowany w `routes/off.js` z zapasem (8 i 12).
+Po przekroczeniu klient dostaje `429` z czytelnym komunikatem, zamiast doprowadzać
+do zablokowania całej instancji.
+
+Dwa mechanizmy ograniczają ruch:
+
+- **Cache wyszukiwań** w pamięci (10 minut) — poprawianie frazy i powrót do
+  poprzedniej nie kosztuje już nic.
+- **Tabela `foods` jako cache produktów** — raz zaimportowany produkt zostaje
+  na stałe z `source = 'off'` i kodem kreskowym, i od tej pory znajduje się
+  w zwykłym wyszukiwaniu lokalnym bez ruchu na zewnątrz.
+
+Wartości odżywcze przy imporcie pobiera serwer po kodzie kreskowym — nie
+przyjmuje ich z przeglądarki. Klient wskazuje wyłącznie, który produkt.
+Nagłówek `User-Agent` musi być czystym ASCII: nagłówki HTTP to ByteString,
+więc polski znak w nazwie aplikacji wywraca `fetch`.
+
+### Wartości pochodne
+
+BMI, podstawowa (PPM) i całkowita przemiana materii (CPM) liczone są w
+`routes/profile.js` i wracają razem z profilem. Wzory żyją w jednym miejscu
+po stronie serwera — frontend je tylko wyświetla, zamiast liczyć równolegle.
 
 ---
 
 ## 3. Baza danych (`db-pod`)
 
-### `db/init.sql`
-```sql
-CREATE TABLE IF NOT EXISTS kv_store (
-  key        text PRIMARY KEY,
-  value      text NOT NULL,
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
+Pliki z `db/init/` wykonuje Postgres przy inicjalizacji **pustego** wolumenu.
+Na bazie, która już istnieje, ten sam schemat zakłada `./scripts/db-init.sh`
+(pliki są idempotentne, więc powtórne uruchomienie niczego nie psuje).
+
+### Tabele — `db/init/01_schema.sql`
+
+| Tabela | Zawartość |
+|---|---|
+| `users` | konta: login, hash hasła (scrypt). Rejestracja zamknięta — patrz `create-user.sh` |
+| `sessions` | tokeny sesji z datą wygaśnięcia, kasowalne (wylogowanie działa naprawdę) |
+| `habits` | nawyki: nazwa, kategoria, godzina przypomnienia, kolejność |
+| `habit_logs` | odhaczenia, klucz `(habit_id, day)` — obecność wiersza znaczy „zrobione" |
+| `profiles` | waga, wzrost, wiek, płeć, poziom aktywności — jeden wiersz na konto |
+| `foods` | katalog produktów: `builtin` (wspólne), `custom` (prywatne), `off` (cache OpenFoodFacts) |
+| `meal_entries` | dziennik posiłków — wartości odżywcze zapisane w chwili dodania |
+| `anchors` | kotwice z zakładki „Z dołka" |
+
+Trzy decyzje projektowe, które nie są oczywiste z samego DDL:
+
+- **BMI i przemiana materii nie są przechowywane.** To czyste funkcje pól
+  z `profiles`, liczone przy odczycie. W starym modelu zapisany wynik potrafił
+  rozjechać się z profilem po edycji wagi bez kliknięcia „Oblicz".
+- **`meal_entries` duplikuje wartości odżywcze** zamiast liczyć je z `foods`.
+  To celowe: korekta produktu w katalogu nie może zmieniać tego, co zostało
+  zjedzone w zeszłym miesiącu. `food_id` zostaje wyłącznie jako informacja
+  o pochodzeniu i przechodzi w `NULL`, gdy produkt zniknie z katalogu.
+- **Odhaczenie to jeden wiersz, nie nadpisanie bloba.** W modelu klucz–wartość
+  każde kliknięcie przepisywało całą strukturę nawyków, więc dwa otwarte
+  urządzenia cicho kasowały sobie nawzajem zmiany.
+
+Brak tabeli na odhaczone techniki w „Z dołka" jest zamierzony — struktura
+poziomów zmieni się przy przebudowie zakładki, a klucz oparty o pozycję
+w tablicy technik i tak trafiłby do kosza.
+
+### Konta i przeniesienie danych
+
+```bash
+./scripts/db-init.sh                # schemat (tylko dla istniejącej już bazy)
+./scripts/create-user.sh <login>    # pyta o hasło, zakłada konto
+./scripts/migrate-kv.sh <login>     # przenosi dane z kv_store na to konto
 ```
+
+`migrate-kv.sh` jest idempotentny i **nie kasuje `kv_store`** — stara tabela
+zostaje jako siatka bezpieczeństwa, dopóki aplikacja nie przejdzie na nowe
+tabele i nie potwierdzisz, że komplet danych się zgadza.
+
+Hasła hashuje scrypt z wbudowanego modułu `crypto` Node'a (bez dodatkowych
+zależności), format `scrypt$N$r$p$salt$hash`.
 
 ---
 
@@ -344,6 +393,10 @@ server {
 # Nazwa DNS hosta w Twojej sieci (lub adres IP) — sprawdź: hostname -f
 HOST=host.example.lan
 
+# Porty na hoście — rootless Podman nie zbinduje portów <1024
+HTTP_PORT=8080
+HTTPS_PORT=8443
+
 DB_USER=tracker
 DB_PASSWORD=zmien_to_na_silne_haslo
 DB_NAME=tracker
@@ -354,6 +407,24 @@ DB_NAME=tracker
 - wpis w pliku `hosts` na maszynach klienckich (`C:\Windows\System32\drivers\etc\hosts`
   / `/etc/hosts`), albo
 - po prostu adres IP hosta, jeśli DNS nie jest dostępny.
+
+### Porty a rootless Podman
+
+Podman uruchomiony jako zwykły użytkownik **nie może bindować portów poniżej 1024** —
+pod z `-p 80:80` nie wystartuje (zostaje w stanie `Created` z `internal libpod error`).
+Dlatego domyślnie używamy 8080/8443, a aplikacja jest pod `https://$HOST:$HTTPS_PORT`.
+
+Jeśli chcesz adres bez numeru portu, masz dwie drogi:
+```bash
+# a) obniżenie progu portów uprzywilejowanych (jednorazowo, wymaga sudo)
+sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/99-tracker.conf
+# potem w .env: HTTP_PORT=80 / HTTPS_PORT=443 i ponowne wdrożenie
+
+# b) przekierowanie portów na firewallu, np. firewalld
+sudo firewall-cmd --permanent --add-forward-port=port=443:proto=tcp:toport=8443
+sudo firewall-cmd --reload
+```
 
 ---
 
@@ -417,7 +488,7 @@ podman container exists postgres || podman run -d --pod db-pod --name postgres -
   -e POSTGRES_PASSWORD="$DB_PASSWORD" \
   -e POSTGRES_DB="$DB_NAME" \
   -v pgdata:/var/lib/postgresql/data:Z \
-  -v "$PWD/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,Z" \
+  -v "$PWD/db/init:/docker-entrypoint-initdb.d:ro,Z" \
   docker.io/library/postgres:16-alpine
 
 echo "▶ Budowa obrazu aplikacji"
@@ -438,17 +509,44 @@ fi
 
 echo "▶ nginx-pod (HTTPS, alias: web)"
 podman pod exists nginx-pod || podman pod create --name nginx-pod \
-  --network "${NET}:alias=web" -p 80:80 -p 443:443
+  --network "${NET}:alias=web" -p "${HTTP_PORT}:80" -p "${HTTPS_PORT}:443"
 podman container exists nginx || podman run -d --pod nginx-pod --name nginx --restart=always \
   -e HOST="$HOST" \
+  -e HTTPS_PORT="$HTTPS_PORT" \
   -v "$PWD/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro,Z" \
   -v "$PWD/certs:/etc/nginx/certs:ro,Z" \
   docker.io/library/nginx:alpine
 
-echo "✅ Gotowe: https://$HOST"
+echo "✅ Gotowe: https://$HOST:$HTTPS_PORT"
 echo "   Certyfikat jest self-signed — przeglądarka pokaże ostrzeżenie,"
 echo "   patrz tracker.md, sekcja o zaufaniu certyfikatowi."
 ```
+
+### `scripts/teardown.sh`  (odwrotność `deploy.sh`)
+
+Usuwa to, co utworzył `deploy.sh` — w kolejności odwrotnej do tworzenia:
+
+```bash
+./scripts/teardown.sh            # kontenery, pody, sieć app-net
+./scripts/teardown.sh --purge    # dodatkowo wolumen pgdata, obraz i certs/
+```
+
+Domyślnie **wolumen `pgdata` zostaje nietknięty**, więc `./scripts/deploy.sh`
+odtwarza wdrożenie razem z danymi — to zwykły sposób na restart „od zera"
+po zmianie konfiguracji. `--purge` kasuje bazę bezpowrotnie i dopytuje
+o potwierdzenie (trzeba wpisać `tak`).
+
+Skrypt jest idempotentny: sprawdza `podman pod exists` / `container exists` /
+`network exists` przed każdym usunięciem, więc uruchomiony na czystym systemie
+po prostu nic nie robi. Nie czyta `.env` — nazwy zasobów są stałe, dzięki czemu
+działa nawet gdy `.env` zniknął.
+
+> Uwaga na `pgdata` przy zmianie hasła: Postgres ustawia `POSTGRES_PASSWORD`
+> **tylko przy inicjalizacji pustego katalogu danych**. Jeśli zmienisz
+> `DB_PASSWORD` w `.env`, a wolumen już istnieje, aplikacja dostanie
+> `password authentication failed for user "tracker"`. Wtedy albo
+> `./scripts/teardown.sh --purge`, albo zmiana hasła w samej bazie:
+> `podman exec -it postgres psql -U tracker -c "ALTER USER tracker WITH PASSWORD '...'"`.
 
 Nadaj uprawnienia: `chmod +x scripts/*.sh`
 
@@ -458,15 +556,22 @@ Nadaj uprawnienia: `chmod +x scripts/*.sh`
 
 ```bash
 cp .env.example .env      # uzupełnij HOST (nazwa DNS lub IP hosta) i hasło DB
-./scripts/deploy.sh       # sieć + wolumeny + certyfikat self-signed + 3 pody, od razu HTTPS
+./scripts/deploy.sh       # sieć + wolumen + certyfikat self-signed + 3 pody, od razu HTTPS
 ```
 
 Sprawdzenie:
 ```bash
-podman pod ps
-podman ps --all
-curl -k https://$HOST/api/health     # -k: pomija weryfikację self-signed CA, → {"ok":true}
+podman pod ps                                  # wszystkie trzy pody: Running
+podman logs tracker-app                        # → "DB gotowa" i "API na :3000"
+curl -k https://$HOST:$HTTPS_PORT/api/health   # -k: pomija weryfikację self-signed, → {"ok":true}
+curl -sI http://$HOST:$HTTP_PORT/              # → 301 na https://$HOST:$HTTPS_PORT/
 ```
+
+Usunięcie wdrożenia: `./scripts/teardown.sh` (patrz sekcja 7).
+
+> Jeśli `podman pod ps` pokazuje pod w stanie `Created` zamiast `Running`,
+> najczęstszą przyczyną jest próba zbindowania portu <1024 w trybie rootless —
+> patrz „Porty a rootless Podman" w sekcji 6.
 
 ---
 
