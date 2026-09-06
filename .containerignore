@@ -1,0 +1,7 @@
+# Zależności i wyniki builda z hosta nie mają czego szukać w obrazie —
+# instalowane są w środku, a skopiowane tylko spowalniają build.
+node_modules
+dist
+.env
+certs
+.git
