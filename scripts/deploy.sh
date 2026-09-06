@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+set -a; source .env; set +a
+
+NET=app-net
+
+echo "▶ Sieć"
+podman network exists "$NET" || podman network create "$NET"
+
+echo "▶ Wolumeny"
+for v in pgdata certs certbot-www; do
+  podman volume exists "$v" || podman volume create "$v"
+done
+
+echo "▶ db-pod (PostgreSQL, alias: db)"
+podman pod exists db-pod || podman pod create --name db-pod --network "${NET}:alias=db"
+podman container exists postgres || podman run -d --pod db-pod --name postgres --restart=always \
+  -e POSTGRES_USER="$DB_USER" \
+  -e POSTGRES_PASSWORD="$DB_PASSWORD" \
+  -e POSTGRES_DB="$DB_NAME" \
+  -v pgdata:/var/lib/postgresql/data:Z \
+  -v "$PWD/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,Z" \
+  docker.io/library/postgres:16-alpine
+
+echo "▶ Budowa obrazu aplikacji"
+podman build -t tracker-app -f Containerfile .
+
+echo "▶ app-pod (React + API, alias: app)"
+podman pod exists app-pod || podman pod create --name app-pod --network "${NET}:alias=app"
+podman container exists tracker-app || podman run -d --pod app-pod --name tracker-app --restart=always \
+  -e DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}" \
+  tracker-app
+
+echo "▶ nginx-pod (bootstrap HTTP, alias: web)"
+podman pod exists nginx-pod || podman pod create --name nginx-pod \
+  --network "${NET}:alias=web" -p 80:80 -p 443:443
+podman container exists nginx || podman run -d --pod nginx-pod --name nginx --restart=always \
+  -e DOMAIN="$DOMAIN" \
+  -v "$PWD/nginx/bootstrap.conf.template:/etc/nginx/templates/default.conf.template:ro,Z" \
+  -v certs:/etc/letsencrypt \
+  -v certbot-www:/var/www/certbot \
+  docker.io/library/nginx:alpine
+
+echo "✅ Gotowe. Teraz: ./scripts/issue-cert.sh, potem ./scripts/enable-tls.sh"
