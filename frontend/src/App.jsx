@@ -1,12 +1,25 @@
-// TODO: wklej tutaj swój istniejący komponent Tracker
-// (zakładki: Nawyki / Kalorie & BMI / Mięśnie / Z dołka).
-// Działa bez modyfikacji, bo używa window.storage, które dostarcza storage.js.
-//
-// Uwaga: zakładka „🌍 Wyszukaj online" korzystała z API Claude (api.anthropic.com)
-// i nie zadziała w samodzielnym wdrożeniu. Zostaw ją wyłączoną lub podepnij
-// własne API wartości odżywczych.
-
 import { useState, useEffect, useCallback } from "react";
+import { api } from "./api.js";
+
+// ── RESPONSYWNOŚĆ ─────────────────────────────────────────────────────────
+// Layout jest budowany na stylach inline, więc breakpointy bierzemy z JS
+// przez matchMedia zamiast z arkusza CSS.
+const MOBILE = "(max-width: 640px)";
+const NARROW = "(max-width: 380px)";
+
+function useMedia(query) {
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = e => setMatches(e.matches);
+    setMatches(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+}
 
 const CATEGORIES = [
   { label: "Zdrowie", color: "#4ade80", bg: "#052e16" },
@@ -17,9 +30,6 @@ const CATEGORIES = [
 const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.label, c]));
 const DAY_LABELS = ["N","P","W","Ś","C","P","S"];
 const MONTHS_PL = ["Sty","Lut","Mar","Kwi","Maj","Cze","Lip","Sie","Wrz","Paź","Lis","Gru"];
-const HABIT_KEY = "habit_tracker_v1";
-const BMI_KEY = "bmi_tracker_v1";
-const CUSTOM_KEY = "custom_foods_v1";
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES = ["00","15","30","45"];
 const TILE = 36;
@@ -30,37 +40,80 @@ const getLast7 = () => { const a=[]; for(let i=6;i>=0;i--){const d=new Date();d.
 const getDaysInMonth = (y,m) => { const a=[],d=new Date(y,m,1); while(d.getMonth()===m){a.push(toISO(d));d.setDate(d.getDate()+1);} return a; };
 const getDaysInYear = y => { const a=[],d=new Date(y,0,1); while(d.getFullYear()===y){a.push(toISO(d));d.setDate(d.getDate()+1);} return a; };
 
-const FOOD_DB = {
-  "🥛 Nabiał":[{name:"Mleko 2%",cal:50,p:3.4,c:4.8,f:2,fb:0,s:0.1},{name:"Jogurt naturalny",cal:61,p:3.5,c:4.7,f:3.3,fb:0,s:0.1},{name:"Ser żółty",cal:380,p:25,c:1.3,f:31,fb:0,s:1.8},{name:"Twaróg chudy",cal:98,p:18,c:3.5,f:1,fb:0,s:0.1},{name:"Masło",cal:717,p:0.9,c:0.1,f:81,fb:0,s:0.1},{name:"Kefir",cal:52,p:3.3,c:4.5,f:2,fb:0,s:0.1},{name:"Mozzarella",cal:280,p:22,c:2.2,f:22,fb:0,s:0.6}],
-  "🥩 Mięso":[{name:"Kurczak pierś",cal:165,p:31,c:0,f:3.6,fb:0,s:0.1},{name:"Wołowina (mielona)",cal:250,p:26,c:0,f:17,fb:0,s:0.1},{name:"Wieprzowina (schab)",cal:212,p:23,c:0,f:13,fb:0,s:0.1},{name:"Indyk pierś",cal:155,p:30,c:0,f:3,fb:0,s:0.1},{name:"Boczek",cal:541,p:17,c:0.7,f:53,fb:0,s:2},{name:"Szynka gotowana",cal:145,p:18,c:1.5,f:7,fb:0,s:2},{name:"Kiełbasa",cal:301,p:14,c:1.8,f:27,fb:0,s:2.2}],
-  "🐟 Ryby":[{name:"Łosoś",cal:208,p:20,c:0,f:13,fb:0,s:0.1},{name:"Tuńczyk (puszka)",cal:116,p:26,c:0,f:1,fb:0,s:0.8},{name:"Dorsz",cal:82,p:18,c:0,f:0.7,fb:0,s:0.2},{name:"Makrela",cal:205,p:19,c:0,f:14,fb:0,s:0.3},{name:"Krewetki",cal:99,p:24,c:0.2,f:0.3,fb:0,s:0.5}],
-  "🥦 Warzywa":[{name:"Brokuły",cal:34,p:2.8,c:6.6,f:0.4,fb:2.6,s:0.08},{name:"Marchew",cal:41,p:0.9,c:9.6,f:0.2,fb:2.8,s:0.16},{name:"Ziemniaki",cal:77,p:2,c:17,f:0.1,fb:2.2,s:0.01},{name:"Pomidor",cal:18,p:0.9,c:3.9,f:0.2,fb:1.2,s:0.01},{name:"Szpinak",cal:23,p:2.9,c:3.6,f:0.4,fb:2.2,s:0.2},{name:"Papryka czerwona",cal:31,p:1,c:6,f:0.3,fb:2.1,s:0.01},{name:"Sałata",cal:15,p:1.4,c:2.9,f:0.2,fb:1.3,s:0.03}],
-  "🍎 Owoce":[{name:"Jabłko",cal:52,p:0.3,c:14,f:0.2,fb:2.4,s:0},{name:"Banan",cal:89,p:1.1,c:23,f:0.3,fb:2.6,s:0},{name:"Pomarańcza",cal:47,p:0.9,c:12,f:0.1,fb:2.4,s:0},{name:"Truskawki",cal:32,p:0.7,c:7.7,f:0.3,fb:2,s:0},{name:"Winogrona",cal:67,p:0.6,c:17,f:0.4,fb:0.9,s:0},{name:"Mango",cal:60,p:0.8,c:15,f:0.4,fb:1.6,s:0}],
-  "🌾 Zboża":[{name:"Ryż biały (suchy)",cal:365,p:7,c:80,f:0.7,fb:1.3,s:0.01},{name:"Makaron (suchy)",cal:370,p:13,c:75,f:1.5,fb:3.2,s:0.02},{name:"Chleb pszenny",cal:265,p:9,c:49,f:3.2,fb:2.7,s:1.2},{name:"Płatki owsiane",cal:389,p:17,c:66,f:7,fb:10,s:0.02},{name:"Kasza gryczana",cal:335,p:13,c:71,f:3.4,fb:10,s:0.01}],
-  "🥚 Inne":[{name:"Jajko kurze",cal:155,p:13,c:1.1,f:11,fb:0,s:0.3},{name:"Tofu",cal:76,p:8,c:1.9,f:4.8,fb:0.9,s:0.01},{name:"Oliwa z oliwek",cal:884,p:0,c:0,f:100,fb:0,s:0},{name:"Orzech włoski",cal:654,p:15,c:14,f:65,fb:6.7,s:0},{name:"Migdały",cal:579,p:21,c:22,f:50,fb:12.5,s:0.01}],
-};
-const ALL_FOODS = Object.entries(FOOD_DB).flatMap(([cat,items])=>items.map(i=>({...i,category:cat})));
+// Katalog produktów żyje w tabeli foods (baza wbudowana + własne + Open Food Facts).
 
-function calcBMI(w,h){return w/((h/100)**2);}
 function getBMILabel(bmi){
   if(bmi<18.5)return{label:"Niedowaga",color:"#3b82f6"};
   if(bmi<25)return{label:"Norma",color:"#22c55e"};
   if(bmi<30)return{label:"Nadwaga",color:"#f59e0b"};
   return{label:"Otyłość",color:"#ef4444"};
 }
-function calcTDEE(w,h,age,sex,activity){
-  const bmr=sex==="M"?10*w+6.25*h-5*age+5:10*w+6.25*h-5*age-161;
-  return Math.round(bmr*[1.2,1.375,1.55,1.725,1.9][activity]);
+// Etykiety poziomów aktywności. Same współczynniki i wzory należą do serwera —
+// tutaj są tylko po to, żeby opisać pozycje listy wyboru.
+const ACTIVITY = [
+  {factor:1.2,   label:"siedzący",             option:"🛋️ Siedzący"},
+  {factor:1.375, label:"lekko aktywny",        option:"🚶 Lekko aktywny (1-3 dni/tydz.)"},
+  {factor:1.55,  label:"umiarkowanie aktywny", option:"🏃 Umiarkowanie aktywny (3-5 dni/tydz.)"},
+  {factor:1.725, label:"bardzo aktywny",       option:"💪 Bardzo aktywny (6-7 dni/tydz.)"},
+  {factor:1.9,   label:"ekstremalnie aktywny", option:"🏋️ Ekstremalnie aktywny"},
+];
+
+
+// Wzory pod wynikami. Wszystkie liczby — łącznie z PPM i współczynnikiem —
+// pochodzą z odpowiedzi serwera, więc działanie nie może rozminąć się z wynikiem.
+function FormulaPanel({profile}){
+  const {weightKg:w, heightCm:h, ageYears:age, sex, bmi, bmr, tdee, activityFactor:factor}=profile;
+  const act=ACTIVITY[profile.activity]||ACTIVITY[0];
+  const n=v=>String(Math.round(v*100)/100).replace(".",",");
+  const mono={fontFamily:"monospace",fontSize:12.5,color:"#bbb",lineHeight:1.9,whiteSpace:"nowrap"};
+  const res={color:"#fff",fontWeight:700};
+  const head={fontSize:11,fontWeight:700,letterSpacing:"0.08em",color:"#667eea",marginBottom:6,fontFamily:"monospace"};
+  const note={fontSize:11,color:"#666",marginBottom:8,lineHeight:1.5};
+  return(
+    <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,marginTop:12}}>
+      <div style={{fontSize:14,fontWeight:700,color:"#ccc",marginBottom:16}}>Jak to policzono</div>
+
+      <div style={{marginBottom:18}}>
+        <div style={head}>BMI</div>
+        <div style={note}>Wskaźnik masy ciała — masa podzielona przez kwadrat wzrostu w metrach.</div>
+        <div style={{overflowX:"auto"}}>
+          <div style={mono}>BMI = waga [kg] / (wzrost [m])²</div>
+          <div style={mono}>{"    "}= {n(w)} / {n(h/100)}² = <span style={res}>{bmi.toFixed(1)}</span></div>
+        </div>
+      </div>
+
+      <div style={{marginBottom:18}}>
+        <div style={head}>PPM — PODSTAWOWA PRZEMIANA MATERII</div>
+        <div style={note}>Wzór Mifflina-St Jeora ({sex==="M"?"mężczyzna":"kobieta"}) — energia zużywana przez organizm w spoczynku.</div>
+        <div style={{overflowX:"auto"}}>
+          <div style={mono}>PPM = 10×waga + 6,25×wzrost − 5×wiek {sex==="M"?"+ 5":"− 161"}</div>
+          <div style={mono}>{"    "}= 10×{n(w)} + 6,25×{n(h)} − 5×{n(age)} {sex==="M"?"+ 5":"− 161"}</div>
+          <div style={mono}>{"    "}= <span style={res}>{bmr} kcal</span></div>
+        </div>
+      </div>
+
+      <div>
+        <div style={head}>CPM — CAŁKOWITA PRZEMIANA MATERII</div>
+        <div style={note}>PPM przemnożona przez współczynnik aktywności ({act.label} = {n(factor)}). To jest dzienne zapotrzebowanie.</div>
+        <div style={{overflowX:"auto"}}>
+          <div style={mono}>CPM = PPM × współczynnik aktywności</div>
+          <div style={mono}>{"    "}= {bmr} × {n(factor)} = <span style={res}>{tdee} kcal</span></div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function makeSel(active){return{background:active?"#fff":"#1a1a1a",color:active?"#000":"#aaa",border:"none",borderRadius:7,cursor:"pointer",fontWeight:active?700:400,fontSize:13,textAlign:"center",width:TILE,height:TILE,flexShrink:0,transition:"background 0.15s"};}
 
 function TimePicker({value,onChange,onClose,onRemove}){
+  const isMobile=useMedia(MOBILE);
   const [h,setH]=useState(value?value.split(":")[0]:"08");
   const [m,setM]=useState(value?value.split(":")[1]:"00");
   const btn=extra=>({borderRadius:10,cursor:"pointer",fontSize:14,fontWeight:700,padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,width:"100%",border:"none",...extra});
   return(
-    <div style={{marginLeft:42,display:"flex",gap:12,alignItems:"center"}}>
+    // na wąskim ekranie siatka godzin i przyciski nie zmieszczą się obok siebie
+    <div style={{marginLeft:isMobile?0:42,display:"flex",flexDirection:isMobile?"column":"row",gap:12,alignItems:isMobile?"stretch":"center"}}>
       <div style={{background:"#111",border:"1px solid #2a2a2a",borderRadius:12,padding:3,display:"inline-block",flexShrink:0}}>
         <div style={{display:"flex",gap:3}}>
           <div style={{display:"grid",gridTemplateColumns:`repeat(4,${TILE}px)`,gap:3}}>
@@ -156,7 +209,7 @@ function YearView({habitId,logs,color}){
         <span style={{fontSize:13,fontWeight:600,color:"#ccc"}}>{year} — {rate}% ({done}/{days.length})</span>
         <button onClick={()=>setYear(y=>y+1)} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:"0 6px"}}>›</button>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))",gap:6}}>
         {byMonth.map((mDays,mi)=>{
           const mDone=mDays.filter(d=>logs[`${habitId}_${d}`]).length;
           const mRate=mDays.length?mDone/mDays.length:0;
@@ -211,7 +264,7 @@ function CalYearView({calLogs,tdee}){
           ))}
         </div>
       )}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))",gap:6}}>
         {byMonth.map((mDays,mi)=>{
           const mCal=mDays.reduce((s,d)=>s+(calLogs[d]||0),0);
           return(
@@ -261,116 +314,104 @@ const MUSCLES = {
 };
 
 const BODY_SVG_MARKUP = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 780" width="100%" height="100%">
   <defs>
-    <linearGradient id="mmMuscleGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#b83b3b"/><stop offset="50%" stop-color="#962d2d"/><stop offset="100%" stop-color="#731f1f"/></linearGradient>
-    <linearGradient id="mmLightGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#d65151"/><stop offset="60%" stop-color="#b83b3b"/><stop offset="100%" stop-color="#8a2626"/></linearGradient>
-    <linearGradient id="mmDarkGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#872525"/><stop offset="70%" stop-color="#611818"/><stop offset="100%" stop-color="#421010"/></linearGradient>
-    <linearGradient id="mmTendonGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#f0f2f5"/><stop offset="50%" stop-color="#d2d7df"/><stop offset="100%" stop-color="#b0b7c2"/></linearGradient>
+    <linearGradient id="mmBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22222a"/><stop offset="100%" stop-color="#15151a"/>
+    </linearGradient>
   </defs>
-  <rect width="1000" height="700" fill="#161616"/>
-  <g id="mm-front-body">
-    <path d="M280,90 Q250,90 245,120 Q220,140 200,160 Q175,190 160,250 Q150,300 170,360 Q180,380 180,420 Q170,500 185,600 L210,610 L220,590 Q240,490 255,440 L280,440 L305,440 Q320,490 340,590 L350,610 L375,600 Q390,500 380,420 Q380,380 390,360 Q410,300 400,250 Q385,190 360,160 Q340,140 315,120 Q310,90 280,90 Z" fill="#2d1919" stroke="#ff4a4a" stroke-width="0.5" opacity="0.3"/>
-    <ellipse cx="280" cy="115" rx="22" ry="25" fill="url(#mmDarkGrad)"/>
-    <path d="M265,135 Q255,165 245,175 L260,175 Q270,155 275,140 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M295,135 Q305,165 315,175 L300,175 Q290,155 285,140 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M275,140 L285,140 L280,175 Z" fill="url(#mmDarkGrad)"/>
-    <path d="M245,175 Q215,175 205,195 Q195,215 205,235 L225,210 Q240,190 255,180 Z" fill="url(#mmLightGrad)"/>
-    <path d="M315,175 Q345,175 355,195 Q365,215 355,235 L335,210 Q320,190 305,180 Z" fill="url(#mmLightGrad)"/>
-    <path d="M280,180 Q240,175 220,195 Q215,215 225,245 Q255,245 280,215 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M280,180 Q320,175 340,195 Q345,215 335,245 Q305,245 280,215 Z" fill="url(#mmMuscleGrad)"/>
-    <rect x="258" y="250" width="20" height="22" rx="3" fill="url(#mmLightGrad)"/>
-    <rect x="282" y="250" width="20" height="22" rx="3" fill="url(#mmLightGrad)"/>
-    <rect x="259" y="275" width="19" height="24" rx="3" fill="url(#mmLightGrad)"/>
-    <rect x="282" y="275" width="19" height="24" rx="3" fill="url(#mmLightGrad)"/>
-    <rect x="261" y="302" width="18" height="26" rx="3" fill="url(#mmMuscleGrad)"/>
-    <rect x="281" y="302" width="18" height="26" rx="3" fill="url(#mmMuscleGrad)"/>
-    <line x1="280" y1="245" x2="280" y2="335" stroke="#eef2f7" stroke-width="2" stroke-dasharray="2,2" opacity="0.7"/>
-    <path d="M220,225 Q210,250 215,280 Q230,310 255,325 L255,250 Z" fill="url(#mmDarkGrad)"/>
-    <path d="M340,225 Q350,250 345,280 Q330,310 305,325 L305,250 Z" fill="url(#mmDarkGrad)"/>
-    <path d="M205,235 Q195,265 190,295 L210,295 Q220,265 225,245 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M355,235 Q365,265 370,295 L350,295 Q340,265 335,245 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M190,295 Q175,340 180,375 L195,370 Q195,330 210,295 Z" fill="url(#mmLightGrad)"/>
-    <path d="M370,295 Q385,340 380,375 L365,370 Q365,330 350,295 Z" fill="url(#mmLightGrad)"/>
-    <path d="M235,325 Q235,355 250,365 L280,340 L235,325 Z" fill="url(#mmDarkGrad)"/>
-    <path d="M325,325 Q325,355 310,365 L280,340 L325,325 Z" fill="url(#mmDarkGrad)"/>
-    <path d="M230,360 Q215,410 220,465 L245,465 Q245,410 255,363 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M255,363 Q250,410 245,450 L260,450 Q265,410 270,367 Z" fill="url(#mmLightGrad)"/>
-    <path d="M270,367 Q270,410 260,455 L272,460 Q285,420 282,372 Z" fill="url(#mmDarkGrad)"/>
-    <path d="M330,360 Q345,410 340,465 L315,465 Q315,410 305,363 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M305,363 Q310,410 315,450 L300,450 Q295,410 290,367 Z" fill="url(#mmLightGrad)"/>
-    <path d="M290,367 Q290,410 300,455 L288,460 Q275,420 278,372 Z" fill="url(#mmDarkGrad)"/>
-    <path d="M235,485 Q225,530 230,580 L245,585 Q250,530 252,485 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M252,485 Q255,520 262,560 L252,565 Z" fill="url(#mmLightGrad)"/>
-    <path d="M325,485 Q335,530 330,580 L315,585 Q310,530 308,485 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M308,485 Q305,520 298,560 L308,565 Z" fill="url(#mmLightGrad)"/>
-  </g>
-  <g id="mm-back-body">
-    <path d="M720,90 Q690,90 685,120 Q660,140 640,160 Q615,190 600,250 Q590,300 610,360 Q620,380 620,420 Q610,500 625,600 L650,610 L660,590 Q680,490 695,440 L720,440 L745,440 Q760,490 780,590 L790,610 L815,600 Q830,500 820,420 Q820,380 830,360 Q850,300 840,250 Q825,190 800,160 Q780,140 755,120 Q750,90 720,90 Z" fill="#2d1919" stroke="#ff4a4a" stroke-width="0.5" opacity="0.3"/>
-    <ellipse cx="720" cy="115" rx="22" ry="25" fill="url(#mmDarkGrad)"/>
-    <path d="M720,130 L740,165 L770,180 Q740,210 720,255 Q700,210 670,180 L700,165 Z" fill="url(#mmLightGrad)"/>
-    <path d="M685,175 Q660,175 645,195 Q635,215 645,235 L665,220 Q675,200 685,178 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M755,175 Q780,175 795,195 Q805,215 795,235 L775,220 Q765,200 755,178 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M720,255 Q685,220 655,235 Q645,260 650,300 Q685,320 720,325 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M720,255 Q755,220 785,235 Q795,260 790,300 Q755,320 720,325 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M705,255 L735,255 L730,330 L710,330 Z" fill="url(#mmDarkGrad)"/>
-    <path d="M645,235 Q635,265 630,295 L650,295 Q655,270 665,220 Z" fill="url(#mmLightGrad)"/>
-    <path d="M795,235 Q805,265 810,295 L790,295 Q785,270 775,220 Z" fill="url(#mmLightGrad)"/>
-    <path d="M630,295 Q615,340 620,375 L635,370 Q635,330 650,295 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M810,295 Q825,340 820,375 L805,370 Q805,330 790,295 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M668,355 Q655,385 680,415 Q710,415 720,370 Q720,340 695,345 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M772,355 Q785,385 760,415 Q730,415 720,370 Q720,340 745,345 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M665,410 Q655,445 660,470 L685,468 Q680,440 685,412 Z" fill="url(#mmDarkGrad)"/>
-    <path d="M685,412 Q680,440 685,468 L710,465 Q710,435 712,412 Z" fill="url(#mmLightGrad)"/>
-    <path d="M775,410 Q785,445 780,470 L755,468 Q760,440 755,412 Z" fill="url(#mmDarkGrad)"/>
-    <path d="M755,412 Q760,440 755,468 L730,465 Q730,435 728,412 Z" fill="url(#mmLightGrad)"/>
-    <path d="M670,490 Q655,515 665,545 L688,540 Q688,515 688,490 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M688,490 Q688,515 688,540 L702,535 Q702,510 698,490 Z" fill="url(#mmLightGrad)"/>
-    <path d="M770,490 Q785,515 775,545 L752,540 Q752,515 752,490 Z" fill="url(#mmMuscleGrad)"/>
-    <path d="M752,490 Q752,515 752,540 L738,535 Q738,510 742,490 Z" fill="url(#mmLightGrad)"/>
-  </g>
+  <rect width="900" height="780" fill="#121215"/>
+  <path d="M 200.0,26 Q 232.0,26 236.0,62 Q 238.0,88 226.0,102 Q 214.0,114 200.0,114 L 200.0,26 Z" fill="url(#mmBody)"/><path d="M 200.0,26 Q 168.0,26 164.0,62 Q 162.0,88 174.0,102 Q 186.0,114 200.0,114 L 200.0,26 Z" fill="url(#mmBody)"/><path d="M 200.0,108 L 219.0,108 L 222.0,138 L 200.0,142 Z" fill="url(#mmBody)"/><path d="M 200.0,108 L 181.0,108 L 178.0,138 L 200.0,142 Z" fill="url(#mmBody)"/><path d="M 200.0,132 Q 232.0,136 250.0,148 Q 264.0,156 268.0,180 L 272.0,236 Q 270.0,268 262.0,296 L 258.0,330 Q 262.0,356 260.0,384 L 254.0,412 L 200.0,420 Z" fill="url(#mmBody)"/><path d="M 200.0,132 Q 168.0,136 150.0,148 Q 136.0,156 132.0,180 L 128.0,236 Q 130.0,268 138.0,296 L 142.0,330 Q 138.0,356 140.0,384 L 146.0,412 L 200.0,420 Z" fill="url(#mmBody)"/><path d="M 252.0,146 Q 278.0,154 286.0,180 L 294.0,238 Q 298.0,268 302.0,300 L 310.0,352 Q 316.0,392 318.0,424 L 322.0,452 Q 330.0,470 324.0,486 Q 314.0,496 304.0,488 L 296.0,462 L 288.0,424 L 280.0,352 L 272.0,300 L 266.0,238 L 262.0,180 Z" fill="url(#mmBody)"/><path d="M 148.0,146 Q 122.0,154 114.0,180 L 106.0,238 Q 102.0,268 98.0,300 L 90.0,352 Q 84.0,392 82.0,424 L 78.0,452 Q 70.0,470 76.0,486 Q 86.0,496 96.0,488 L 104.0,462 L 112.0,424 L 120.0,352 L 128.0,300 L 134.0,238 L 138.0,180 Z" fill="url(#mmBody)"/><path d="M 200.0,414 L 254.0,408 Q 262.0,448 260.0,486 L 252.0,548 Q 248.0,574 246.0,596 L 242.0,652 Q 238.0,700 236.0,716 Q 246.0,726 248.0,740 L 246.0,752 L 214.0,752 L 212.0,716 L 210.0,652 L 208.0,596 L 206.0,548 L 202.0,486 Z" fill="url(#mmBody)"/><path d="M 200.0,414 L 146.0,408 Q 138.0,448 140.0,486 L 148.0,548 Q 152.0,574 154.0,596 L 158.0,652 Q 162.0,700 164.0,716 Q 154.0,726 152.0,740 L 154.0,752 L 186.0,752 L 188.0,716 L 190.0,652 L 192.0,596 L 194.0,548 L 198.0,486 Z" fill="url(#mmBody)"/>
+  <path d="M 700.0,26 Q 732.0,26 736.0,62 Q 738.0,88 726.0,102 Q 714.0,114 700.0,114 L 700.0,26 Z" fill="url(#mmBody)"/><path d="M 700.0,26 Q 668.0,26 664.0,62 Q 662.0,88 674.0,102 Q 686.0,114 700.0,114 L 700.0,26 Z" fill="url(#mmBody)"/><path d="M 700.0,108 L 719.0,108 L 722.0,138 L 700.0,142 Z" fill="url(#mmBody)"/><path d="M 700.0,108 L 681.0,108 L 678.0,138 L 700.0,142 Z" fill="url(#mmBody)"/><path d="M 700.0,132 Q 732.0,136 750.0,148 Q 764.0,156 768.0,180 L 772.0,236 Q 770.0,268 762.0,296 L 758.0,330 Q 762.0,356 760.0,384 L 754.0,412 L 700.0,420 Z" fill="url(#mmBody)"/><path d="M 700.0,132 Q 668.0,136 650.0,148 Q 636.0,156 632.0,180 L 628.0,236 Q 630.0,268 638.0,296 L 642.0,330 Q 638.0,356 640.0,384 L 646.0,412 L 700.0,420 Z" fill="url(#mmBody)"/><path d="M 752.0,146 Q 778.0,154 786.0,180 L 794.0,238 Q 798.0,268 802.0,300 L 810.0,352 Q 816.0,392 818.0,424 L 822.0,452 Q 830.0,470 824.0,486 Q 814.0,496 804.0,488 L 796.0,462 L 788.0,424 L 780.0,352 L 772.0,300 L 766.0,238 L 762.0,180 Z" fill="url(#mmBody)"/><path d="M 648.0,146 Q 622.0,154 614.0,180 L 606.0,238 Q 602.0,268 598.0,300 L 590.0,352 Q 584.0,392 582.0,424 L 578.0,452 Q 570.0,470 576.0,486 Q 586.0,496 596.0,488 L 604.0,462 L 612.0,424 L 620.0,352 L 628.0,300 L 634.0,238 L 638.0,180 Z" fill="url(#mmBody)"/><path d="M 700.0,414 L 754.0,408 Q 762.0,448 760.0,486 L 752.0,548 Q 748.0,574 746.0,596 L 742.0,652 Q 738.0,700 736.0,716 Q 746.0,726 748.0,740 L 746.0,752 L 714.0,752 L 712.0,716 L 710.0,652 L 708.0,596 L 706.0,548 L 702.0,486 Z" fill="url(#mmBody)"/><path d="M 700.0,414 L 646.0,408 Q 638.0,448 640.0,486 L 648.0,548 Q 652.0,574 654.0,596 L 658.0,652 Q 662.0,700 664.0,716 Q 654.0,726 652.0,740 L 654.0,752 L 686.0,752 L 688.0,716 L 690.0,652 L 692.0,596 L 694.0,548 L 698.0,486 Z" fill="url(#mmBody)"/>
 </svg>`;
 
-const FRONT_PATHS = {
-  deltoid_front:["M245,175 Q215,175 205,195 Q195,215 205,235 L225,210 Q240,190 255,180 Z","M315,175 Q345,175 355,195 Q365,215 355,235 L335,210 Q320,190 305,180 Z"],
-  pectoralis:["M280,180 Q240,175 220,195 Q215,215 225,245 Q255,245 280,215 Z","M280,180 Q320,175 340,195 Q345,215 335,245 Q305,245 280,215 Z"],
-  biceps:["M205,235 Q195,265 190,295 L210,295 Q220,265 225,245 Z","M355,235 Q365,265 370,295 L350,295 Q340,265 335,245 Z"],
-  forearm_front:["M190,295 Q175,340 180,375 L195,370 Q195,330 210,295 Z","M370,295 Q385,340 380,375 L365,370 Q365,330 350,295 Z"],
-  serratus:["M220,225 Q210,250 215,280 Q230,310 255,325 L255,250 Z","M340,225 Q350,250 345,280 Q330,310 305,325 L305,250 Z"],
-  rectus_abdominis:["M258,250 L278,250 L278,272 L258,272 Z M282,250 L302,250 L302,272 L282,272 Z M259,275 L278,275 L278,299 L259,299 Z M282,275 L301,275 L301,299 L282,299 Z M261,302 L279,302 L279,328 L261,328 Z M281,302 L299,302 L299,328 L281,328 Z"],
-  obliques:["M220,225 Q215,215 225,245 L255,250 L255,325 Q235,325 235,360 L230,360 Q215,410 220,465 L225,465 Q225,360 240,340 Z","M340,225 Q345,215 335,245 L305,250 L305,325 Q325,325 325,360 L330,360 Q345,410 340,465 L335,465 Q335,360 320,340 Z"],
-  quadriceps:["M230,360 Q215,410 220,465 L245,465 Q245,410 255,363 Z M255,363 Q250,410 245,450 L260,450 Q265,410 270,367 Z M270,367 Q270,410 260,455 L272,460 Q285,420 282,372 Z","M330,360 Q345,410 340,465 L315,465 Q315,410 305,363 Z M305,363 Q310,410 315,450 L300,450 Q295,410 290,367 Z M290,367 Q290,410 300,455 L288,460 Q275,420 278,372 Z"],
-  adductors:["M235,325 Q235,355 250,365 L280,340 L235,325 Z","M325,325 Q325,355 310,365 L280,340 L325,325 Z"],
-  sternocleidomastoid:["M265,128 C264,135 262,145 263,155 L267,175 L275,173 C274,160 273,148 272,137 Z","M295,128 C296,135 298,145 297,155 L293,175 L285,173 C286,160 287,148 288,137 Z"],
-  scalenes:["M253,132 C248,140 246,152 248,165 L256,172 L260,160 C258,148 256,138 255,132 Z","M307,132 C312,140 314,152 312,165 L304,172 L300,160 C302,148 304,138 305,132 Z"],
-  platysma:["M260,130 C258,138 257,148 258,158 L260,172 L300,172 L302,158 C303,148 302,138 300,130 C292,126 268,126 260,130 Z"],
-  tibialis:["M235,485 Q225,530 230,580 L245,585 Q250,530 252,485 Z M252,485 Q255,520 262,560 L252,565 Z","M325,485 Q335,530 330,580 L315,585 Q310,530 308,485 Z M308,485 Q305,520 298,560 L308,565 Z"],
-};
-const BACK_PATHS = {
-  trapezius:["M720,130 L740,165 L770,180 Q740,210 720,255 Q700,210 670,180 L700,165 Z"],
-  deltoid_back:["M685,175 Q660,175 645,195 Q635,215 645,235 L665,220 Q675,200 685,178 Z","M755,175 Q780,175 795,195 Q805,215 795,235 L775,220 Q765,200 755,178 Z"],
-  infraspinatus:["M720,255 Q685,220 655,235 Q645,260 650,300 Q685,320 720,325 Z","M720,255 Q755,220 785,235 Q795,260 790,300 Q755,320 720,325 Z"],
-  triceps:["M645,235 Q635,265 630,295 L650,295 Q655,270 665,220 Z M630,295 Q615,340 620,375 L635,370 Q635,330 650,295 Z","M795,235 Q805,265 810,295 L790,295 Q785,270 775,220 Z M810,295 Q825,340 820,375 L805,370 Q805,330 790,295 Z"],
-  forearm_back:["M630,295 Q615,340 620,375 L635,370 Q635,330 650,295 Z","M810,295 Q825,340 820,375 L805,370 Q805,330 790,295 Z"],
-  latissimus:["M655,235 Q645,260 650,300 Q685,320 720,325 Q720,340 695,345 Q668,355 655,385 Q680,415 710,415 L720,370 Z","M785,235 Q795,260 790,300 Q755,320 720,325 Q720,340 745,345 Q772,355 785,385 Q760,415 730,415 L720,370 Z"],
-  erector_spinae:["M705,255 L735,255 L730,330 L710,330 Z M695,310 L745,310 L735,345 L705,345 Z"],
-  gluteus:["M668,355 Q655,385 680,415 Q710,415 720,370 Q720,340 695,345 Z","M772,355 Q785,385 760,415 Q730,415 720,370 Q720,340 745,345 Z"],
-  hamstrings:["M665,410 Q655,445 660,470 L685,468 Q680,440 685,412 Z M685,412 Q680,440 685,468 L710,465 Q710,435 712,412 Z","M775,410 Q785,445 780,470 L755,468 Q760,440 755,412 Z M755,412 Q760,440 755,468 L730,465 Q730,435 728,412 Z"],
-  gastrocnemius:["M670,490 Q655,515 665,545 L688,540 Q688,515 688,490 Z M688,490 Q688,515 688,540 L702,535 Q702,510 698,490 Z","M770,490 Q785,515 775,545 L752,540 Q752,515 752,490 Z M752,490 Q752,515 752,540 L738,535 Q738,510 742,490 Z"],
+// Warstwa anatomiczna: "deep" leży pod "surface". Przełącznik w interfejsie
+// pokazuje jedną naraz, dzięki czemu mięśnie głębokie przestają być zasłonięte.
+const MUSCLE_LAYER = {
+  platysma:"surface",
+  sternocleidomastoid:"deep",
+  scalenes:"deep",
+  deltoid_front:"surface",
+  pectoralis:"surface",
+  serratus:"deep",
+  rectus_abdominis:"surface",
+  obliques:"surface",
+  biceps:"surface",
+  forearm_front:"surface",
+  quadriceps:"surface",
+  sartorius:"surface",
+  adductors:"deep",
+  tibialis:"surface",
+  trapezius:"surface",
+  deltoid_back:"surface",
+  infraspinatus:"deep",
+  latissimus:"surface",
+  erector_spinae:"deep",
+  triceps:"surface",
+  forearm_back:"surface",
+  gluteus:"surface",
+  hamstrings:"surface",
+  gastrocnemius:"surface",
 };
 
-function BodySVG({selected,hovered,onHover,onClick}){
-  const allPaths=[...Object.entries(FRONT_PATHS).map(([id,dArr])=>({id,dArr})),...Object.entries(BACK_PATHS).map(([id,dArr])=>({id,dArr}))];
+const FRONT_PATHS = {
+  platysma:["M 200.0,110 L 216.0,110 Q 223.0,126 221.0,144 L 206.0,148 L 200.0,147 Z","M 200.0,110 L 184.0,110 Q 177.0,126 179.0,144 L 194.0,148 L 200.0,147 Z"],
+  sternocleidomastoid:["M 201.0,112 Q 213.0,118 214.0,133 Q 212.0,144 205.0,148 L 200.0,147 Q 204.0,130 200.0,113 Z","M 199.0,112 Q 187.0,118 186.0,133 Q 188.0,144 195.0,148 L 200.0,147 Q 196.0,130 200.0,113 Z"],
+  scalenes:["M 213.0,119 Q 222.0,129 221.0,143 L 214.0,145 Q 215.0,132 209.0,123 Z","M 187.0,119 Q 178.0,129 179.0,143 L 186.0,145 Q 185.0,132 191.0,123 Z"],
+  deltoid_front:["M 234.0,146 Q 266.0,152 282.0,184 L 288.0,214 Q 272.0,225 258.0,214 L 250.0,176 Q 243.0,156 234.0,146 Z","M 166.0,146 Q 134.0,152 118.0,184 L 112.0,214 Q 128.0,225 142.0,214 L 150.0,176 Q 157.0,156 166.0,146 Z"],
+  pectoralis:["M 205.0,150 L 236.0,147 Q 252.0,159 254.0,183 Q 249.0,208 229.0,219 L 205.0,222 Z","M 195.0,150 L 164.0,147 Q 148.0,159 146.0,183 Q 151.0,208 171.0,219 L 195.0,222 Z"],
+  serratus:["M 234.0,224 L 250.0,215 L 254.0,229 L 244.0,233 L 254.0,239 L 244.0,245 L 254.0,251 L 248.0,264 L 234.0,256 Z","M 166.0,224 L 150.0,215 L 146.0,229 L 156.0,233 L 146.0,239 L 156.0,245 L 146.0,251 L 152.0,264 L 166.0,256 Z"],
+  rectus_abdominis:["M 204.0,226 L 231.0,222 Q 233.0,284 227.0,330 L 220.0,358 L 204.0,360 Z","M 196.0,226 L 169.0,222 Q 167.0,284 173.0,330 L 180.0,358 L 196.0,360 Z"],
+  obliques:["M 233.0,224 L 256.0,218 Q 259.0,256 252.0,292 L 238.0,330 L 222.0,352 L 229.0,304 Z","M 167.0,224 L 144.0,218 Q 141.0,256 148.0,292 L 162.0,330 L 178.0,352 L 171.0,304 Z"],
+  biceps:["M 254.0,196 Q 277.0,206 284.0,240 L 289.0,286 Q 274.0,297 261.0,289 L 257.0,240 Z","M 146.0,196 Q 123.0,206 116.0,240 L 111.0,286 Q 126.0,297 139.0,289 L 143.0,240 Z"],
+  forearm_front:["M 263.0,302 Q 284.0,311 291.0,347 L 299.0,404 Q 288.0,417 277.0,409 L 272.0,353 Z","M 137.0,302 Q 116.0,311 109.0,347 L 101.0,404 Q 112.0,417 123.0,409 L 128.0,353 Z"],
+  quadriceps:["M 209.0,428 L 252.0,420 Q 260.0,466 256.0,504 L 250.0,548 L 213.0,550 L 207.0,474 Z","M 191.0,428 L 148.0,420 Q 140.0,466 144.0,504 L 150.0,548 L 187.0,550 L 193.0,474 Z"],
+  sartorius:["M 245.0,422 L 255.0,430 Q 230.0,478 218.0,514 L 212.0,548 L 203.0,546 Q 214.0,500 232.0,458 Z","M 155.0,422 L 145.0,430 Q 170.0,478 182.0,514 L 188.0,548 L 197.0,546 Q 186.0,500 168.0,458 Z"],
+  adductors:["M 200.0,426 L 219.0,432 Q 216.0,478 209.0,522 L 200.0,524 Z","M 200.0,426 L 181.0,432 Q 184.0,478 191.0,522 L 200.0,524 Z"],
+  tibialis:["M 215.0,560 L 238.0,556 Q 241.0,616 236.0,672 L 229.0,702 L 220.0,700 L 217.0,624 Z","M 185.0,560 L 162.0,556 Q 159.0,616 164.0,672 L 171.0,702 L 180.0,700 L 183.0,624 Z"],
+};
+const BACK_PATHS = {
+  trapezius:["M 700.0,130 L 716.0,134 Q 744.0,142 758.0,159 L 749.0,185 L 731.0,197 L 700.0,254 Z","M 700.0,130 L 684.0,134 Q 656.0,142 642.0,159 L 651.0,185 L 669.0,197 L 700.0,254 Z"],
+  deltoid_back:["M 746.0,152 Q 774.0,160 782.0,188 L 787.0,216 Q 771.0,227 757.0,216 L 749.0,182 Z","M 654.0,152 Q 626.0,160 618.0,188 L 613.0,216 Q 629.0,227 643.0,216 L 651.0,182 Z"],
+  infraspinatus:["M 714.0,198 L 746.0,192 L 752.0,222 L 732.0,236 L 712.0,222 Z","M 686.0,198 L 654.0,192 L 648.0,222 L 668.0,236 L 688.0,222 Z"],
+  latissimus:["M 700.0,258 L 734.0,204 Q 754.0,220 759.0,256 Q 757.0,300 744.0,326 L 700.0,336 Z","M 700.0,258 L 666.0,204 Q 646.0,220 641.0,256 Q 643.0,300 656.0,326 L 700.0,336 Z"],
+  erector_spinae:["M 700.0,194 L 713.0,199 Q 717.0,270 712.0,340 L 700.0,346 Z","M 700.0,194 L 687.0,199 Q 683.0,270 688.0,340 L 700.0,346 Z"],
+  triceps:["M 756.0,198 Q 779.0,209 786.0,244 L 791.0,288 Q 776.0,299 763.0,291 L 759.0,244 Z","M 644.0,198 Q 621.0,209 614.0,244 L 609.0,288 Q 624.0,299 637.0,291 L 641.0,244 Z"],
+  forearm_back:["M 766.0,304 Q 787.0,313 794.0,348 L 802.0,406 Q 791.0,419 780.0,411 L 775.0,355 Z","M 634.0,304 Q 613.0,313 606.0,348 L 598.0,406 Q 609.0,419 620.0,411 L 625.0,355 Z"],
+  gluteus:["M 700.0,338 L 742.0,328 Q 759.0,350 758.0,382 Q 745.0,410 700.0,414 Z","M 700.0,338 L 658.0,328 Q 641.0,350 642.0,382 Q 655.0,410 700.0,414 Z"],
+  hamstrings:["M 707.0,420 L 752.0,415 Q 759.0,462 753.0,506 L 746.0,548 L 711.0,550 L 705.0,474 Z","M 693.0,420 L 648.0,415 Q 641.0,462 647.0,506 L 654.0,548 L 689.0,550 L 695.0,474 Z"],
+  gastrocnemius:["M 712.0,556 L 747.0,552 Q 753.0,604 745.0,650 L 733.0,686 L 716.0,684 L 710.0,632 Z","M 688.0,556 L 653.0,552 Q 647.0,604 655.0,650 L 667.0,686 L 684.0,684 L 690.0,632 Z"],
+};
+
+
+// Kadry sylwetki: pełny (obie strony obok siebie) oraz pojedyncze — na wąskich
+// ekranach dwie sylwetki naraz są za małe, żeby trafić w mięsień palcem.
+const BODY_VIEW = { both:"0 0 900 780", front:"85 10 235 765", back:"585 10 235 765" };
+
+function BodySVG({selected,hovered,onHover,onClick,layer,viewBox=BODY_VIEW.both}){
+  const entries=[...Object.entries(FRONT_PATHS),...Object.entries(BACK_PATHS)];
+  const markup=BODY_SVG_MARKUP.replace('viewBox="0 0 900 780"',`viewBox="${viewBox}"`);
   return(
     <div style={{position:"relative",width:"100%",lineHeight:0}}>
-      <div dangerouslySetInnerHTML={{__html:BODY_SVG_MARKUP}} style={{display:"block"}}/>
-      <svg viewBox="0 0 1000 700" style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none"}}>
-        {allPaths.map(({id,dArr})=>{
-          const m=MUSCLES[id];const isHov=hovered===id;const isSel=selected===id;
+      <div dangerouslySetInnerHTML={{__html:markup}} style={{display:"block"}}/>
+      <svg viewBox={viewBox} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%"}}>
+        {entries.map(([id,dArr])=>{
+          const m=MUSCLES[id];
+          const onLayer=MUSCLE_LAYER[id]===layer;
+          const isHov=hovered===id, isSel=selected===id;
+          // Mięsień spoza wybranej warstwy zostaje ledwie widocznym tłem i nie
+          // reaguje na kliknięcia — to on zasłaniał wcześniej to, co pod nim.
+          const fill=!onLayer?0.06:isSel?0.95:isHov?0.8:0.62;
           return dArr.map((d,i)=>(
-            <path key={id+i} d={d} fill={m?.color||"#fff"} fillOpacity={isSel?0.55:isHov?0.45:0.28} stroke={isSel||isHov?"#fff":m?.color||"#fff"} strokeWidth={isSel?1.5:isHov?1:0.8} strokeOpacity={isSel?0.9:isHov?0.7:0.5}
-              style={{cursor:"pointer",pointerEvents:"all",filter:isSel?`drop-shadow(0 0 8px ${m?.color}cc)`:isHov?`drop-shadow(0 0 4px ${m?.color}88)`:"none",transition:"fill-opacity 0.12s, filter 0.12s"}}
-              onMouseEnter={()=>onHover(id)} onMouseLeave={()=>onHover(null)} onClick={()=>onClick(id)}/>
+            <path key={id+i} d={d} fill={m?.color||"#fff"} fillOpacity={fill}
+              stroke={onLayer?(isSel||isHov?"#fff":"#0e0e10"):"#0e0e10"}
+              strokeWidth={isSel?1.8:isHov?1.4:1}
+              strokeOpacity={onLayer?(isSel||isHov?0.9:0.55):0.25}
+              style={{cursor:onLayer?"pointer":"default",pointerEvents:onLayer?"all":"none",
+                filter:isSel?`drop-shadow(0 0 7px ${m?.color}bb)`:"none",
+                transition:"fill-opacity 0.14s, filter 0.14s"}}
+              onMouseEnter={()=>onLayer&&onHover(id)} onMouseLeave={()=>onHover(null)}
+              onClick={()=>onLayer&&onClick(id)}/>
           ));
         })}
       </svg>
@@ -422,27 +463,61 @@ function ExercisePanel({muscleId,onClose}){
 }
 
 function MuscleMap(){
+  const isMobile=useMedia(MOBILE);
   const [hovered,setHovered]=useState(null);
   const [selected,setSelected]=useState(null);
+  const [side,setSide]=useState("front");
+  const [layer,setLayer]=useState("surface");
   const hoveredMuscle=hovered?MUSCLES[hovered]:null;
+  // na desktopie pokazujemy obie sylwetki naraz, na telefonie jedną wybraną
+  const viewBox=isMobile?BODY_VIEW[side]:BODY_VIEW.both;
+  const switchLayer=l=>{
+    setLayer(l);
+    if(selected&&MUSCLE_LAYER[selected]!==l)setSelected(null);
+    setHovered(null);
+  };
+  const countIn=l=>Object.values(MUSCLE_LAYER).filter(x=>x===l).length;
   return(
     <div>
       <div style={{textAlign:"center",marginBottom:16}}>
         <div style={{fontSize:11,letterSpacing:"0.2em",color:"#5DCAA5",fontWeight:600,fontFamily:"monospace",marginBottom:6}}>ANATOMIA INTERAKTYWNA</div>
-        <div style={{fontSize:22,fontWeight:700,color:"#f5f5f0"}}>Mapa Mięśni Człowieka</div>
-        <div style={{marginTop:6,fontSize:12,color:"#666"}}>Najedź, aby podejrzeć · Kliknij, aby zobaczyć ćwiczenia</div>
+        <div style={{fontSize:isMobile?18:22,fontWeight:700,color:"#f5f5f0"}}>Mapa Mięśni Człowieka</div>
+        <div style={{marginTop:6,fontSize:12,color:"#666"}}>{isMobile?"Dotknij mięśnia, aby zobaczyć ćwiczenia":"Najedź, aby podejrzeć · Kliknij, aby zobaczyć ćwiczenia"}</div>
       </div>
+      <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:14,maxWidth:420,marginLeft:"auto",marginRight:"auto"}}>
+        {[["surface","Powierzchowne"],["deep","Głębokie"]].map(([k,l])=>(
+          <button key={k} onClick={()=>switchLayer(k)} style={{flex:1,background:layer===k?"#2a2a2a":"transparent",
+            border:"none",borderRadius:8,padding:"9px 6px",color:layer===k?"#fff":"#666",fontWeight:600,
+            cursor:"pointer",fontSize:12.5,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            {l}<span style={{fontSize:10,color:layer===k?"#777":"#4a4a4a"}}>{countIn(k)}</span>
+          </button>
+        ))}
+      </div>
+      <div style={{fontSize:11,color:"#5a5a5a",textAlign:"center",marginBottom:14,lineHeight:1.5}}>
+        {layer==="surface"
+          ? "Warstwa powierzchowna — mięśnie widoczne bezpośrednio pod skórą."
+          : "Warstwa głęboka — mięśnie leżące pod powierzchownymi, te przygaszone są nad nimi."}
+      </div>
+
       <div style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
-        <div style={{flex:"1 1 340px",minWidth:280}}>
-          <div style={{display:"flex",justifyContent:"space-around",marginBottom:6}}>
-            <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:"#444",fontFamily:"monospace"}}>PRZÓD</span>
-            <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:"#444",fontFamily:"monospace"}}>TYŁ</span>
-          </div>
+        <div style={{flex:"1 1 340px",minWidth:0}}>
+          {isMobile?(
+            <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:8}}>
+              {[["front","PRZÓD"],["back","TYŁ"]].map(([k,l])=>(
+                <button key={k} onClick={()=>setSide(k)} style={{flex:1,background:side===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"8px",color:side===k?"#fff":"#666",fontWeight:700,fontSize:11,letterSpacing:"0.15em",fontFamily:"monospace",cursor:"pointer"}}>{l}</button>
+              ))}
+            </div>
+          ):(
+            <div style={{display:"flex",justifyContent:"space-around",marginBottom:6}}>
+              <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:"#444",fontFamily:"monospace"}}>PRZÓD</span>
+              <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:"#444",fontFamily:"monospace"}}>TYŁ</span>
+            </div>
+          )}
           <div style={{borderRadius:12,border:"1px solid #1e2130",overflow:"hidden"}}>
-            <BodySVG selected={selected} hovered={hovered} onHover={setHovered} onClick={id=>setSelected(p=>p===id?null:id)}/>
+            <BodySVG viewBox={viewBox} layer={layer} selected={selected} hovered={hovered} onHover={setHovered} onClick={id=>setSelected(p=>p===id?null:id)}/>
           </div>
         </div>
-        <div style={{flex:"1 1 260px",minWidth:240,minHeight:460,background:"#13161f",border:`1px solid ${selected?MUSCLES[selected]?.color+"55":"#1e2130"}`,borderRadius:14,position:"relative",overflow:"hidden"}}>
+        <div style={{flex:"1 1 260px",minWidth:0,minHeight:selected?460:isMobile?0:460,background:"#13161f",border:`1px solid ${selected?MUSCLES[selected]?.color+"55":"#1e2130"}`,borderRadius:14,position:"relative",overflow:"hidden"}}>
           {!selected&&(
             <div style={{padding:"20px 18px"}}>
               {hoveredMuscle?(
@@ -456,9 +531,13 @@ function MuscleMap(){
                   <div style={{marginTop:20,fontSize:11,color:"#444",display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:14}}>👆</span> Kliknij, aby zobaczyć ćwiczenia</div>
                 </div>
               ):(
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:400,color:"#333",textAlign:"center",gap:12}}>
-                  <div style={{fontSize:36}}>🫀</div>
-                  <div style={{fontSize:13,lineHeight:1.7,maxWidth:180}}>Najedź na mięsień na sylwetce, aby zobaczyć szczegóły.<br/><br/><span style={{color:"#444"}}>Kliknij, aby otworzyć plan ćwiczeń.</span></div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:isMobile?130:400,color:"#333",textAlign:"center",gap:12}}>
+                  <div style={{fontSize:isMobile?28:36}}>🫀</div>
+                  <div style={{fontSize:13,lineHeight:1.7,maxWidth:180}}>
+                    {isMobile
+                      ?<>Dotknij mięśnia na sylwetce, aby otworzyć plan ćwiczeń.</>
+                      :<>Najedź na mięsień na sylwetce, aby zobaczyć szczegóły.<br/><br/><span style={{color:"#444"}}>Kliknij, aby otworzyć plan ćwiczeń.</span></>}
+                  </div>
                 </div>
               )}
             </div>
@@ -470,8 +549,73 @@ function MuscleMap(){
   );
 }
 
+
+function LoginScreen({onLogged}){
+  const [login,setLogin]=useState("");
+  const [password,setPassword]=useState("");
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(false);
+
+  const submit=async e=>{
+    e.preventDefault();
+    if(busy)return;
+    setBusy(true);setError("");
+    try{
+      const {user}=await api.login(login,password);
+      onLogged(user);
+    }catch(err){
+      setError(err.message);
+      setPassword("");
+    }finally{
+      setBusy(false);
+    }
+  };
+
+  const field={width:"100%",background:"#0a0a0a",border:"1px solid #333",borderRadius:10,
+    padding:"12px 14px",color:"#fff",fontSize:15,outline:"none",boxSizing:"border-box"};
+
+  return(
+    <div style={{background:"#0a0a0a",minHeight:"100vh",display:"flex",alignItems:"center",
+      justifyContent:"center",padding:20,fontFamily:"'Inter',sans-serif",color:"#f1f1f1"}}>
+      <form onSubmit={submit} style={{width:"100%",maxWidth:360,background:"#161616",
+        border:"1px solid #1e1e1e",borderRadius:16,padding:28}}>
+        <h1 style={{margin:"0 0 4px",fontSize:24,fontWeight:700}}>Tracker</h1>
+        <p style={{margin:"0 0 22px",color:"#888",fontSize:13}}>Zaloguj się, aby zobaczyć swoje dane.</p>
+
+        <label style={{fontSize:12,color:"#888",display:"block",marginBottom:6}}>Login</label>
+        <input value={login} onChange={e=>setLogin(e.target.value)} autoFocus autoComplete="username"
+          style={{...field,marginBottom:14}}/>
+
+        <label style={{fontSize:12,color:"#888",display:"block",marginBottom:6}}>Hasło</label>
+        <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
+          autoComplete="current-password" style={{...field,marginBottom:18}}/>
+
+        {error&&(
+          <div style={{background:"#2a0f0f",border:"1px solid #6b2020",borderRadius:10,
+            padding:"10px 12px",color:"#f87171",fontSize:13,marginBottom:16}}>{error}</div>
+        )}
+
+        <button type="submit" disabled={busy||!login||!password}
+          style={{width:"100%",padding:"13px",borderRadius:10,border:"none",fontWeight:700,fontSize:15,
+            background:busy||!login||!password?"#222":"linear-gradient(135deg,#667eea,#764ba2)",
+            color:busy||!login||!password?"#555":"#fff",
+            cursor:busy||!login||!password?"not-allowed":"pointer"}}>
+          {busy?"Logowanie…":"Zaloguj"}
+        </button>
+
+        <p style={{margin:"18px 0 0",color:"#555",fontSize:11,lineHeight:1.6}}>
+          Rejestracja jest zamknięta. Konto zakłada administrator instancji
+          skryptem <code style={{color:"#777"}}>create-user.sh</code>.
+        </p>
+      </form>
+    </div>
+  );
+}
+
 // ── MAIN ──────────────────────────────────────────────────────────────────
 export default function App() {
+  const isMobile=useMedia(MOBILE);
+  const isNarrow=useMedia(NARROW);
   const [habits,setHabits]=useState([]);
   const [habitLogs,setHabitLogs]=useState({});
   const [editTimeId,setEditTimeId]=useState(null);
@@ -483,12 +627,14 @@ export default function App() {
   const [newTime,setNewTime]=useState("");
   const [progressView,setProgressView]=useState({});
 
+  const [user,setUser]=useState(null);
+  const [authChecked,setAuthChecked]=useState(false);
   const [profile,setProfile]=useState({weight:"",height:"",age:"",sex:"M",activity:1});
-  const [bmiVal,setBmiVal]=useState(null);
-  const [tdee,setTdee]=useState(null);
-  const [calDays,setCalDays]=useState({});
+  const [serverProfile,setServerProfile]=useState(null);
+  const [offQuery,setOffQuery]=useState("");
+  const [offResults,setOffResults]=useState(null);   // null = tryb bazy lokalnej
+  const [offLoading,setOffLoading]=useState(false);
   const [calDate,setCalDate]=useState(today());
-  const [customFoods,setCustomFoods]=useState([]);
   const [modal,setModal]=useState(false);
   const [search,setSearch]=useState("");
   const [selCat,setSelCat]=useState("Wszystkie");
@@ -500,7 +646,6 @@ export default function App() {
   const [mainTab,setMainTab]=useState("nawyki");
 
   // ── DOŁEK STATE ──
-  const DOLEK_KEY="dolekSystem_v1";
   const [dolekLevel,setDolekLevel]=useState(null);
   const [dolekCompleted,setDolekCompleted]=useState({l1:[],l2:[],l3:[]});
   const [dolekExpanded,setDolekExpanded]=useState({});
@@ -529,23 +674,15 @@ export default function App() {
     ],
   };
 
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const r=await window.storage.get(DOLEK_KEY);
-        if(r){const d=JSON.parse(r.value);if(d.kotwice)setKotwice(d.kotwice);}
-      }catch(_){}
-    })();
-  },[]);
-
-  const saveDolekData=(k)=>{window.storage.set(DOLEK_KEY,JSON.stringify({kotwice:k})).catch(()=>{});};
-
-  const addKotwica=()=>{
+  const addKotwica=async()=>{
     if(!kotwicaInput.trim())return;
-    const k=[...kotwice,{emoji:kotwicaEmoji,text:kotwicaInput.trim()}];
-    setKotwice(k);saveDolekData(k);setKotwicaInput("");
+    const a=await api.addAnchor({emoji:kotwicaEmoji,label:kotwicaInput.trim()});
+    setKotwice(k=>[...k,a]);setKotwicaInput("");
   };
-  const delKotwica=i=>{const k=kotwice.filter((_,idx)=>idx!==i);setKotwice(k);saveDolekData(k);};
+  const delKotwica=async id=>{
+    await api.deleteAnchor(id);
+    setKotwice(k=>k.filter(x=>x.id!==id));
+  };
   const toggleTechnique=key=>setDolekExpanded(p=>({...p,[key]:!p[key]}));
   const markDone=(lvl,idx)=>{
     if(dolekCompleted[lvl].includes(idx))return;
@@ -560,159 +697,240 @@ export default function App() {
   const [bmiTab,setBmiTab]=useState("bmi");
   const [saving,setSaving]=useState(false);
   const [loading,setLoading]=useState(true);
+  const [foods,setFoods]=useState([]);
+  const [foodCats,setFoodCats]=useState([]);
+  const [dayEntries,setDayEntries]=useState([]);
+  const [dailyTotals,setDailyTotals]=useState({});
+  const [error,setError]=useState("");
 
+  const year=new Date().getFullYear();
+
+  // Przy wejściu pytamy serwer, czy ciasteczko sesji jest jeszcze ważne.
   useEffect(()=>{
-    (async()=>{
-      try{
-        const [hr,br,cr]=await Promise.allSettled([
-          window.storage.get(HABIT_KEY),
-          window.storage.get(BMI_KEY),
-          window.storage.get(CUSTOM_KEY),
-        ]);
-        if(hr.status==="fulfilled"&&hr.value){const d=JSON.parse(hr.value.value);setHabits(d.habits||[]);setHabitLogs(d.logs||{});}
-        if(br.status==="fulfilled"&&br.value){const d=JSON.parse(br.value.value);if(d.profile)setProfile(d.profile);if(d.calDays)setCalDays(d.calDays);if(d.tdee)setTdee(d.tdee);if(d.bmiVal)setBmiVal(d.bmiVal);}
-        if(cr.status==="fulfilled"&&cr.value){setCustomFoods(JSON.parse(cr.value.value)||[]);}
-      }catch(_){}
-      setLoading(false);
-    })();
+    api.me()
+      .then(({user})=>setUser(user))
+      .catch(()=>setUser(null))
+      .finally(()=>setAuthChecked(true));
   },[]);
 
-  const saveHabits=(h,l)=>{setSaving(true);window.storage.set(HABIT_KEY,JSON.stringify({habits:h,logs:l})).finally(()=>setSaving(false));};
-  const saveBmi=useCallback((p,cd,t,b)=>{window.storage.set(BMI_KEY,JSON.stringify({profile:p,calDays:cd,tdee:t,bmiVal:b}));},[]);
-  const saveCustom=f=>window.storage.set(CUSTOM_KEY,JSON.stringify(f));
+  const logout=async()=>{
+    await api.logout().catch(()=>{});
+    setUser(null);setHabits([]);setHabitLogs({});setServerProfile(null);
+    setFoods([]);setDayEntries([]);setDailyTotals({});setKotwice([]);setLoading(true);
+  };
 
-  const addHabit=()=>{
+  // Odhaczenia trzymamy jako mapę "<idNawyku>_<data>" — taki kształt jest
+  // wygodny dla widoków miesiąca i roku, które sięgają po konkretny dzień.
+  const logsToMap=rows=>Object.fromEntries(rows.map(r=>[`${r.habitId}_${r.day}`,true]));
+
+  const reloadLogs=useCallback(async()=>{
+    const rows=await api.logs(`${year}-01-01`,`${year}-12-31`);
+    setHabitLogs(logsToMap(rows));
+  },[year]);
+
+  const reloadFoods=useCallback(async()=>{
+    setFoods(await api.foods({}));
+  },[]);
+
+  const reloadDay=useCallback(async(day)=>{
+    setDayEntries(await api.meals(day));
+  },[]);
+
+  const reloadTotals=useCallback(async()=>{
+    const rows=await api.dailyTotals(year);
+    setDailyTotals(Object.fromEntries(rows.map(r=>[r.day,Math.round(r.kcal)])));
+  },[year]);
+
+  useEffect(()=>{
+    if(!user)return;
+    (async()=>{
+      try{
+        const [h,p,f,c,a]=await Promise.all([
+          api.habits(),api.profile(),api.foods({}),api.foodCategories(),api.anchors(),
+        ]);
+        setHabits(h);setServerProfile(p);setFoods(f);setFoodCats(c);setKotwice(a);
+        setProfile({
+          weight:p.weightKg??"",height:p.heightCm??"",age:p.ageYears??"",
+          sex:p.sex||"M",activity:p.activity??1,
+        });
+        await Promise.all([reloadLogs(),reloadTotals(),reloadDay(calDate)]);
+      }catch(e){
+        setError(e.message);
+      }
+      setLoading(false);
+    })();
+  },[user,reloadLogs,reloadTotals,reloadDay]);
+
+  // Zmiana wybranego dnia dociąga tylko ten dzień, zamiast trzymać w pamięci
+  // cały dziennik — sumy roczne przychodzą osobno, policzone w SQL.
+  useEffect(()=>{
+    if(user&&!loading)reloadDay(calDate).catch(e=>setError(e.message));
+  },[calDate,user]);
+
+  const run=async fn=>{
+    setSaving(true);setError("");
+    try{ await fn(); }
+    catch(e){ setError(e.message); }
+    finally{ setSaving(false); }
+  };
+
+  // ── Nawyki ──
+  const addHabit=()=>run(async()=>{
     if(!newName.trim())return;
-    const h=[...habits,{id:Date.now().toString(),name:newName.trim(),category:newCat,time:newTime}];
-    setHabits(h);saveHabits(h,habitLogs);setNewName("");setNewTime("");setShowForm(false);
-  };
-  const deleteHabit=id=>{const h=habits.filter(x=>x.id!==id);setHabits(h);saveHabits(h,habitLogs);};
-  const updateTime=(id,time)=>{const h=habits.map(x=>x.id===id?{...x,time}:x);setHabits(h);saveHabits(h,habitLogs);setEditTimeId(null);};
-  const updateName=(id,name)=>{
+    const h=await api.addHabit({name:newName.trim(),category:newCat,reminderTime:newTime||null});
+    setHabits(x=>[...x,h]);setNewName("");setNewTime("");setShowForm(false);
+  });
+  const deleteHabit=id=>run(async()=>{
+    await api.deleteHabit(id);
+    setHabits(x=>x.filter(h=>h.id!==id));
+    await reloadLogs();
+  });
+  const updateTime=(id,time)=>run(async()=>{
+    const h=await api.patchHabit(id,{reminderTime:time||null});
+    setHabits(x=>x.map(o=>o.id===id?h:o));setEditTimeId(null);
+  });
+  const updateName=(id,name)=>run(async()=>{
     if(!name.trim())return;
-    const h=habits.map(x=>x.id===id?{...x,name:name.trim()}:x);
-    setHabits(h);saveHabits(h,habitLogs);setEditNameId(null);
-  };
-  const toggleHabit=(habitId,date)=>{const key=`${habitId}_${date}`;const l={...habitLogs,[key]:!habitLogs[key]};setHabitLogs(l);saveHabits(habits,l);};
+    const h=await api.patchHabit(id,{name:name.trim()});
+    setHabits(x=>x.map(o=>o.id===id?h:o));setEditNameId(null);
+  });
+  const toggleHabit=(habitId,date)=>run(async()=>{
+    const key=`${habitId}_${date}`;
+    const next=!habitLogs[key];
+    setHabitLogs(l=>{const c={...l};if(next)c[key]=true;else delete c[key];return c;});
+    try{
+      await api.setLog(habitId,date,next);
+    }catch(e){
+      await reloadLogs();   // cofamy optymistyczną zmianę stanem z serwera
+      throw e;
+    }
+  });
   const isChecked=(habitId,date)=>!!habitLogs[`${habitId}_${date}`];
   const getStreak=id=>{let s=0;const d=new Date();while(true){const ds=toISO(d);if(habitLogs[`${id}_${ds}`]){s++;d.setDate(d.getDate()-1);}else break;}return s;};
   const getWeeklyRate=id=>{const d=getLast7();return Math.round((d.filter(x=>habitLogs[`${id}_${x}`]).length/7)*100);};
   const getView=id=>progressView[id]||"7dni";
   const setView=(id,v)=>setProgressView(p=>({...p,[id]:v}));
-  const sortedHabits=[...habits].sort((a,b)=>{if(!a.time&&!b.time)return 0;if(!a.time)return 1;if(!b.time)return-1;return a.time.localeCompare(b.time);});
+  const sortedHabits=[...habits].sort((a,b)=>{
+    const at=a.reminderTime,bt=b.reminderTime;
+    if(!at&&!bt)return 0;if(!at)return 1;if(!bt)return-1;return at.localeCompare(bt);
+  });
 
-  const calcAll=()=>{
+  // ── Profil ──
+  const calcAll=()=>run(async()=>{
     const {weight:w,height:h,age,sex,activity}=profile;
     if(!w||!h||!age)return;
-    const bmi=calcBMI(+w,+h);
-    const t=calcTDEE(+w,+h,+age,sex,+activity);
-    setBmiVal(bmi);setTdee(t);saveBmi(profile,calDays,t,bmi);
-  };
+    const p=await api.saveProfile({
+      weightKg:+w,heightCm:+h,ageYears:+age,sex,activity:+activity,
+    });
+    setServerProfile(p);
+  });
 
   const todayStr=today();
-  const todayEntries=calDays[calDate]||[];
-  const dayTotals=entries=>entries.reduce((a,e)=>({cal:a.cal+e.cal,p:a.p+e.p,c:a.c+e.c,f:a.f+e.f,fb:a.fb+(e.fb||0),s:a.s+(e.s||0)}),{cal:0,p:0,c:0,f:0,fb:0,s:0});
-  const totToday=dayTotals(todayEntries);
+  const todayEntries=dayEntries;
+  const totToday=todayEntries.reduce((a,e)=>({
+    cal:a.cal+e.kcal,p:a.p+e.proteinG,c:a.c+e.carbsG,
+    f:a.f+e.fatG,fb:a.fb+e.fiberG,s:a.s+e.saltG,
+  }),{cal:0,p:0,c:0,f:0,fb:0,s:0});
+  const tdee=serverProfile?.tdee??null;
+  const bmiVal=serverProfile?.bmi??null;
   const pctToday=tdee?Math.min(200,Math.round(totToday.cal/tdee*100)):null;
 
-  const addFood=()=>{
+  // ── Posiłki ──
+  const addFood=()=>run(async()=>{
     if(!selFood)return;
     const ratio=grams/100;
-    const entry={id:Date.now(),name:selFood.name,grams,cal:Math.round(selFood.cal*ratio),p:Math.round(selFood.p*ratio*10)/10,c:Math.round(selFood.c*ratio*10)/10,f:Math.round(selFood.f*ratio*10)/10,fb:Math.round((selFood.fb||0)*ratio*10)/10,s:Math.round((selFood.s||0)*ratio*10)/10};
-    const newCd={...calDays,[calDate]:[...todayEntries,entry]};
-    setCalDays(newCd);saveBmi(profile,newCd,tdee,bmiVal);
-    setModal(false);setSelFood(null);setSearch("");setGrams(100);
-  };
-  const removeEntry=id=>{
-    const newCd={...calDays,[calDate]:todayEntries.filter(e=>e.id!==id)};
-    setCalDays(newCd);saveBmi(profile,newCd,tdee,bmiVal);
-  };
-  const addCustomFood=()=>{
-    const {name,cal,p,c,f}=customForm;
-    if(!name||!cal||!p||!c||!f)return;
-    const nf={id:Date.now(),name,cal:+cal,p:+p,c:+c,f:+f,category:"⭐ Własne produkty",isCustom:true};
-    const u=[...customFoods,nf];setCustomFoods(u);saveCustom(u);
-    setCustomForm({name:"",cal:"",p:"",c:"",f:""});setShowCustomForm(false);
-  };
-  const deleteCustomFood=id=>{const u=customFoods.filter(f=>f.id!==id);setCustomFoods(u);saveCustom(u);};
-
-  const [apiResults,setApiResults]=useState([]);
-  const [apiLoading,setApiLoading]=useState(false);
-  const [apiError,setApiError]=useState("");
-  const [searchMode,setSearchMode]=useState("local"); // "local" | "api"
-  const [apiQuery,setApiQuery]=useState("");
-
-  const searchOpenFoodFacts=async(query)=>{
-    if(!query.trim())return;
-    setApiLoading(true);setApiError("");setApiResults([]);
-    try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",
-          max_tokens:1000,
-          messages:[{role:"user",content:`Wyszukaj w internecie wartości odżywcze na 100 g dla produktów spożywczych pasujących do frazy: "${query}". Preferuj dane z Open Food Facts lub tabel wartości odżywczych. Zwróć WYŁĄCZNIE tablicę JSON (bez markdown, bez żadnego komentarza) z maksymalnie 8 produktami w formacie:
-[{"name":"nazwa","cal":liczba,"p":liczba,"c":liczba,"f":liczba}]
-gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/100g. Zaokrąglij do 1 miejsca po przecinku. Jeśli nic nie znajdziesz, zwróć [].`}],
-          tools:[{type:"web_search_20250305",name:"web_search"}]
-        })
-      });
-      if(!res.ok)throw new Error("HTTP "+res.status);
-      const data=await res.json();
-      const text=(data.content||[]).filter(i=>i.type==="text").map(i=>i.text||"").join("");
-      const match=text.match(/\[[\s\S]*\]/);
-      if(!match)throw new Error("brak danych w odpowiedzi");
-      const parsed=JSON.parse(match[0]);
-      const results=parsed.map(p=>({
-        name:String(p.name||"").slice(0,55),
-        cal:Math.round(p.cal||0),
-        p:Math.round((p.p||0)*10)/10,
-        c:Math.round((p.c||0)*10)/10,
-        f:Math.round((p.f||0)*10)/10,
-        category:"🌍 Wyszukane online",
-        isApi:true,
-      })).filter(x=>x.name&&x.cal);
-      setApiResults(results);
-      if(results.length===0)setApiError("Brak wyników. Spróbuj innej frazy.");
-    }catch(e){
-      setApiError("Błąd wyszukiwania: "+e.message+". Spróbuj ponownie.");
+    const r1=v=>Math.round((v||0)*ratio*10)/10;
+    // Produkt z Open Food Facts trafia najpierw do naszego katalogu — serwer
+    // sam pobiera wartości po kodzie kreskowym, nie ufając temu, co przyszło
+    // z przeglądarki.
+    let foodId=selFood.id??null;
+    if(selFood.offCode){
+      const imported=await api.offImport(selFood.offCode);
+      foodId=imported.id;
+      await Promise.all([reloadFoods(),api.foodCategories().then(setFoodCats)]);
     }
-    setApiLoading(false);
-  };
-
-  const allFoods=[...customFoods,...ALL_FOODS];
-  const filtered=searchMode==="api"?apiResults:allFoods.filter(f=>{
-    const matchCat=selCat==="Wszystkie"||f.category===selCat;
-    const matchSearch=f.name.toLowerCase().includes(search.toLowerCase());
-    return matchCat&&matchSearch;
+    await api.addMeal({
+      day:calDate,foodId,name:selFood.name,grams,
+      kcal:Math.round(selFood.kcal*ratio),
+      proteinG:r1(selFood.proteinG),carbsG:r1(selFood.carbsG),
+      fatG:r1(selFood.fatG),fiberG:r1(selFood.fiberG),saltG:r1(selFood.saltG),
+    });
+    await Promise.all([reloadDay(calDate),reloadTotals()]);
+    setModal(false);setSelFood(null);setSearch("");setGrams(100);setOffResults(null);setOffQuery("");
   });
-  const calLogsFlat=Object.fromEntries(Object.entries(calDays).map(([d,entries])=>[d,entries.reduce((s,e)=>s+e.cal,0)]));
+  const removeEntry=id=>run(async()=>{
+    await api.deleteMeal(id);
+    await Promise.all([reloadDay(calDate),reloadTotals()]);
+  });
+  const addCustomFood=()=>run(async()=>{
+    const {name,cal,p,c,f}=customForm;
+    if(!name||!cal)return;
+    await api.addFood({name,kcal:+cal,proteinG:+p||0,carbsG:+c||0,fatG:+f||0});
+    await Promise.all([reloadFoods(),api.foodCategories().then(setFoodCats)]);
+    setCustomForm({name:"",cal:"",p:"",c:"",f:""});setShowCustomForm(false);
+  });
+  const deleteCustomFood=id=>run(async()=>{
+    await api.deleteFood(id);
+    await Promise.all([reloadFoods(),api.foodCategories().then(setFoodCats)]);
+  });
+
+  // ── Open Food Facts ──
+  const searchOff=()=>run(async()=>{
+    if(offQuery.trim().length<2)return;
+    setOffLoading(true);
+    try{
+      const {results}=await api.offSearch(offQuery.trim());
+      setOffResults(results);
+    } finally { setOffLoading(false); }
+  });
+
+  const filtered=(offResults!==null?offResults.map(r=>({...r,offCode:r.code,category:"🌍 Open Food Facts"})):foods)
+    .filter(f=>{
+      if(offResults!==null)return true;   // wyniki z sieci filtruje już serwer
+      const matchCat=selCat==="Wszystkie"||f.category===selCat;
+      return matchCat&&f.name.toLowerCase().includes(search.toLowerCase());
+    });
   const bmiInfo=bmiVal?getBMILabel(bmiVal):null;
   const days7=getLast7();
 
-  if(loading)return <div style={{background:"#0a0a0a",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}>Ładowanie...</div>;
+  const splash=txt=><div style={{background:"#0a0a0a",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:"#666",fontFamily:"'Inter',sans-serif"}}>{txt}</div>;
+  if(!authChecked)return splash("");
+  if(!user)return <LoginScreen onLogged={u=>{setUser(u);setLoading(true);}}/>;
+  if(loading)return splash("Ładowanie…");
 
   return(
-    <div style={{background:"#0a0a0a",minHeight:"100vh",fontFamily:"'Inter',sans-serif",color:"#f1f1f1",padding:"24px 16px"}}>
-      <div style={{maxWidth:680,margin:"0 auto"}}>
+    <div style={{background:"#0a0a0a",minHeight:"100vh",fontFamily:"'Inter',sans-serif",color:"#f1f1f1",padding:isMobile?"16px 12px 32px":"24px 16px"}}>
+      {/* mapa mięśni potrzebuje więcej szerokości niż reszta zakładek */}
+      <div style={{maxWidth:mainTab==="miesnie"?1100:680,margin:"0 auto"}}>
 
         {/* Header */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-          <div>
-            <h1 style={{margin:0,fontSize:24,fontWeight:700}}>Tracker</h1>
-            <p style={{margin:0,color:"#888",fontSize:13,textTransform:"capitalize"}}>{new Date().toLocaleDateString("pl-PL",{weekday:"long",month:"long",day:"numeric"})}</p>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:isMobile?16:24}}>
+          <div style={{minWidth:0}}>
+            <h1 style={{margin:0,fontSize:isMobile?20:24,fontWeight:700}}>Tracker</h1>
+            <p style={{margin:0,color:"#888",fontSize:isMobile?12:13,textTransform:"capitalize"}}>{new Date().toLocaleDateString("pl-PL",{weekday:"long",month:"long",day:"numeric"})}</p>
           </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
             {saving&&<span style={{fontSize:12,color:"#888"}}>Zapisywanie…</span>}
             {mainTab==="nawyki"&&<button onClick={()=>setShowForm(!showForm)} style={{background:"#fff",color:"#000",border:"none",borderRadius:10,padding:"8px 16px",fontWeight:600,cursor:"pointer",fontSize:14}}>+ Dodaj</button>}
+            <button onClick={logout} title={`Zalogowany jako ${user.login}`}
+              style={{background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,padding:"8px 12px",color:"#888",fontSize:13,cursor:"pointer"}}>
+              {isMobile?"⏻":`${user.login} · Wyloguj`}
+            </button>
           </div>
         </div>
 
+        {error&&(
+          <div style={{background:"#2a0f0f",border:"1px solid #6b2020",borderRadius:12,padding:"10px 14px",
+            marginBottom:16,color:"#f87171",fontSize:13,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+            <span>{error}</span>
+            <button onClick={()=>setError("")} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,flexShrink:0}}>✕</button>
+          </div>
+        )}
+
         {/* Main tabs */}
-        <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:20}}>
-          {[["nawyki","Nawyki"],["kalorie","Kalorie & BMI"],["miesnie","Mięśnie"],["dolек","Z dołka"]].map(([k,l])=>(
-            <button key={k} onClick={()=>setMainTab(k)} style={{flex:1,background:mainTab===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"8px 4px",color:mainTab===k?"#fff":"#666",fontWeight:600,cursor:"pointer",fontSize:13}}>{l}</button>
+        <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:isMobile?16:20}}>
+          {[["nawyki","Nawyki","Nawyki"],["kalorie","Kalorie & BMI","Kalorie"],["miesnie","Mięśnie","Mięśnie"],["dolек","Z dołka","Dołek"]].map(([k,long,short])=>(
+            <button key={k} onClick={()=>setMainTab(k)} style={{flex:1,minWidth:0,background:mainTab===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:isMobile?"9px 2px":"8px 4px",color:mainTab===k?"#fff":"#666",fontWeight:600,cursor:"pointer",fontSize:isNarrow?11:isMobile?12:13,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{isMobile?short:long}</button>
           ))}
         </div>
 
@@ -781,13 +999,13 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
                       )}
                       <div style={{fontSize:12,color:cat.color,marginTop:2}}>{habit.category}{streak>0&&` · 🔥 ${streak} dni z rzędu`}</div>
                     </div>
-                    {habit.time&&!isEditingTime&&<button onClick={()=>setEditTimeId(habit.id)} style={{background:"#222",border:"none",borderRadius:8,padding:"4px 10px",color:"#aaa",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>🕐 {habit.time}</button>}
-                    {!habit.time&&!isEditingTime&&<button onClick={()=>setEditTimeId(habit.id)} style={{background:"none",border:"none",color:"#444",cursor:"pointer",fontSize:16,padding:4}}>🕐</button>}
+                    {habit.reminderTime&&!isEditingTime&&<button onClick={()=>setEditTimeId(habit.id)} style={{background:"#222",border:"none",borderRadius:8,padding:"4px 10px",color:"#aaa",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>🕐 {habit.reminderTime}</button>}
+                    {!habit.reminderTime&&!isEditingTime&&<button onClick={()=>setEditTimeId(habit.id)} style={{background:"none",border:"none",color:"#444",cursor:"pointer",fontSize:16,padding:4}}>🕐</button>}
                     <button onClick={()=>deleteHabit(habit.id)} style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:8,color:"#f87171",cursor:"pointer",fontSize:16,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
                   </div>
                   {isEditingTime&&(
                     <div style={{marginTop:10}}>
-                      <TimePicker value={habit.time} onChange={t=>updateTime(habit.id,t)} onClose={()=>setEditTimeId(null)} onRemove={habit.time?()=>updateTime(habit.id,""):null}/>
+                      <TimePicker value={habit.reminderTime} onChange={t=>updateTime(habit.id,t)} onClose={()=>setEditTimeId(null)} onRemove={habit.reminderTime?()=>updateTime(habit.id,""):null}/>
                     </div>
                   )}
                 </div>
@@ -802,10 +1020,10 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
               const view=getView(habit.id);
               return(
                 <div key={habit.id} style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,marginBottom:12}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-                    <div>
-                      <div style={{fontWeight:600,fontSize:15}}>{habit.name}</div>
-                      <div style={{fontSize:12,color:cat.color,marginTop:2}}>{habit.category}{habit.time&&<span style={{color:"#666"}}> · 🕐 {habit.time}</span>}</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontWeight:600,fontSize:15,wordBreak:"break-word"}}>{habit.name}</div>
+                      <div style={{fontSize:12,color:cat.color,marginTop:2}}>{habit.category}{habit.reminderTime&&<span style={{color:"#666"}}> · 🕐 {habit.reminderTime}</span>}</div>
                     </div>
                     <div style={{display:"flex",gap:3}}>
                       {["7dni","miesiąc","rok"].map(v=><button key={v} onClick={()=>setView(habit.id,v)} style={{background:view===v?cat.color:"#222",color:view===v?"#000":"#666",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,fontWeight:600,cursor:"pointer"}}>{v}</button>)}
@@ -852,7 +1070,7 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
               <div>
                 <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,marginBottom:16}}>
                   <div style={{fontSize:14,fontWeight:700,color:"#ccc",marginBottom:16}}>Twoje dane</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:12,marginBottom:12}}>
                     {[["Waga (kg)","weight"],["Wzrost (cm)","height"],["Wiek (lata)","age"]].map(([label,key])=>(
                       <div key={key} style={{display:"flex",flexDirection:"column",gap:6}}>
                         <label style={{fontSize:12,color:"#888"}}>{label}</label>
@@ -872,20 +1090,17 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
                     <label style={{fontSize:12,color:"#888",display:"block",marginBottom:6}}>Poziom aktywności</label>
                     <select value={profile.activity} onChange={e=>setProfile(p=>({...p,activity:+e.target.value}))}
                       style={{width:"100%",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:13,outline:"none"}}>
-                      <option value={0}>🛋️ Siedzący</option>
-                      <option value={1}>🚶 Lekko aktywny (1-3 dni/tydz.)</option>
-                      <option value={2}>🏃 Umiarkowanie aktywny (3-5 dni/tydz.)</option>
-                      <option value={3}>💪 Bardzo aktywny (6-7 dni/tydz.)</option>
-                      <option value={4}>🏋️ Ekstremalnie aktywny</option>
+                      {ACTIVITY.map((a,i)=><option key={i} value={i}>{a.option} — ×{String(a.factor).replace(".",",")}</option>)}
                     </select>
                   </div>
                   <button onClick={calcAll} style={{width:"100%",padding:"12px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#667eea,#764ba2)",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer"}}>Oblicz BMI i zapotrzebowanie</button>
                 </div>
                 {bmiVal&&bmiInfo&&(
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>
                     <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,textAlign:"center"}}>
                       <div style={{fontSize:12,color:"#888",marginBottom:6}}>Twoje BMI</div>
-                      <div style={{fontSize:48,fontWeight:800,color:bmiInfo.color}}>{bmiVal.toFixed(1)}</div>
+                      <div style={{fontSize:isMobile?40:48,fontWeight:800,color:bmiInfo.color}}>{bmiVal.toFixed(1)}</div>
                       <div style={{display:"inline-block",marginTop:6,padding:"3px 14px",borderRadius:20,background:bmiInfo.color+"22",color:bmiInfo.color,fontWeight:700,fontSize:13}}>{bmiInfo.label}</div>
                       <div style={{marginTop:12,fontSize:11,color:"#555",lineHeight:1.8}}>
                         <div>Niedowaga: &lt;18.5</div><div>Norma: 18.5–24.9</div><div>Nadwaga: 25–29.9</div><div>Otyłość: ≥30</div>
@@ -893,7 +1108,7 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
                     </div>
                     <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,textAlign:"center"}}>
                       <div style={{fontSize:12,color:"#888",marginBottom:6}}>Dzienne zapotrzebowanie</div>
-                      <div style={{fontSize:48,fontWeight:800,color:"#667eea"}}>{tdee}</div>
+                      <div style={{fontSize:isMobile?40:48,fontWeight:800,color:"#667eea"}}>{tdee}</div>
                       <div style={{color:"#888",fontSize:13,marginBottom:12}}>kcal / dzień</div>
                       <div style={{background:"#0a0a0a",borderRadius:10,padding:10}}>
                         <div style={{fontSize:11,color:"#666",marginBottom:8}}>Sugerowane makro:</div>
@@ -905,6 +1120,8 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
                       </div>
                     </div>
                   </div>
+                  {serverProfile?.bmr&&<FormulaPanel profile={serverProfile}/>}
+                  </>
                 )}
               </div>
             )}
@@ -914,8 +1131,8 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
               <div>
                 <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,marginBottom:16}}>
                 <div style={{marginBottom:14}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,flex:"1 1 auto",justifyContent:isMobile?"space-between":"flex-start"}}>
                       <button onClick={()=>{const d=new Date(calDate+"T00:00:00");d.setDate(d.getDate()-1);setCalDate(toISO(d));}} style={{background:"#222",border:"none",borderRadius:8,color:"#aaa",cursor:"pointer",fontSize:16,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>‹</button>
                       <div style={{textAlign:"center",minWidth:118}}>
                         <div style={{fontWeight:700,fontSize:15,textTransform:"capitalize"}}>{(()=>{const t=today();if(calDate===t)return"Dzisiaj";const y=new Date();y.setDate(y.getDate()-1);if(calDate===toISO(y))return"Wczoraj";return new Date(calDate+"T00:00:00").toLocaleDateString("pl-PL",{weekday:"short",day:"numeric",month:"short"});})()}</div>
@@ -923,14 +1140,14 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
                       </div>
                       <button onClick={()=>{if(calDate>=today())return;const d=new Date(calDate+"T00:00:00");d.setDate(d.getDate()+1);setCalDate(toISO(d));}} disabled={calDate>=today()} style={{background:calDate>=today()?"#161616":"#222",border:"none",borderRadius:8,color:calDate>=today()?"#333":"#aaa",cursor:calDate>=today()?"default":"pointer",fontSize:16,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>›</button>
                     </div>
-                    <button onClick={()=>setModal(true)} style={{background:"linear-gradient(135deg,#667eea,#764ba2)",color:"#fff",border:"none",borderRadius:10,padding:"8px 16px",fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0}}>➕ Dodaj produkt</button>
+                    <button onClick={()=>setModal(true)} style={{background:"linear-gradient(135deg,#667eea,#764ba2)",color:"#fff",border:"none",borderRadius:10,padding:isMobile?"11px 16px":"8px 16px",fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0,width:isMobile?"100%":"auto"}}>➕ Dodaj produkt</button>
                   </div>
                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
                     <input type="date" value={calDate} max={today()} onChange={e=>e.target.value&&setCalDate(e.target.value)} style={{background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"6px 10px",color:"#fff",fontSize:12,colorScheme:"dark",outline:"none"}}/>
                     {calDate!==today()&&<button onClick={()=>setCalDate(today())} style={{background:"#222",border:"1px solid #444",borderRadius:8,color:"#aaa",fontSize:12,padding:"6px 12px",cursor:"pointer"}}>↩ Wróć do dziś</button>}
                   </div>
                 </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(88px,1fr))",gap:8,marginBottom:12}}>
                     {[["🔥",totToday.cal,"kcal","#667eea"],["🥑",totToday.f.toFixed(1),"g Tłuszcz","#ef4444"],["🌾",totToday.c.toFixed(1),"g Węgl.","#f59e0b"],["💪",totToday.p.toFixed(1),"g Białko","#22c55e"],["🌿",totToday.fb.toFixed(1),"g Błonnik","#84cc16"],["🧂",totToday.s.toFixed(1),"g Sól","#94a3b8"]].map(([icon,val,unit,color])=>(
                       <div key={unit} style={{background:"#0a0a0a",borderRadius:10,padding:10,textAlign:"center"}}>
                         <div style={{fontSize:10,color:"#666",marginBottom:2}}>{icon}</div>
@@ -956,10 +1173,10 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
                         <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:ri<todayEntries.length-1?"1px solid #1a1a1a":"none"}}>
                           <div style={{flex:1}}>
                             <div style={{fontSize:13,fontWeight:600}}>{e.name}</div>
-                            <div style={{fontSize:11,color:"#555"}}>{e.grams}g · T:{e.f}g W:{e.c}g B:{e.p}g Bł:{e.fb||0}g Sól:{e.s||0}g</div>
+                            <div style={{fontSize:11,color:"#555"}}>{e.grams}g · T:{e.fatG}g W:{e.carbsG}g B:{e.proteinG}g Bł:{e.fiberG}g Sól:{e.saltG}g</div>
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <span style={{fontSize:14,fontWeight:700,color:"#667eea"}}>{e.cal} kcal</span>
+                            <span style={{fontSize:14,fontWeight:700,color:"#667eea"}}>{e.kcal} kcal</span>
                             <button onClick={()=>removeEntry(e.id)} style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:7,color:"#f87171",cursor:"pointer",fontSize:13,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
                           </div>
                         </div>
@@ -969,15 +1186,14 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
                 </div>
                 <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16}}>
                   <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#ccc"}}>📅 Historia kalorii</div>
-                  <CalYearView calLogs={calLogsFlat} tdee={tdee}/>
+                  <CalYearView calLogs={dailyTotals} tdee={tdee}/>
                 </div>
               </div>
             )}
           </div>
         )}
-      </div>
 
-              {/* ═══ MIĘŚNIE ═══ */}
+        {/* ═══ MIĘŚNIE ═══ */}
         {mainTab==="miesnie"&&<MuscleMap/>}
 
         {/* ═══ DOŁEK ═══ */}
@@ -995,7 +1211,7 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
 
             {/* Level selector */}
             <div style={{fontSize:13,fontWeight:700,color:"#ccc",marginBottom:12}}>Gdzie teraz jesteś?</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:24}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,marginBottom:24}}>
               {[
                 {k:"l1",n:"Poziom 1",name:"Stabilizacja",time:"0–10 min",desc:"Przytłoczony, chaotyczny. Ciało napięte, serce przyspieszone. Jesteś w spirali.",border:"#e8b84b",bg:"#2a1e00",text:"#e8b84b"},
                 {k:"l2",n:"Poziom 2",name:"Przetwarzanie",time:"10–30 min",desc:"Trochę spokojniejszy, ale ciężki. Negatywne myśli, brak perspektywy.",border:"#d97340",bg:"#2a1000",text:"#d97340"},
@@ -1105,49 +1321,54 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
             )}
           </div>
         )}
+      </div>
+
       {modal&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:20}}
           onClick={e=>{if(e.target===e.currentTarget){setModal(false);setSelFood(null);setSearch("");setGrams(100);}}}>
-          <div style={{background:"#161616",borderRadius:"20px 20px 0 0",padding:24,width:"100%",maxWidth:600,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.4)"}}>
+          {/* na telefonie panel dolny, na desktopie wyśrodkowane okno */}
+          <div style={{background:"#161616",borderRadius:isMobile?"20px 20px 0 0":16,padding:isMobile?"20px 16px calc(20px + env(safe-area-inset-bottom))":24,width:"100%",maxWidth:600,maxHeight:isMobile?"88vh":"85vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.4)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <h3 style={{margin:0,fontSize:17,fontWeight:700}}>Dodaj produkt</h3>
               <button onClick={()=>{setModal(false);setSelFood(null);setSearch("");setGrams(100);}} style={{background:"#222",border:"none",borderRadius:8,color:"#aaa",fontSize:18,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
             </div>
-            {/* Search mode toggle */}
             <div style={{display:"flex",gap:4,background:"#0a0a0a",borderRadius:10,padding:3,marginBottom:10}}>
-              {[["local","📦 Baza lokalna"],["api","🌍 Wyszukaj online"]].map(([k,l])=>(
-                <button key={k} onClick={()=>{setSearchMode(k);setSelFood(null);}} style={{flex:1,background:searchMode===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"7px",color:searchMode===k?"#fff":"#666",fontWeight:600,cursor:"pointer",fontSize:12}}>{l}</button>
+              {[[false,"📦 Baza lokalna"],[true,"🌍 Open Food Facts"]].map(([online,label])=>(
+                <button key={label} onClick={()=>{setSelFood(null);setOffResults(online?[]:null);}}
+                  style={{flex:1,background:(offResults!==null)===online?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"7px",
+                    color:(offResults!==null)===online?"#fff":"#666",fontWeight:600,cursor:"pointer",fontSize:12}}>{label}</button>
               ))}
             </div>
 
-            {/* Local search */}
-            {searchMode==="local"&&(
-              <>
-                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Szukaj w lokalnej bazie…"
-                  style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1px solid #333",background:"#0a0a0a",color:"#fff",fontSize:14,marginBottom:10,boxSizing:"border-box",outline:"none"}}/>
-                <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:10}}>
-                  {["Wszystkie","⭐ Własne produkty",...Object.keys(FOOD_DB)].map(cat=>(
-                    <button key={cat} onClick={()=>setSelCat(cat)} style={{whiteSpace:"nowrap",padding:"5px 10px",borderRadius:20,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:selCat===cat?"#667eea":"#222",color:selCat===cat?"#fff":"#666"}}>{cat.replace(/^.\s/,"")}</button>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* API search */}
-            {searchMode==="api"&&(
+            {offResults!==null?(
               <div style={{marginBottom:10}}>
                 <div style={{display:"flex",gap:8,marginBottom:6}}>
-                  <input value={apiQuery} onChange={e=>setApiQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&searchOpenFoodFacts(apiQuery)}
-                    placeholder="🔍 Wyszukaj wartości odżywcze online…"
+                  <input value={offQuery} onChange={e=>setOffQuery(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&searchOff()}
+                    placeholder="🔍 Nazwa produktu, np. jogurt naturalny"
                     style={{flex:1,padding:"10px 14px",borderRadius:10,border:"1px solid #333",background:"#0a0a0a",color:"#fff",fontSize:14,outline:"none"}}/>
-                  <button onClick={()=>searchOpenFoodFacts(apiQuery)} disabled={apiLoading||!apiQuery.trim()}
-                    style={{background:apiQuery.trim()?"#667eea":"#222",color:apiQuery.trim()?"#fff":"#555",border:"none",borderRadius:10,padding:"0 16px",fontWeight:700,fontSize:13,cursor:apiQuery.trim()?"pointer":"not-allowed",flexShrink:0}}>
-                    {apiLoading?"⏳":"Szukaj"}
+                  <button onClick={searchOff} disabled={offLoading||offQuery.trim().length<2}
+                    style={{background:offQuery.trim().length>1?"#667eea":"#222",color:offQuery.trim().length>1?"#fff":"#555",
+                      border:"none",borderRadius:10,padding:"0 16px",fontWeight:700,fontSize:13,flexShrink:0,
+                      cursor:offQuery.trim().length>1?"pointer":"not-allowed"}}>
+                    {offLoading?"⏳":"Szukaj"}
                   </button>
                 </div>
-                <div style={{fontSize:11,color:"#555"}}>Claude wyszuka wartości odżywcze w sieci 🌐 (może chwilę potrwać)</div>
-                {apiError&&<div style={{fontSize:12,color:"#f87171",marginTop:6}}>{apiError}</div>}
+                <div style={{fontSize:11,color:"#555",lineHeight:1.5}}>
+                  Dane z bazy Open Food Facts. Wybrany produkt trafia na stałe do Twojego katalogu,
+                  więc kolejnym razem znajdziesz go już lokalnie.
+                </div>
               </div>
+            ):(
+              <>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Szukaj produktu…"
+              style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1px solid #333",background:"#0a0a0a",color:"#fff",fontSize:14,marginBottom:10,boxSizing:"border-box",outline:"none"}}/>
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:10}}>
+              {["Wszystkie",...foodCats.map(c=>c.category)].map(cat=>(
+                <button key={cat} onClick={()=>setSelCat(cat)} style={{whiteSpace:"nowrap",padding:"5px 10px",borderRadius:20,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:selCat===cat?"#667eea":"#222",color:selCat===cat?"#fff":"#666"}}>{cat.replace(/^.\s/,"")}</button>
+              ))}
+            </div>
+              </>
             )}
             <button onClick={()=>setShowCustomForm(!showCustomForm)} style={{width:"100%",padding:"9px",borderRadius:10,border:`2px dashed ${showCustomForm?"#ef4444":"#667eea"}`,background:"transparent",color:showCustomForm?"#ef4444":"#667eea",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:10}}>
               {showCustomForm?"❌ Anuluj":"➕ Dodaj własny produkt"}
@@ -1155,7 +1376,7 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
             {showCustomForm&&(
               <div style={{background:"#0a0a0a",borderRadius:12,padding:14,marginBottom:12,border:"1px solid #2a2a2a"}}>
                 <div style={{fontSize:13,fontWeight:700,color:"#c084fc",marginBottom:10}}>Własny produkt (na 100g)</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8}}>
                   <input placeholder="Nazwa" value={customForm.name} onChange={e=>setCustomForm(f=>({...f,name:e.target.value}))}
                     style={{gridColumn:"1/-1",padding:"8px 12px",borderRadius:8,border:"1px solid #333",background:"#161616",color:"#fff",fontSize:13,outline:"none"}}/>
                   {[["Kalorie (kcal)","cal"],["Białko (g)","p"],["Węglowodany (g)","c"],["Tłuszcze (g)","f"]].map(([label,key])=>(
@@ -1167,20 +1388,24 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
               </div>
             )}
             <div style={{maxHeight:220,overflowY:"auto",border:"1px solid #2a2a2a",borderRadius:10,marginBottom:14}}>
-              {apiLoading&&<div style={{padding:20,textAlign:"center",color:"#667eea"}}>⏳ Wyszukiwanie w sieci…</div>}
-              {!apiLoading&&filtered.length===0&&<div style={{padding:20,textAlign:"center",color:"#555"}}>{searchMode==="api"?"Wpisz frazę i kliknij Szukaj":"Brak wyników"}</div>}
+              {offLoading&&<div style={{padding:20,textAlign:"center",color:"#667eea"}}>⏳ Pytam Open Food Facts…</div>}
+              {!offLoading&&filtered.length===0&&(
+                <div style={{padding:20,textAlign:"center",color:"#555"}}>
+                  {offResults!==null?(offQuery?"Brak wyników w Open Food Facts":"Wpisz nazwę i kliknij Szukaj"):"Brak wyników"}
+                </div>
+              )}
               {filtered.map(f=>(
-                <div key={`${f.name}${f.id||""}`} onClick={()=>setSelFood(f)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #1a1a1a",background:selFood?.name===f.name?"#1a1030":"transparent",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div key={f.offCode||f.id} onClick={()=>setSelFood(f)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #1a1a1a",background:selFood?.name===f.name?"#1a1030":"transparent",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{flex:1}}>
                     <div style={{fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:6}}>
                       {f.name}
-                      {f.isCustom&&<span style={{fontSize:10,background:"#c084fc",color:"#000",padding:"1px 5px",borderRadius:4,fontWeight:700}}>WŁASNY</span>}
+                      {f.source==="custom"&&<span style={{fontSize:10,background:"#c084fc",color:"#000",padding:"1px 5px",borderRadius:4,fontWeight:700}}>WŁASNY</span>}
                     </div>
                     <div style={{fontSize:11,color:"#555"}}>{f.category}</div>
                   </div>
                   <div style={{textAlign:"right",fontSize:11,display:"flex",alignItems:"center",gap:8}}>
-                    <div><div style={{fontWeight:700,color:"#667eea"}}>{f.cal} kcal</div><div style={{color:"#555"}}>B:{f.p}g W:{f.c}g T:{f.f}g</div></div>
-                    {f.isCustom&&<button onClick={e=>{e.stopPropagation();deleteCustomFood(f.id);}} style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:6,color:"#f87171",cursor:"pointer",fontSize:12,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
+                    <div><div style={{fontWeight:700,color:"#667eea"}}>{f.kcal} kcal</div><div style={{color:"#555"}}>B:{f.proteinG}g W:{f.carbsG}g T:{f.fatG}g</div></div>
+                    {f.source==="custom"&&<button onClick={e=>{e.stopPropagation();deleteCustomFood(f.id);}} style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:6,color:"#f87171",cursor:"pointer",fontSize:12,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
                   </div>
                 </div>
               ))}
@@ -1193,7 +1418,7 @@ gdzie cal=kcal/100g, p=białko(g)/100g, c=węglowodany(g)/100g, f=tłuszcze(g)/1
                     style={{width:80,padding:"7px 10px",borderRadius:8,border:"1px solid #333",background:"#161616",color:"#fff",fontSize:14,outline:"none"}}/>
                 </div>
                 <div style={{display:"flex",gap:8}}>
-                  {[["Kcal",Math.round(selFood.cal*grams/100),"#667eea"],["B",(selFood.p*grams/100).toFixed(1)+"g","#22c55e"],["W",(selFood.c*grams/100).toFixed(1)+"g","#f59e0b"],["T",(selFood.f*grams/100).toFixed(1)+"g","#ef4444"]].map(([k,v,c])=>(
+                  {[["Kcal",Math.round(selFood.kcal*grams/100),"#667eea"],["B",(selFood.proteinG*grams/100).toFixed(1)+"g","#22c55e"],["W",(selFood.carbsG*grams/100).toFixed(1)+"g","#f59e0b"],["T",(selFood.fatG*grams/100).toFixed(1)+"g","#ef4444"]].map(([k,v,c])=>(
                     <div key={k} style={{flex:1,textAlign:"center",background:"#161616",borderRadius:8,padding:"8px 4px"}}>
                       <div style={{fontSize:15,fontWeight:800,color:c}}>{v}</div>
                       <div style={{fontSize:10,color:"#555"}}>{k}</div>
