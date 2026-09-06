@@ -8,10 +8,8 @@ NET=app-net
 echo "▶ Sieć"
 podman network exists "$NET" || podman network create "$NET"
 
-echo "▶ Wolumeny"
-for v in pgdata certs certbot-www; do
-  podman volume exists "$v" || podman volume create "$v"
-done
+echo "▶ Wolumen bazy danych"
+podman volume exists pgdata || podman volume create pgdata
 
 echo "▶ db-pod (PostgreSQL, alias: db)"
 podman pod exists db-pod || podman pod create --name db-pod --network "${NET}:alias=db"
@@ -32,14 +30,22 @@ podman container exists tracker-app || podman run -d --pod app-pod --name tracke
   -e DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}" \
   tracker-app
 
-echo "▶ nginx-pod (bootstrap HTTP, alias: web)"
+echo "▶ Certyfikat TLS (self-signed, bez domeny publicznej)"
+if [[ ! -f certs/fullchain.pem || ! -f certs/privkey.pem ]]; then
+  ./scripts/gen-self-signed-cert.sh
+else
+  echo "  już istnieje, pomijam (uruchom ./scripts/gen-self-signed-cert.sh ręcznie, by wymienić)"
+fi
+
+echo "▶ nginx-pod (HTTPS, alias: web)"
 podman pod exists nginx-pod || podman pod create --name nginx-pod \
   --network "${NET}:alias=web" -p 80:80 -p 443:443
 podman container exists nginx || podman run -d --pod nginx-pod --name nginx --restart=always \
-  -e DOMAIN="$DOMAIN" \
-  -v "$PWD/nginx/bootstrap.conf.template:/etc/nginx/templates/default.conf.template:ro,Z" \
-  -v certs:/etc/letsencrypt \
-  -v certbot-www:/var/www/certbot \
+  -e HOST="$HOST" \
+  -v "$PWD/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro,Z" \
+  -v "$PWD/certs:/etc/nginx/certs:ro,Z" \
   docker.io/library/nginx:alpine
 
-echo "✅ Gotowe. Teraz: ./scripts/issue-cert.sh, potem ./scripts/enable-tls.sh"
+echo "✅ Gotowe: https://$HOST"
+echo "   Certyfikat jest self-signed — przeglądarka pokaże ostrzeżenie,"
+echo "   patrz tracker.md, sekcja o zaufaniu certyfikatowi."

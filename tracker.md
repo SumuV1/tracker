@@ -1,12 +1,16 @@
 # Tracker — wdrożenie na Podman
 
-Trzy pody w jednej sieci Podmana `app-net`:
+Trzy pody w jednej sieci Podmana `app-net`. **Nie jest wymagana żadna publiczna
+domena** — aplikacja jest dostępna po HTTPS pod nazwą DNS (lub adresem IP)
+Twojego hosta w sieci lokalnej/firmowej, z certyfikatem TLS wygenerowanym
+samodzielnie (self-signed), bez Let's Encrypt/certbot i bez otwierania portu 80
+na świat:
 
 ```
-                Internet
+           Sieć lokalna / firmowa
                    │  :80 / :443
           ┌────────▼─────────┐
-          │    nginx-pod      │   nginx (TLS, reverse proxy) + certbot
+          │    nginx-pod      │   nginx (TLS self-signed, reverse proxy)
           │  alias: web       │
           └────────┬─────────┘
                    │  http://app:3000   (sieć app-net)
@@ -33,11 +37,13 @@ Dzięki temu Twój komponent React działa **bez zmian**.
 tracker/
 ├── Containerfile              # build React + serwer Node w jednym obrazie
 ├── .env.example
+├── certs/                     # wygenerowane lokalnie, NIE w repo (.gitignore)
+│   ├── fullchain.pem
+│   └── privkey.pem
 ├── db/
 │   └── init.sql
 ├── nginx/
-│   ├── bootstrap.conf.template   # HTTP-only, do wydania certyfikatu
-│   └── default.conf.template     # docelowy HTTPS + proxy
+│   └── default.conf.template     # HTTPS (self-signed) + proxy do app
 ├── server/
 │   ├── package.json
 │   └── server.js
@@ -51,8 +57,7 @@ tracker/
 │       └── App.jsx            # ⟵ TWÓJ istniejący komponent, bez zmian
 └── scripts/
     ├── deploy.sh
-    ├── issue-cert.sh
-    └── enable-tls.sh
+    └── gen-self-signed-cert.sh
 ```
 
 ---
@@ -296,44 +301,28 @@ CMD ["node", "server.js"]
 
 ---
 
-## 5. nginx + certbot (`nginx-pod`)
+## 5. nginx (`nginx-pod`)
 
 Wykorzystujemy szablony oficjalnego obrazu nginx: pliki w `/etc/nginx/templates/*.template`
-są przetwarzane przez `envsubst` przy starcie (podmienia tylko zmienne z ENV, np. `${DOMAIN}`).
+są przetwarzane przez `envsubst` przy starcie (podmienia tylko zmienne z ENV, np. `${HOST}`).
+Certyfikat TLS jest generowany lokalnie (self-signed) — patrz sekcja 7 — więc nie ma
+fazy „bootstrap HTTP" ani wyzwania ACME: nginx od razu startuje z HTTPS.
 
-### `nginx/bootstrap.conf.template`  (tylko HTTP — do wydania certyfikatu)
+### `nginx/default.conf.template`  (HTTPS self-signed + proxy do app)
 ```nginx
 server {
     listen 80;
-    server_name ${DOMAIN};
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-    location / {
-        add_header Content-Type text/plain;
-        return 200 'Oczekiwanie na certyfikat TLS...';
-    }
-}
-```
-
-### `nginx/default.conf.template`  (docelowy HTTPS + proxy do app)
-```nginx
-server {
-    listen 80;
-    server_name ${DOMAIN};
-
-    location /.well-known/acme-challenge/ { root /var/www/certbot; }
-    location / { return 301 https://$host$request_uri; }
+    server_name ${HOST};
+    return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl;
     http2 on;
-    server_name ${DOMAIN};
+    server_name ${HOST};
 
-    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
 
     location / {
         proxy_pass http://app:3000;      # alias podu app w sieci app-net
@@ -352,17 +341,59 @@ server {
 
 ### `.env.example`  → skopiuj do `.env` i uzupełnij
 ```bash
-DOMAIN=twoja-domena.pl
-EMAIL=admin@twoja-domena.pl
+# Nazwa DNS hosta w Twojej sieci (lub adres IP) — sprawdź: hostname -f
+HOST=host.example.lan
 
 DB_USER=tracker
 DB_PASSWORD=zmien_to_na_silne_haslo
 DB_NAME=tracker
 ```
 
+`HOST` **nie musi być domeną publiczną**. Wystarczy:
+- wpis w lokalnym/firmowym serwerze DNS wskazujący na ten host, albo
+- wpis w pliku `hosts` na maszynach klienckich (`C:\Windows\System32\drivers\etc\hosts`
+  / `/etc/hosts`), albo
+- po prostu adres IP hosta, jeśli DNS nie jest dostępny.
+
 ---
 
 ## 7. Skrypty wdrożeniowe
+
+### `scripts/gen-self-signed-cert.sh`  (generuje certyfikat TLS bez CA/domeny)
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+set -a; source .env; set +a
+
+mkdir -p certs
+
+# SAN musi wskazywać właściwy typ (IP vs DNS), inaczej przeglądarki odrzucą cert.
+if [[ "$HOST" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+  SAN_HOST="IP:${HOST}"
+else
+  SAN_HOST="DNS:${HOST}"
+fi
+SAN="${SAN_HOST},DNS:localhost,IP:127.0.0.1"
+
+openssl req -x509 -nodes -newkey rsa:2048 \
+  -days 3650 \
+  -keyout certs/privkey.pem \
+  -out certs/fullchain.pem \
+  -subj "/CN=${HOST}" \
+  -addext "subjectAltName=${SAN}"
+
+chmod 600 certs/privkey.pem
+
+echo "✅ Certyfikat self-signed wygenerowany dla ${HOST} (ważny 10 lat)"
+echo "   certs/fullchain.pem, certs/privkey.pem"
+echo "   Uruchom ten skrypt ponownie, żeby wymienić certyfikat, a potem:"
+echo "   podman restart nginx"
+```
+
+Certyfikat trzyma się w bind-mouncie `certs/` (nie w wolumenie Podmana), żeby był
+łatwo dostępny do zaimportowania na maszyny klienckie — patrz sekcja 9.
+Katalog jest w `.gitignore`, klucz prywatny nigdy nie trafia do repo.
 
 ### `scripts/deploy.sh`
 ```bash
@@ -376,10 +407,8 @@ NET=app-net
 echo "▶ Sieć"
 podman network exists "$NET" || podman network create "$NET"
 
-echo "▶ Wolumeny"
-for v in pgdata certs certbot-www; do
-  podman volume exists "$v" || podman volume create "$v"
-done
+echo "▶ Wolumen bazy danych"
+podman volume exists pgdata || podman volume create pgdata
 
 echo "▶ db-pod (PostgreSQL, alias: db)"
 podman pod exists db-pod || podman pod create --name db-pod --network "${NET}:alias=db"
@@ -400,52 +429,25 @@ podman container exists tracker-app || podman run -d --pod app-pod --name tracke
   -e DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}" \
   tracker-app
 
-echo "▶ nginx-pod (bootstrap HTTP, alias: web)"
+echo "▶ Certyfikat TLS (self-signed, bez domeny publicznej)"
+if [[ ! -f certs/fullchain.pem || ! -f certs/privkey.pem ]]; then
+  ./scripts/gen-self-signed-cert.sh
+else
+  echo "  już istnieje, pomijam (uruchom ./scripts/gen-self-signed-cert.sh ręcznie, by wymienić)"
+fi
+
+echo "▶ nginx-pod (HTTPS, alias: web)"
 podman pod exists nginx-pod || podman pod create --name nginx-pod \
   --network "${NET}:alias=web" -p 80:80 -p 443:443
 podman container exists nginx || podman run -d --pod nginx-pod --name nginx --restart=always \
-  -e DOMAIN="$DOMAIN" \
-  -v "$PWD/nginx/bootstrap.conf.template:/etc/nginx/templates/default.conf.template:ro,Z" \
-  -v certs:/etc/letsencrypt \
-  -v certbot-www:/var/www/certbot \
-  docker.io/library/nginx:alpine
-
-echo "✅ Gotowe. Teraz: ./scripts/issue-cert.sh, potem ./scripts/enable-tls.sh"
-```
-
-### `scripts/issue-cert.sh`
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-cd "$(dirname "$0")/.."
-set -a; source .env; set +a
-
-podman run --rm \
-  -v certs:/etc/letsencrypt \
-  -v certbot-www:/var/www/certbot \
-  docker.io/certbot/certbot certonly --webroot -w /var/www/certbot \
-  -d "$DOMAIN" \
-  --email "$EMAIL" --agree-tos --no-eff-email --non-interactive
-
-echo "✅ Certyfikat wydany dla $DOMAIN"
-```
-
-### `scripts/enable-tls.sh`  (przełącza nginx na konfigurację HTTPS)
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-cd "$(dirname "$0")/.."
-set -a; source .env; set +a
-
-podman rm -f nginx
-podman run -d --pod nginx-pod --name nginx --restart=always \
-  -e DOMAIN="$DOMAIN" \
+  -e HOST="$HOST" \
   -v "$PWD/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro,Z" \
-  -v certs:/etc/letsencrypt \
-  -v certbot-www:/var/www/certbot \
+  -v "$PWD/certs:/etc/nginx/certs:ro,Z" \
   docker.io/library/nginx:alpine
 
-echo "✅ HTTPS aktywne na https://$DOMAIN"
+echo "✅ Gotowe: https://$HOST"
+echo "   Certyfikat jest self-signed — przeglądarka pokaże ostrzeżenie,"
+echo "   patrz tracker.md, sekcja o zaufaniu certyfikatowi."
 ```
 
 Nadaj uprawnienia: `chmod +x scripts/*.sh`
@@ -455,41 +457,65 @@ Nadaj uprawnienia: `chmod +x scripts/*.sh`
 ## 8. Uruchomienie — kolejność
 
 ```bash
-cp .env.example .env      # i uzupełnij domenę, e-mail, hasło DB
-./scripts/deploy.sh       # sieć + 3 pody (nginx w trybie HTTP)
-./scripts/issue-cert.sh   # Let's Encrypt przez webroot (domena musi wskazywać na serwer, port 80 otwarty)
-./scripts/enable-tls.sh   # przełączenie nginx na HTTPS
+cp .env.example .env      # uzupełnij HOST (nazwa DNS lub IP hosta) i hasło DB
+./scripts/deploy.sh       # sieć + wolumeny + certyfikat self-signed + 3 pody, od razu HTTPS
 ```
 
 Sprawdzenie:
 ```bash
 podman pod ps
 podman ps --all
-curl -k https://$DOMAIN/api/health     # → {"ok":true}
+curl -k https://$HOST/api/health     # -k: pomija weryfikację self-signed CA, → {"ok":true}
 ```
 
 ---
 
-## 9. Odnawianie certyfikatu (systemd timer)
+## 9. Zaufanie certyfikatowi i jego wymiana
 
-`~/.config/systemd/user/certbot-renew.service`
+Certyfikat jest self-signed, więc przeglądarka przy pierwszym wejściu pokaże
+ostrzeżenie „Połączenie nie jest prywatne" / `NET::ERR_CERT_AUTHORITY_INVALID`.
+Do wyboru:
+
+- **Zaakceptować ostrzeżenie ręcznie** (najszybsze, wystarczające do użytku
+  jednoosobowego/testowego) — „Zaawansowane" → „Przejdź do (niebezpieczne)".
+- **Zaimportować `certs/fullchain.pem` jako zaufany certyfikat** na urządzeniach,
+  z których korzystasz — wtedy przeglądarka nie pokazuje już ostrzeżenia:
+  - Linux: `sudo cp certs/fullchain.pem /etc/pki/ca-trust/source/anchors/tracker.pem && sudo update-ca-trust`
+  - Windows: zaimportuj plik do „Zaufane główne urzędy certyfikacji" (certmgr.msc)
+  - macOS: Pęk kluczy → import → ustaw zaufanie „Zawsze ufaj"
+
+Certyfikat generowany jest na 10 lat, więc **nie jest potrzebny automatyczny
+mechanizm odnawiania** (nie ma tu certbota ani ACME). Jeśli mimo to chcesz go
+wymienić (np. zmienił się `HOST`, albo chcesz krótszy okres ważności z powodów
+bezpieczeństwa):
+
+```bash
+./scripts/gen-self-signed-cert.sh   # nadpisuje certs/fullchain.pem i privkey.pem
+podman restart nginx
+```
+
+Jeśli chcesz mieć to zautomatyzowane mimo długiej ważności (np. coroczna
+rotacja), możesz dodać systemd timer analogiczny do poniższego:
+
+`~/.config/systemd/user/cert-renew.service`
 ```ini
 [Unit]
-Description=Odnawianie certyfikatu Let's Encrypt
+Description=Wymiana self-signed certyfikatu TLS
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/podman run --rm -v certs:/etc/letsencrypt -v certbot-www:/var/www/certbot docker.io/certbot/certbot renew
-ExecStartPost=/usr/bin/podman exec nginx nginx -s reload
+WorkingDirectory=%h/tracker
+ExecStart=%h/tracker/scripts/gen-self-signed-cert.sh
+ExecStartPost=/usr/bin/podman restart nginx
 ```
 
-`~/.config/systemd/user/certbot-renew.timer`
+`~/.config/systemd/user/cert-renew.timer`
 ```ini
 [Unit]
-Description=Codzienne sprawdzanie odnowienia certyfikatu
+Description=Coroczna wymiana certyfikatu TLS
 
 [Timer]
-OnCalendar=daily
+OnCalendar=yearly
 Persistent=true
 
 [Install]
@@ -497,7 +523,7 @@ WantedBy=timers.target
 ```
 
 ```bash
-systemctl --user enable --now certbot-renew.timer
+systemctl --user enable --now cert-renew.timer
 loginctl enable-linger "$USER"   # aby timer działał bez zalogowanej sesji
 ```
 
@@ -506,9 +532,14 @@ loginctl enable-linger "$USER"   # aby timer działał bez zalogowanej sesji
 ## Uwagi
 
 - **Wymagany Podman 4.4+** (składnia `--network nazwa:alias=...` i DNS w sieciach netavark).
+- **Bez publicznej domeny**: `HOST` to dowolna nazwa DNS w Twojej sieci lokalnej/firmowej
+  (albo IP hosta) — nie trzeba niczego kupować ani wystawiać portu 80 na świat.
+  Certyfikat TLS jest self-signed, ważny 10 lat, generowany lokalnie przez
+  `openssl` (wymaga zainstalowanego pakietu `openssl` na hoście uruchamiającym skrypty).
 - **Jedna sieć `app-net`** łączy wszystkie trzy pody; usługi znajdują się wzajemnie po aliasach
   `db`, `app`, `web` (DNS Podmana).
-- **Trwałość danych**: wolumen `pgdata` (baza) oraz `certs` (certyfikaty) przetrwają restart.
+- **Trwałość danych**: wolumen `pgdata` (baza) przetrwa restart. Certyfikat leży w `certs/`
+  na hoście (bind-mount), poza wolumenami Podmana — łatwiej go stąd zaimportować na klienty.
 - **Jeden użytkownik / bez logowania** — tak jak oryginalny artefakt. Dane są wspólne dla całej instancji;
   dodanie kont i uwierzytelniania to osobny krok.
 - **Automatyczny start po reboocie**: `--restart=always` + `podman generate systemd` lub Quadlet,
