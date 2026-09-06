@@ -3,6 +3,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 set -a; source .env; set +a
 
+# Rootless Podman nie zbinduje portów <1024 — stąd domyślne 8080/8443.
+HTTP_PORT="${HTTP_PORT:-8080}"
+HTTPS_PORT="${HTTPS_PORT:-8443}"
+
 NET=app-net
 
 echo "▶ Sieć"
@@ -39,13 +43,14 @@ fi
 
 echo "▶ nginx-pod (HTTPS, alias: web)"
 podman pod exists nginx-pod || podman pod create --name nginx-pod \
-  --network "${NET}:alias=web" -p 80:80 -p 443:443
+  --network "${NET}:alias=web" -p "${HTTP_PORT}:80" -p "${HTTPS_PORT}:443"
 podman container exists nginx || podman run -d --pod nginx-pod --name nginx --restart=always \
   -e HOST="$HOST" \
+  -e HTTPS_PORT="$HTTPS_PORT" \
   -v "$PWD/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro,Z" \
   -v "$PWD/certs:/etc/nginx/certs:ro,Z" \
   docker.io/library/nginx:alpine
 
-echo "✅ Gotowe: https://$HOST"
+echo "✅ Gotowe: https://$HOST:$HTTPS_PORT"
 echo "   Certyfikat jest self-signed — przeglądarka pokaże ostrzeżenie,"
 echo "   patrz tracker.md, sekcja o zaufaniu certyfikatowi."
