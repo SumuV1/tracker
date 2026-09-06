@@ -32,6 +32,19 @@ const CATEGORIES = [
 const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.label, c]));
 const DAY_LABELS = ["N","P","W","Ś","C","P","S"];
 const MONTHS_PL = ["Sty","Lut","Mar","Kwi","Maj","Cze","Lip","Sie","Wrz","Paź","Lis","Gru"];
+// Paleta składników odżywczych. Kolejność slotów jest zwalidowana skryptem
+// walidatora dostępności (tryb ciemny, pary sąsiednie): najgorsza para
+// bursztyn↔morski ma ΔE 8,4 przy protanopii, przy progu 8. Nie zmieniać
+// kolorów ani ich kolejności bez ponownego uruchomienia walidatora.
+const NUTRIENT = {
+  kcal:    "#3987e5",
+  protein: "#199e70",
+  carbs:   "#c98500",
+  fat:     "#d55181",
+  fiber:   "#008300",
+  salt:    "#9085e9",
+};
+
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES = ["00","15","30","45"];
 const TILE = 36;
@@ -69,7 +82,7 @@ function FormulaPanel({profile}){
   const n=v=>String(Math.round(v*100)/100).replace(".",",");
   const mono={fontFamily:"monospace",fontSize:12.5,color:"#bbb",lineHeight:1.9,whiteSpace:"nowrap"};
   const res={color:"#fff",fontWeight:700};
-  const head={fontSize:11,fontWeight:700,letterSpacing:"0.08em",color:"#667eea",marginBottom:6,fontFamily:"monospace"};
+  const head={fontSize:11,fontWeight:700,letterSpacing:"0.08em",color:NUTRIENT.kcal,marginBottom:6,fontFamily:"monospace"};
   const note={fontSize:11,color:"#666",marginBottom:8,lineHeight:1.5};
   return(
     <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,marginTop:12}}>
@@ -149,25 +162,34 @@ function Ring({value,target,unit,label,icon,color,size=104,limit=false}){
 }
 
 function NutrientRings({totals,targets}){
-  const macros=[
-    {key:"p",  icon:"💪", label:"Białko",  val:totals.p,  target:targets?.proteinG, color:"#22c55e"},
-    {key:"c",  icon:"🌾", label:"Węgle",   val:totals.c,  target:targets?.carbsG,   color:"#f59e0b"},
-    {key:"f",  icon:"🥑", label:"Tłuszcz", val:totals.f,  target:targets?.fatG,     color:"#ef4444"},
-    {key:"fb", icon:"🌿", label:"Błonnik", val:totals.fb, target:targets?.fiberG,   color:"#84cc16"},
-    {key:"s",  icon:"🧂", label:"Sól",     val:totals.s,  target:targets?.saltG,    color:"#94a3b8", limit:true},
+  // Piramida: kalorie na szczycie, pod nimi dwa główne makroskładniki,
+  // na dole pozostałe trzy. Wszystkie pierścienie poza kaloriami mają jeden
+  // rozmiar, więc rzędy pozostają symetryczne niezależnie od wartości.
+  const row2=[
+    {key:"p", icon:"💪", label:"Białko", val:totals.p, target:targets?.proteinG, color:NUTRIENT.protein},
+    {key:"c", icon:"🌾", label:"Węgle",  val:totals.c, target:targets?.carbsG,   color:NUTRIENT.carbs},
   ];
+  const row3=[
+    {key:"f",  icon:"🥑", label:"Tłuszcz", val:totals.f,  target:targets?.fatG,   color:NUTRIENT.fat},
+    {key:"fb", icon:"🌿", label:"Błonnik", val:totals.fb, target:targets?.fiberG, color:NUTRIENT.fiber},
+    {key:"s",  icon:"🧂", label:"Sól",     val:totals.s,  target:targets?.saltG,  color:NUTRIENT.salt, limit:true},
+  ];
+  const cell=m=>(
+    <Ring key={m.key} value={m.val} target={m.target} unit="g"
+      label={m.label} icon={m.icon} color={m.color} limit={m.limit} size={96}/>
+  );
   return(
-    <div>
+    <div style={{display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
       <Ring value={Math.round(totals.cal)} target={targets?.kcal} unit="kcal"
-        label="Kalorie" icon="🔥" color="#667eea" size={148}/>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(96px,1fr))",gap:12,marginTop:16}}>
-        {macros.map(m=>(
-          <Ring key={m.key} value={m.val} target={m.target} unit="g"
-            label={m.label} icon={m.icon} color={m.color} limit={m.limit}/>
-        ))}
+        label="Kalorie" icon="🔥" color={NUTRIENT.kcal} size={150}/>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12,width:"100%"}}>
+        {row2.map(cell)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,width:"100%"}}>
+        {row3.map(cell)}
       </div>
       {!targets&&(
-        <div style={{fontSize:11,color:"#666",lineHeight:1.5,marginTop:14,textAlign:"center"}}>
+        <div style={{fontSize:11,color:"#666",lineHeight:1.5,textAlign:"center"}}>
           Uzupełnij profil w zakładce „BMI & Profil", żeby zobaczyć dzienne cele.
         </div>
       )}
@@ -1197,12 +1219,12 @@ export default function App() {
                     </div>
                     <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,textAlign:"center"}}>
                       <div style={{fontSize:12,color:"#888",marginBottom:6}}>Dzienne zapotrzebowanie</div>
-                      <div style={{fontSize:isMobile?40:48,fontWeight:800,color:"#667eea"}}>{tdee}</div>
+                      <div style={{fontSize:isMobile?40:48,fontWeight:800,color:NUTRIENT.kcal}}>{tdee}</div>
                       <div style={{color:"#888",fontSize:13,marginBottom:12}}>kcal / dzień</div>
                       <div style={{background:"#0a0a0a",borderRadius:10,padding:10}}>
                         <div style={{fontSize:11,color:"#666",marginBottom:8}}>Sugerowane makro:</div>
                         <div style={{display:"flex",justifyContent:"space-around"}}>
-                          {[["Białko",Math.round(tdee*0.3/4)+"g","#22c55e"],["Węgl.",Math.round(tdee*0.45/4)+"g","#f59e0b"],["Tłuszcze",Math.round(tdee*0.25/9)+"g","#ef4444"]].map(([n,v,c])=>(
+                          {[["Białko",serverProfile.targets.proteinG+"g",NUTRIENT.protein],["Węgl.",serverProfile.targets.carbsG+"g",NUTRIENT.carbs],["Tłuszcze",serverProfile.targets.fatG+"g",NUTRIENT.fat]].map(([n,v,c])=>(
                             <div key={n} style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:10,color:"#555"}}>{n}</div></div>
                           ))}
                         </div>
@@ -1218,7 +1240,7 @@ export default function App() {
             {/* Tracker */}
             {bmiTab==="tracker"&&(
               <div style={{display:"grid",gap:16,alignItems:"start",
-                gridTemplateColumns:isWide?"minmax(230px,280px) minmax(320px,1fr) minmax(300px,380px)":"1fr"}}>
+                gridTemplateColumns:isWide?"minmax(260px,320px) minmax(300px,1fr) minmax(290px,370px)":"1fr"}}>
 
                 {/* lewa kolumna — postęp dnia */}
                 <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16}}>
@@ -1260,7 +1282,7 @@ export default function App() {
                             <div style={{fontSize:11,color:"#555"}}>{e.grams}g · T:{e.fatG}g W:{e.carbsG}g B:{e.proteinG}g Bł:{e.fiberG}g Sól:{e.saltG}g</div>
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <span style={{fontSize:14,fontWeight:700,color:"#667eea"}}>{e.kcal} kcal</span>
+                            <span style={{fontSize:14,fontWeight:700,color:NUTRIENT.kcal}}>{e.kcal} kcal</span>
                             <button onClick={()=>removeEntry(e.id)} style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:7,color:"#f87171",cursor:"pointer",fontSize:13,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
                           </div>
                         </div>
@@ -1489,7 +1511,7 @@ export default function App() {
                     <div style={{fontSize:11,color:"#555"}}>{f.category}</div>
                   </div>
                   <div style={{textAlign:"right",fontSize:11,display:"flex",alignItems:"center",gap:8}}>
-                    <div><div style={{fontWeight:700,color:"#667eea"}}>{f.kcal} kcal</div><div style={{color:"#555"}}>B:{f.proteinG}g W:{f.carbsG}g T:{f.fatG}g</div></div>
+                    <div><div style={{fontWeight:700,color:NUTRIENT.kcal}}>{f.kcal} kcal</div><div style={{color:"#555"}}>B:{f.proteinG}g W:{f.carbsG}g T:{f.fatG}g</div></div>
                     {f.source==="custom"&&<button onClick={e=>{e.stopPropagation();deleteCustomFood(f.id);}} style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:6,color:"#f87171",cursor:"pointer",fontSize:12,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
                   </div>
                 </div>
@@ -1503,7 +1525,7 @@ export default function App() {
                     style={{width:80,padding:"7px 10px",borderRadius:8,border:"1px solid #333",background:"#161616",color:"#fff",fontSize:14,outline:"none"}}/>
                 </div>
                 <div style={{display:"flex",gap:8}}>
-                  {[["Kcal",Math.round(selFood.kcal*grams/100),"#667eea"],["B",(selFood.proteinG*grams/100).toFixed(1)+"g","#22c55e"],["W",(selFood.carbsG*grams/100).toFixed(1)+"g","#f59e0b"],["T",(selFood.fatG*grams/100).toFixed(1)+"g","#ef4444"]].map(([k,v,c])=>(
+                  {[["Kcal",Math.round(selFood.kcal*grams/100),NUTRIENT.kcal],["B",(selFood.proteinG*grams/100).toFixed(1)+"g",NUTRIENT.protein],["W",(selFood.carbsG*grams/100).toFixed(1)+"g",NUTRIENT.carbs],["T",(selFood.fatG*grams/100).toFixed(1)+"g",NUTRIENT.fat]].map(([k,v,c])=>(
                     <div key={k} style={{flex:1,textAlign:"center",background:"#161616",borderRadius:8,padding:"8px 4px"}}>
                       <div style={{fontSize:15,fontWeight:800,color:c}}>{v}</div>
                       <div style={{fontSize:10,color:"#555"}}>{k}</div>
