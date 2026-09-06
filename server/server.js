@@ -1,75 +1,52 @@
 import express from "express";
-import pg from "pg";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import { waitForDb } from "./db.js";
+import { authRoutes, requireAuth } from "./auth.js";
+import { habitRoutes } from "./routes/habits.js";
+import { profileRoutes } from "./routes/profile.js";
+import { foodRoutes } from "./routes/foods.js";
+import { mealRoutes } from "./routes/meals.js";
+import { anchorRoutes } from "./routes/anchors.js";
+import { offRoutes } from "./routes/off.js";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json({ limit: "6mb" }));
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+// Za nginx-em: bez tego req.ip pokazuje adres proxy i licznik prób logowania
+// obejmowałby wszystkich naraz.
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+app.use(express.json({ limit: "1mb" }));
 
-async function initDb(retries = 15) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS kv_store (
-          key        text PRIMARY KEY,
-          value      text NOT NULL,
-          updated_at timestamptz NOT NULL DEFAULT now()
-        )`);
-      console.log("DB gotowa");
-      return;
-    } catch (e) {
-      console.log("DB niedostępna, ponawiam...", e.message);
-      await new Promise((r) => setTimeout(r, 3000));
-    }
-  }
-  throw new Error("Nie udało się połączyć z bazą");
-}
-
-// --- API klucz–wartość (odpowiednik window.storage) ---
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-app.get("/api/kv", async (req, res) => {
-  const prefix = req.query.prefix || "";
-  const { rows } = await pool.query(
-    "SELECT key FROM kv_store WHERE key LIKE $1 ORDER BY key",
-    [prefix + "%"]
-  );
-  res.json({ keys: rows.map((r) => r.key) });
-});
+app.use("/api/auth", authRoutes);
 
-app.get("/api/kv/:key", async (req, res) => {
-  const { rows } = await pool.query(
-    "SELECT key, value FROM kv_store WHERE key = $1",
-    [req.params.key]
-  );
-  if (!rows.length) return res.status(404).json({ error: "not found" });
-  res.json(rows[0]);
-});
+// Wszystko poniżej wymaga zalogowania.
+app.use("/api/habits", requireAuth, habitRoutes);
+app.use("/api/profile", requireAuth, profileRoutes);
+app.use("/api/foods", requireAuth, foodRoutes);
+app.use("/api/meals", requireAuth, mealRoutes);
+app.use("/api/anchors", requireAuth, anchorRoutes);
+app.use("/api/off", requireAuth, offRoutes);
 
-app.put("/api/kv", async (req, res) => {
-  const { key, value } = req.body || {};
-  if (!key) return res.status(400).json({ error: "key required" });
-  await pool.query(
-    `INSERT INTO kv_store (key, value, updated_at) VALUES ($1, $2, now())
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-    [key, String(value ?? "")]
-  );
-  res.json({ key, value });
-});
+// Nieznana ścieżka /api/* musi kończyć się błędem, a nie stroną aplikacji —
+// inaczej literówka w adresie zwraca HTML-a ze statusem 200 i klient
+// wywraca się dopiero na parsowaniu JSON-a.
+app.use("/api", (_req, res) => res.status(404).json({ error: "Nie ma takiej trasy API." }));
 
-app.delete("/api/kv/:key", async (req, res) => {
-  await pool.query("DELETE FROM kv_store WHERE key = $1", [req.params.key]);
-  res.json({ key: req.params.key, deleted: true });
-});
-
-// --- serwowanie zbudowanego frontendu (SPA) ---
+// ── Frontend ──────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, "public")));
-app.get("*", (_req, res) =>
-  res.sendFile(path.join(__dirname, "public", "index.html"))
-);
+app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+
+// ── Błędy ─────────────────────────────────────────────────────────────────
+app.use((err, _req, res, _next) => {
+  const status = err.status || 500;
+  if (status >= 500) console.error(err);
+  res.status(status).json({ error: status >= 500 ? "Błąd serwera." : err.message });
+});
 
 const PORT = process.env.PORT || 3000;
-initDb().then(() => app.listen(PORT, () => console.log("API na :" + PORT)));
+waitForDb().then(() => app.listen(PORT, () => console.log("API na :" + PORT)));
