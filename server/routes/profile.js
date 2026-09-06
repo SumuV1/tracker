@@ -11,16 +11,31 @@ const ACTIVITY_FACTORS = [1.2, 1.375, 1.55, 1.725, 1.9];
 // i w panelu „Jak to policzono" pochodziły z jednego miejsca.
 function derive(p) {
   const { weightKg: w, heightCm: h, ageYears: age, sex, activity } = p;
-  if (!w || !h || !age || !sex) return { bmi: null, bmr: null, tdee: null, activityFactor: null };
+  if (!w || !h || !age || !sex) {
+    return { bmi: null, bmr: null, tdee: null, activityFactor: null, targets: null };
+  }
   const bmi = w / (h / 100) ** 2;
   // Mifflin-St Jeor
   const bmr = 10 * w + 6.25 * h - 5 * age + (sex === "M" ? 5 : -161);
   const factor = ACTIVITY_FACTORS[activity] ?? ACTIVITY_FACTORS[1];
+  const tdee = Math.round(bmr * factor);
   return {
     bmi: Math.round(bmi * 100) / 100,
     bmr: Math.round(bmr),
-    tdee: Math.round(bmr * factor),
+    tdee,
     activityFactor: factor,
+    targets: {
+      // Rozkład makroskładników 30/45/25 % energii; białko i węglowodany
+      // dają 4 kcal/g, tłuszcz 9 kcal/g.
+      kcal: tdee,
+      proteinG: Math.round((tdee * 0.30) / 4),
+      carbsG: Math.round((tdee * 0.45) / 4),
+      fatG: Math.round((tdee * 0.25) / 9),
+      // Błonnik: zalecenie ~14 g na 1000 kcal. Sól to nie cel, tylko górny
+      // limit WHO — interfejs pokazuje ją inaczej niż pozostałe pozycje.
+      fiberG: Math.max(25, Math.round((tdee / 1000) * 14)),
+      saltG: 5,
+    },
   };
 }
 
