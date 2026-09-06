@@ -6,6 +6,8 @@ import { api } from "./api.js";
 // przez matchMedia zamiast z arkusza CSS.
 const MOBILE = "(max-width: 640px)";
 const NARROW = "(max-width: 380px)";
+// poniżej tej szerokości kolumny obok siebie robią się za ciasne
+const WIDE = "(min-width: 1000px)";
 
 function useMedia(query) {
   const [matches, setMatches] = useState(
@@ -100,6 +102,75 @@ function FormulaPanel({profile}){
           <div style={mono}>{"    "}= {bmr} × {n(factor)} = <span style={res}>{tdee} kcal</span></div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Pierścienie postępu: jedna wartość względem dziennego celu, osobno dla każdego
+// składnika. To nie jest wykres kołowy w sensie "części całości" — składniki nie
+// sumują się do wspólnej całości, więc każdy dostaje własny wskaźnik.
+// Nazwa i liczby są zawsze wypisane tekstem: kolor wyłącznie wzmacnia odczyt,
+// nigdy nie jest jedynym nośnikiem informacji.
+function Ring({value,target,unit,label,icon,color,size=104,limit=false}){
+  const r=(size-14)/2, C=2*Math.PI*r;
+  const pct=target?Math.round((value/target)*100):null;
+  const over=pct!==null&&pct>100;
+  const shown=Math.min(100,pct??0);
+  const stroke=over?(limit?"#ef4444":"#f59e0b"):color;
+  const fmt=v=>Number.isInteger(v)?v:Math.round(v*10)/10;
+  return(
+    <div style={{textAlign:"center"}}>
+      <svg viewBox={`0 0 ${size} ${size}`} style={{width:"100%",maxWidth:size,display:"block",margin:"0 auto"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#26262b" strokeWidth="9"/>
+        {pct!==null&&(
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={stroke} strokeWidth="9"
+            strokeLinecap="round" strokeDasharray={`${(shown/100)*C} ${C}`}
+            transform={`rotate(-90 ${size/2} ${size/2})`}
+            style={{transition:"stroke-dasharray 0.45s ease"}}/>
+        )}
+        <text x={size/2} y={size/2-1} textAnchor="middle" dominantBaseline="middle"
+          fill="#f1f1f1" fontSize={size/4.2} fontWeight="700" fontFamily="inherit">
+          {pct!==null?`${pct}%`:"—"}
+        </text>
+        <text x={size/2} y={size/2+size/6} textAnchor="middle" dominantBaseline="middle"
+          fill="#777" fontSize={size/9} fontFamily="inherit">{icon} {label}</text>
+      </svg>
+      <div style={{fontSize:11.5,color:"#999",marginTop:6,lineHeight:1.4}}>
+        <span style={{color:"#f1f1f1",fontWeight:700}}>{fmt(value)}</span>
+        {target?<span style={{color:"#666"}}> / {target} {unit}</span>:<span style={{color:"#666"}}> {unit}</span>}
+      </div>
+      {over&&(
+        <div style={{fontSize:10,color:limit?"#ef4444":"#f59e0b",fontWeight:600,marginTop:2}}>
+          {limit?"ponad limit":"ponad cel"}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NutrientRings({totals,targets}){
+  const macros=[
+    {key:"p",  icon:"💪", label:"Białko",  val:totals.p,  target:targets?.proteinG, color:"#22c55e"},
+    {key:"c",  icon:"🌾", label:"Węgle",   val:totals.c,  target:targets?.carbsG,   color:"#f59e0b"},
+    {key:"f",  icon:"🥑", label:"Tłuszcz", val:totals.f,  target:targets?.fatG,     color:"#ef4444"},
+    {key:"fb", icon:"🌿", label:"Błonnik", val:totals.fb, target:targets?.fiberG,   color:"#84cc16"},
+    {key:"s",  icon:"🧂", label:"Sól",     val:totals.s,  target:targets?.saltG,    color:"#94a3b8", limit:true},
+  ];
+  return(
+    <div>
+      <Ring value={Math.round(totals.cal)} target={targets?.kcal} unit="kcal"
+        label="Kalorie" icon="🔥" color="#667eea" size={148}/>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(96px,1fr))",gap:12,marginTop:16}}>
+        {macros.map(m=>(
+          <Ring key={m.key} value={m.val} target={m.target} unit="g"
+            label={m.label} icon={m.icon} color={m.color} limit={m.limit}/>
+        ))}
+      </div>
+      {!targets&&(
+        <div style={{fontSize:11,color:"#666",lineHeight:1.5,marginTop:14,textAlign:"center"}}>
+          Uzupełnij profil w zakładce „BMI & Profil", żeby zobaczyć dzienne cele.
+        </div>
+      )}
     </div>
   );
 }
@@ -616,6 +687,7 @@ function LoginScreen({onLogged}){
 export default function App() {
   const isMobile=useMedia(MOBILE);
   const isNarrow=useMedia(NARROW);
+  const isWide=useMedia(WIDE);
   const [habits,setHabits]=useState([]);
   const [habitLogs,setHabitLogs]=useState({});
   const [editTimeId,setEditTimeId]=useState(null);
@@ -833,7 +905,6 @@ export default function App() {
   }),{cal:0,p:0,c:0,f:0,fb:0,s:0});
   const tdee=serverProfile?.tdee??null;
   const bmiVal=serverProfile?.bmi??null;
-  const pctToday=tdee?Math.min(200,Math.round(totToday.cal/tdee*100)):null;
 
   // ── Posiłki ──
   const addFood=()=>run(async()=>{
@@ -900,8 +971,10 @@ export default function App() {
 
   return(
     <div style={{background:"#0a0a0a",minHeight:"100vh",fontFamily:"'Inter',sans-serif",color:"#f1f1f1",padding:isMobile?"16px 12px 32px":"24px 16px"}}>
-      {/* mapa mięśni potrzebuje więcej szerokości niż reszta zakładek */}
-      <div style={{maxWidth:mainTab==="miesnie"?1100:680,margin:"0 auto"}}>
+      {/* Nagłówek ma własny kontener o stałej szerokości: treść zakładek
+          bywa szersza (mapa mięśni), a bez tego tytuł i przycisk wylogowania
+          przeskakiwały przy każdej zmianie zakładki. */}
+      <div style={{maxWidth:680,margin:"0 auto"}}>
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:isMobile?16:24}}>
@@ -911,7 +984,6 @@ export default function App() {
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
             {saving&&<span style={{fontSize:12,color:"#888"}}>Zapisywanie…</span>}
-            {mainTab==="nawyki"&&<button onClick={()=>setShowForm(!showForm)} style={{background:"#fff",color:"#000",border:"none",borderRadius:10,padding:"8px 16px",fontWeight:600,cursor:"pointer",fontSize:14}}>+ Dodaj</button>}
             <button onClick={logout} title={`Zalogowany jako ${user.login}`}
               style={{background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,padding:"8px 12px",color:"#888",fontSize:13,cursor:"pointer"}}>
               {isMobile?"⏻":`${user.login} · Wyloguj`}
@@ -930,9 +1002,18 @@ export default function App() {
         {/* Main tabs */}
         <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:isMobile?16:20}}>
           {[["nawyki","Nawyki","Nawyki"],["kalorie","Kalorie & BMI","Kalorie"],["miesnie","Mięśnie","Mięśnie"],["dolек","Z dołka","Dołek"]].map(([k,long,short])=>(
-            <button key={k} onClick={()=>setMainTab(k)} style={{flex:1,minWidth:0,background:mainTab===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:isMobile?"9px 2px":"8px 4px",color:mainTab===k?"#fff":"#666",fontWeight:600,cursor:"pointer",fontSize:isNarrow?11:isMobile?12:13,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{isMobile?short:long}</button>
+            <button key={k} onClick={()=>{
+              setMainTab(k);
+              // BMI wystarczy policzyć raz, więc przy kolejnych wejściach
+              // sensowniejszym ekranem startowym jest licznik kalorii.
+              if(k==="kalorie"&&serverProfile?.bmi)setBmiTab("tracker");
+            }} style={{flex:1,minWidth:0,background:mainTab===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:isMobile?"9px 2px":"8px 4px",color:mainTab===k?"#fff":"#666",fontWeight:600,cursor:"pointer",fontSize:isNarrow?11:isMobile?12:13,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{isMobile?short:long}</button>
           ))}
         </div>
+      </div>
+
+      {/* mapa mięśni potrzebuje więcej szerokości niż reszta zakładek */}
+      <div style={{maxWidth:mainTab==="miesnie"||mainTab==="kalorie"?1180:680,margin:"0 auto"}}>
 
         {/* ═══ NAWYKI ═══ */}
         {mainTab==="nawyki"&&(
@@ -942,25 +1023,6 @@ export default function App() {
                 <button key={k} onClick={()=>setHabitTab(k)} style={{flex:1,background:habitTab===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"8px",color:habitTab===k?"#fff":"#666",fontWeight:600,cursor:"pointer",fontSize:14}}>{l}</button>
               ))}
             </div>
-
-            {showForm&&(
-              <div style={{background:"#161616",border:"1px solid #2a2a2a",borderRadius:14,padding:16,marginBottom:20}}>
-                <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addHabit()} placeholder="Nazwa nawyku…"
-                  style={{width:"100%",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"10px 12px",color:"#fff",fontSize:14,boxSizing:"border-box",marginBottom:10,outline:"none"}} autoFocus/>
-                <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
-                  {CATEGORIES.map(c=><button key={c.label} onClick={()=>setNewCat(c.label)} style={{border:`2px solid ${newCat===c.label?c.color:"#333"}`,background:newCat===c.label?c.bg:"transparent",color:c.color,borderRadius:20,padding:"4px 12px",cursor:"pointer",fontSize:13,fontWeight:600}}>{c.label}</button>)}
-                </div>
-                <div style={{marginBottom:14}}>
-                  <label style={{fontSize:12,color:"#888",display:"block",marginBottom:8}}>Godzina przypomnienia (opcjonalnie)</label>
-                  <TimePickerForm value={newTime} onChange={setNewTime}/>
-                  {newTime&&<button onClick={()=>setNewTime("")} style={{marginTop:6,background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12}}>Usuń godzinę ×</button>}
-                </div>
-                <div style={{display:"flex",gap:8}}>
-                  <button onClick={addHabit} style={{background:"#fff",color:"#000",border:"none",borderRadius:8,padding:"8px 20px",fontWeight:600,cursor:"pointer",flex:1}}>Dodaj</button>
-                  <button onClick={()=>{setShowForm(false);setNewName("");setNewTime("");}} style={{background:"#222",color:"#aaa",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>Anuluj</button>
-                </div>
-              </div>
-            )}
 
             {habits.length===0&&(
               <div style={{textAlign:"center",padding:"60px 0",color:"#555"}}>
@@ -1053,6 +1115,32 @@ export default function App() {
                 </div>
               );
             })}
+
+            {showForm&&(
+              <div style={{background:"#161616",border:"1px solid #2a2a2a",borderRadius:14,padding:16,marginTop:12}}>
+                <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addHabit()} placeholder="Nazwa nawyku…"
+                  style={{width:"100%",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"10px 12px",color:"#fff",fontSize:14,boxSizing:"border-box",marginBottom:10,outline:"none"}} autoFocus/>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+                  {CATEGORIES.map(c=><button key={c.label} onClick={()=>setNewCat(c.label)} style={{border:`2px solid ${newCat===c.label?c.color:"#333"}`,background:newCat===c.label?c.bg:"transparent",color:c.color,borderRadius:20,padding:"4px 12px",cursor:"pointer",fontSize:13,fontWeight:600}}>{c.label}</button>)}
+                </div>
+                <div style={{marginBottom:14}}>
+                  <label style={{fontSize:12,color:"#888",display:"block",marginBottom:8}}>Godzina przypomnienia (opcjonalnie)</label>
+                  <TimePickerForm value={newTime} onChange={setNewTime}/>
+                  {newTime&&<button onClick={()=>setNewTime("")} style={{marginTop:6,background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12}}>Usuń godzinę ×</button>}
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={addHabit} style={{background:"#fff",color:"#000",border:"none",borderRadius:8,padding:"8px 20px",fontWeight:600,cursor:"pointer",flex:1}}>Dodaj</button>
+                  <button onClick={()=>{setShowForm(false);setNewName("");setNewTime("");}} style={{background:"#222",color:"#aaa",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>Anuluj</button>
+                </div>
+              </div>
+            )}
+            {!showForm&&(
+              <button onClick={()=>setShowForm(true)} style={{width:"100%",marginTop:12,padding:"13px",
+                borderRadius:12,border:"2px dashed #333",background:"transparent",color:"#888",
+                fontWeight:600,fontSize:14,cursor:"pointer"}}>
+                + Dodaj nawyk
+              </button>
+            )}
           </div>
         )}
 
@@ -1067,8 +1155,9 @@ export default function App() {
 
             {/* BMI */}
             {bmiTab==="bmi"&&(
-              <div>
-                <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,marginBottom:16}}>
+              <div style={{display:"grid",gap:16,alignItems:"start",
+                gridTemplateColumns:isWide?"minmax(300px,420px) minmax(320px,1fr)":"1fr"}}>
+                <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20}}>
                   <div style={{fontSize:14,fontWeight:700,color:"#ccc",marginBottom:16}}>Twoje dane</div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:12,marginBottom:12}}>
                     {[["Waga (kg)","weight"],["Wzrost (cm)","height"],["Wiek (lata)","age"]].map(([label,key])=>(
@@ -1096,7 +1185,7 @@ export default function App() {
                   <button onClick={calcAll} style={{width:"100%",padding:"12px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#667eea,#764ba2)",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer"}}>Oblicz BMI i zapotrzebowanie</button>
                 </div>
                 {bmiVal&&bmiInfo&&(
-                  <>
+                  <div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>
                     <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,textAlign:"center"}}>
                       <div style={{fontSize:12,color:"#888",marginBottom:6}}>Twoje BMI</div>
@@ -1121,15 +1210,24 @@ export default function App() {
                     </div>
                   </div>
                   {serverProfile?.bmr&&<FormulaPanel profile={serverProfile}/>}
-                  </>
+                  </div>
                 )}
               </div>
             )}
 
             {/* Tracker */}
             {bmiTab==="tracker"&&(
-              <div>
-                <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,marginBottom:16}}>
+              <div style={{display:"grid",gap:16,alignItems:"start",
+                gridTemplateColumns:isWide?"minmax(230px,280px) minmax(320px,1fr) minmax(300px,380px)":"1fr"}}>
+
+                {/* lewa kolumna — postęp dnia */}
+                <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16}}>
+                  <div style={{fontWeight:700,fontSize:14,marginBottom:14,color:"#ccc"}}>Postęp dnia</div>
+                  <NutrientRings totals={totToday} targets={serverProfile?.targets}/>
+                </div>
+
+                {/* środkowa kolumna — produkty dnia */}
+                <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16}}>
                 <div style={{marginBottom:14}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,flex:"1 1 auto",justifyContent:isMobile?"space-between":"flex-start"}}>
@@ -1147,24 +1245,10 @@ export default function App() {
                     {calDate!==today()&&<button onClick={()=>setCalDate(today())} style={{background:"#222",border:"1px solid #444",borderRadius:8,color:"#aaa",fontSize:12,padding:"6px 12px",cursor:"pointer"}}>↩ Wróć do dziś</button>}
                   </div>
                 </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(88px,1fr))",gap:8,marginBottom:12}}>
-                    {[["🔥",totToday.cal,"kcal","#667eea"],["🥑",totToday.f.toFixed(1),"g Tłuszcz","#ef4444"],["🌾",totToday.c.toFixed(1),"g Węgl.","#f59e0b"],["💪",totToday.p.toFixed(1),"g Białko","#22c55e"],["🌿",totToday.fb.toFixed(1),"g Błonnik","#84cc16"],["🧂",totToday.s.toFixed(1),"g Sól","#94a3b8"]].map(([icon,val,unit,color])=>(
-                      <div key={unit} style={{background:"#0a0a0a",borderRadius:10,padding:10,textAlign:"center"}}>
-                        <div style={{fontSize:10,color:"#666",marginBottom:2}}>{icon}</div>
-                        <div style={{fontSize:18,fontWeight:800,color}}>{val}</div>
-                        <div style={{fontSize:10,color:"#555"}}>{unit}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {pctToday!==null&&(
-                    <div>
-                      <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#666",marginBottom:4}}>
-                        <span>{totToday.cal} kcal</span><span>Cel: {tdee} kcal ({pctToday}%)</span>
-                      </div>
-                      <div style={{background:"#2a2a2a",borderRadius:99,height:8,overflow:"hidden"}}>
-                        <div style={{width:`${Math.min(100,pctToday)}%`,height:"100%",borderRadius:99,background:pctToday>100?"#ef4444":"linear-gradient(90deg,#667eea,#22c55e)",transition:"width 0.4s"}}/>
-                      </div>
-                      {pctToday>100&&<div style={{fontSize:11,color:"#ef4444",marginTop:4,fontWeight:600}}>⚠️ Przekroczono dzienne zapotrzebowanie!</div>}
+                  {todayEntries.length===0&&(
+                    <div style={{textAlign:"center",padding:"36px 0",color:"#555"}}>
+                      <div style={{fontSize:30,marginBottom:10}}>🍽️</div>
+                      <div style={{fontSize:13}}>Brak produktów tego dnia.</div>
                     </div>
                   )}
                   {todayEntries.length>0&&(
@@ -1184,6 +1268,7 @@ export default function App() {
                     </div>
                   )}
                 </div>
+                {/* prawa kolumna — historia */}
                 <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16}}>
                   <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#ccc"}}>📅 Historia kalorii</div>
                   <CalYearView calLogs={dailyTotals} tdee={tdee}/>
