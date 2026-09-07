@@ -572,10 +572,14 @@ function ExercisePanel({muscleId,onClose}){
 function PlanExercise({ex,accent}){
   return(
     <div style={{background:"#0a0a0a",border:`1px solid ${accent}28`,borderLeft:`3px solid ${accent}`,borderRadius:10,padding:"11px 13px",marginBottom:9}}>
-      <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0",lineHeight:1.35}}>{ex.name}</div>
+      <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0",lineHeight:1.35}}>
+        {ex.name}
+        {ex.added&&<span style={{marginLeft:7,fontSize:9,fontWeight:700,letterSpacing:"0.08em",fontFamily:"monospace",color:"#5DCAA5",border:"1px solid #5DCAA555",borderRadius:5,padding:"1px 5px",verticalAlign:"middle"}}>DODANE</span>}
+      </div>
       <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:5}}>
         <span style={{fontSize:10,fontWeight:700,background:accent+"30",color:accent,padding:"1px 8px",borderRadius:20}}>{ex.sets}</span>
-        <span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{ex.load}</span>
+        {ex.load&&<span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{ex.load}</span>}
+        {ex.rest&&<span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.04)",color:"#777",padding:"1px 8px",borderRadius:20}}>⏸ {ex.rest}</span>}
       </div>
       <div style={{fontSize:11.5,color:"#9a9a9a",lineHeight:1.55,marginTop:7}}>{ex.desc}</div>
     </div>
@@ -599,12 +603,19 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
       </button>
     );
   };
-  const hr=day.cardio&&maxHeartRate(age);
+  const hr=day.cardio?maxHeartRate(age):null;
+  const noteBox=(text,color)=>(
+    <div style={{fontSize:11.5,color:color||"#8a8a8a",background:"#0d0f16",border:"1px solid #1e2130",
+      borderRadius:8,padding:"9px 11px",marginBottom:11,lineHeight:1.6}}>{text}</div>
+  );
   return(
     <div style={{display:"flex",flexDirection:"column",maxHeight:isMobile?"none":640}}>
       <div style={{background:accent+"1e",borderBottom:`1px solid ${accent}44`,padding:"14px 16px 12px",flexShrink:0}}>
         <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:accent,fontFamily:"monospace",marginBottom:4}}>{plan.name.toUpperCase()} · {label.toUpperCase()}</div>
-        <div style={{fontSize:17,fontWeight:700,color:"#f0f0f0",lineHeight:1.25}}>{day.title}</div>
+        <div style={{fontSize:17,fontWeight:700,color:"#f0f0f0",lineHeight:1.25}}>
+          {day.title}
+          {day.added&&<span style={{marginLeft:8,fontSize:9,fontWeight:700,letterSpacing:"0.08em",fontFamily:"monospace",color:"#5DCAA5",border:"1px solid #5DCAA555",borderRadius:5,padding:"2px 6px",verticalAlign:"middle"}}>DZIEŃ DODANY</span>}
+        </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>
           {day.primary.map(id=>chip(id,true))}
           {day.support.map(id=>chip(id,false))}
@@ -615,31 +626,44 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
         {hm?<>● {hm.name} — kliknij, aby zobaczyć ćwiczenia</>:<>Kliknij mięsień na sylwetce lub etykietę powyżej</>}
       </div>
       <div style={{overflowY:isMobile?"visible":"auto",flex:1,padding:"12px 16px 18px"}}>
+        {day.intro&&noteBox(day.intro)}
         {day.remark&&<div style={{fontSize:11.5,color:"#c8a24a",background:"#2a1e00",border:"1px solid #4a3a10",borderRadius:8,padding:"8px 11px",marginBottom:11,lineHeight:1.5}}>{day.remark}</div>}
+        {day.warmup&&(
+          <div style={{fontSize:11.5,color:"#9a9a9a",background:"#0d0f16",border:"1px solid #1e2130",borderRadius:8,padding:"9px 11px",marginBottom:11,lineHeight:1.6}}>
+            <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",color:accent}}>ROZGRZEWKA</span><br/>{day.warmup}
+          </div>
+        )}
         {day.rest&&<div style={{fontSize:12.5,color:"#9a9a9a",lineHeight:1.65}}>{day.desc}</div>}
         {day.cardio&&(
           <div style={{background:"#0a0a0a",border:`1px solid ${accent}28`,borderLeft:`3px solid ${accent}`,borderRadius:10,padding:"12px 13px",marginBottom:10}}>
             <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0"}}>{day.cardio.machine}</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
-              <span style={{fontSize:10,fontWeight:700,background:accent+"30",color:accent,padding:"1px 8px",borderRadius:20}}>{day.cardio.minutes} min</span>
-              <span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{day.cardio.hrFrom}–{day.cardio.hrTo}% HRmax</span>
-            </div>
-            <div style={{fontSize:11.5,color:"#9a9a9a",lineHeight:1.55,marginTop:8}}>
+            {day.cardio.variants.map((v,i)=>(
+              <div key={i} style={{marginTop:i?10:7,paddingTop:i?10:0,borderTop:i?"1px solid #1c1c1c":"none"}}>
+                {v.name&&<div style={{fontSize:11,fontWeight:700,color:"#c9c9c9",marginBottom:5}}>{v.name}</div>}
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  <span style={{fontSize:10,fontWeight:700,background:accent+"30",color:accent,padding:"1px 8px",borderRadius:20}}>{v.time}</span>
+                  <span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{v.hrFrom}–{v.hrTo}% HRmax</span>
+                  {hr&&<span style={{fontSize:10,fontWeight:700,background:accent+"1e",color:accent,padding:"1px 8px",borderRadius:20}}>{Math.round(hr*v.hrFrom/100)}–{Math.round(hr*v.hrTo/100)} ud./min</span>}
+                </div>
+                {v.desc&&<div style={{fontSize:11.5,color:"#9a9a9a",lineHeight:1.55,marginTop:6}}>{v.desc}</div>}
+              </div>
+            ))}
+            <div style={{marginTop:10,paddingTop:9,borderTop:"1px solid #1c1c1c",fontSize:11.5,color:"#9a9a9a",lineHeight:1.55}}>
               Tętno maksymalne wg wzoru <span style={{color:"#c9c9c9",fontFamily:"monospace"}}>208 − 0,7 × wiek</span> — dokładniejszego niż popularne 220 − wiek.
+              {hr
+                ?<> Dla Twoich <b>{age} lat</b>: HRmax ≈ <b style={{color:accent}}>{hr}</b> ud./min.</>
+                :<> Podaj wiek w zakładce „Kalorie &amp; BMI”, a policzę zakresy w uderzeniach na minutę.</>}
             </div>
-            {hr?(
-              <div style={{marginTop:9,paddingTop:9,borderTop:"1px solid #1c1c1c",fontSize:12,color:"#c9c9c9",lineHeight:1.7}}>
-                Dla Twoich <b>{age} lat</b>: HRmax ≈ <b style={{color:accent}}>{hr}</b> ud./min,
-                <br/>zakres treningowy <b style={{color:accent}}>{Math.round(hr*day.cardio.hrFrom/100)}–{Math.round(hr*day.cardio.hrTo/100)}</b> ud./min.
-              </div>
-            ):(
-              <div style={{marginTop:9,paddingTop:9,borderTop:"1px solid #1c1c1c",fontSize:11.5,color:"#666"}}>
-                Podaj wiek w zakładce „Kalorie &amp; BMI”, a policzę Twój zakres w uderzeniach na minutę.
-              </div>
-            )}
           </div>
         )}
         {day.exercises.map((ex,i)=><PlanExercise key={i} ex={ex} accent={accent}/>)}
+        {day.loadNote&&noteBox(day.loadNote)}
+        {day.changes&&(
+          <div style={{marginTop:6,borderTop:"1px solid #1a1a1a",paddingTop:11}}>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",color:"#5a5a5a",marginBottom:6}}>CO SIĘ ZMIENIŁO WOBEC ORYGINAŁU</div>
+            <div style={{fontSize:11.5,color:"#8a8a8a",lineHeight:1.65}}>{day.changes}</div>
+          </div>
+        )}
         {plan.note&&<div style={{marginTop:6,fontSize:10.5,color:"#5a5a5a",lineHeight:1.6,borderTop:"1px solid #1a1a1a",paddingTop:10}}>{plan.note}</div>}
       </div>
     </div>
@@ -654,6 +678,7 @@ function MuscleMap({profile}){
   const [layer,setLayer]=useState("surface");
   const [planId,setPlanId]=useState(null);
   const [dayKey,setDayKey]=useState(todayKey);
+  const [showRules,setShowRules]=useState(false);
   const hoveredMuscle=hovered?MUSCLES[hovered]:null;
   const plan=TRAINING_PLANS.find(p=>p.id===planId)||null;
   const day=plan?plan.days[dayKey]:null;
@@ -665,7 +690,7 @@ function MuscleMap({profile}){
   const hiddenPrimary=day?day.primary.filter(id=>MUSCLE_LAYER[id]!==layer):[];
   const pickPlan=id=>{
     setPlanId(prev=>prev===id?null:id);
-    setDayKey(todayKey());
+    setDayKey(todayKey());setShowRules(false);
     setSelected(null);setHovered(null);
   };
   const pickMuscle=id=>{
@@ -723,6 +748,24 @@ function MuscleMap({profile}){
               })}
             </div>
             <div style={{fontSize:10.5,color:"#4a4a4a",marginTop:7}}>Kropka oznacza dzisiejszy dzień.</div>
+            {plan.rules&&(
+              <div style={{marginTop:10,borderTop:"1px solid #1e2130",paddingTop:10}}>
+                <button onClick={()=>setShowRules(v=>!v)} style={{background:"none",border:"none",padding:0,cursor:"pointer",
+                  color:"#5DCAA5",fontSize:11,fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace"}}>
+                  {showRules?"▾":"▸"} ZASADY WSPÓLNE
+                </button>
+                {showRules&&(
+                  <div style={{marginTop:10,display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,1fr)",gap:10}}>
+                    {plan.rules.map((r,i)=>(
+                      <div key={i} style={{background:"#0d0f16",border:"1px solid #1e2130",borderRadius:10,padding:"10px 12px"}}>
+                        <div style={{fontSize:12,fontWeight:600,color:"#e0e0e0",marginBottom:4}}>{r.title}</div>
+                        <div style={{fontSize:11.5,color:"#8a8a8a",lineHeight:1.6}}>{r.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

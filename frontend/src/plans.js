@@ -8,6 +8,11 @@
 //   primary — partia, pod którą ułożony jest dzień
 //   support — mięśnie realnie pracujące w tych ćwiczeniach jako wspomagające
 //             albo stabilizujące; podświetlają się słabiej
+//
+// Pola dnia poza listą ćwiczeń są opcjonalne i pokazują się tylko wtedy, gdy
+// plan je podaje: `warmup`, `intro`, `remark`, `loadNote`, `changes`.
+// Cardio opisujemy wariantami (`cardio.variants`), bo jeden dzień potrafi mieć
+// wersję ciągłą i interwałową o różnych zakresach tętna.
 
 export const WEEKDAYS = [
   { key: "mon", label: "Poniedziałek", short: "Pon" },
@@ -195,7 +200,7 @@ export const TRAINING_PLANS = [
         short: "Cardio",
         primary: ["quadriceps", "hamstrings", "gastrocnemius", "gluteus"],
         support: ["tibialis"],
-        cardio: { machine: "Bieżnia", minutes: 60, hrFrom: 80, hrTo: 90 },
+        cardio: { machine: "Bieżnia", variants: [{ time: "60 min", hrFrom: 80, hrTo: 90 }] },
         exercises: [],
       },
       sat: {
@@ -203,7 +208,7 @@ export const TRAINING_PLANS = [
         short: "Cardio",
         primary: ["quadriceps", "hamstrings", "gastrocnemius", "gluteus"],
         support: ["tibialis"],
-        cardio: { machine: "Bieżnia", minutes: 60, hrFrom: 80, hrTo: 90 },
+        cardio: { machine: "Bieżnia", variants: [{ time: "60 min", hrFrom: 80, hrTo: 90 }] },
         exercises: [],
       },
       sun: {
@@ -216,6 +221,373 @@ export const TRAINING_PLANS = [
         desc:
           "Dzień bez treningu. Regeneracja jest częścią planu — to wtedy odbudowują się włókna " +
           "nadwyrężone przez cztery dni siłowe.",
+      },
+    },
+  },
+  {
+    id: "tyler-durden-pussy-edit",
+    name: "Tyler Durden - Pussy Edit",
+    summary:
+      "Poprawka oryginału: dołożony dzień nóg i praca na tylne aktony barków, " +
+      "określone zakresy powtórzeń i przerwy, cardio zbite do jednego dnia.",
+    rules: [
+      {
+        title: "Przerwy między seriami",
+        text:
+          "Zakresy siłowe (6–8 powtórzeń) — 2–3 min. Hipertrofia (10–15) — 60–90 s. " +
+          "Izolacje i ruchy na wysokie powtórzenia — 45–60 s. Skracanie przerw w seriach " +
+          "ciężkich to obniżanie ciężaru roboczego bez żadnego zysku.",
+      },
+      {
+        title: "Progresja",
+        text:
+          "Gdy wykonasz wszystkie serie w górnej granicy zakresu z zachowaną techniką, " +
+          "podnieś ciężar o 2,5 kg (ruchy górnej części ciała) lub 5 kg (przysiad, martwy ciąg) " +
+          "i wróć do dolnej granicy zakresu.",
+      },
+      {
+        title: "Zapas do upadku",
+        text:
+          "W seriach roboczych zostawiaj 1–2 powtórzenia zapasu, poza seriami wyraźnie " +
+          "oznaczonymi jako „do upadku”. Trening do skrajnego zmęczenia w każdej serii przy " +
+          "sześciu dniach w tygodniu prowadzi do przetrenowania szybciej niż do wyników.",
+      },
+      {
+        title: "Zaokrąglenia",
+        text:
+          "Obciążenia dobrane do realnych kombinacji talerzy (co 1,25 / 2,5 kg) i typowych " +
+          "stosów maszyn (co 2,5 / 5 kg). Traktuj je jako punkt wyjścia, nie jako wartości " +
+          "sztywne — kalibruj do własnej siły w pierwszym tygodniu.",
+      },
+    ],
+    days: {
+      mon: {
+        title: "Klatka piersiowa",
+        short: "Klatka",
+        primary: ["pectoralis"],
+        support: ["deltoid_front", "triceps", "serratus"],
+        warmup: "5 min pracy ogólnej + 2 serie wprowadzające na ławce (pusty gryf × 12, 60 kg × 8).",
+        changes:
+          "Seria 25 powtórzeń na 75 kg poszła w całości. Wyciskanie zaczyna się od najcięższego " +
+          "obciążenia, gdy układ nerwowy jest świeży — to jedyna kolejność, która ma sens przy " +
+          "budowaniu siły. Pompki przeniesione na koniec jako praca wykończeniowa, a nie jako " +
+          "wstępne zmęczenie przed serią roboczą. Ławka skośna awansowała przed maszynę: " +
+          "wolny ciężar zawsze przed prowadzonym.",
+        exercises: [
+          {
+            name: "Wyciskanie na ławce płaskiej",
+            sets: "4 × 6–8",
+            load: "102,5 kg",
+            rest: "2–3 min",
+            desc:
+              "Chwyt nieco szerszy od barków, łopatki ściągnięte i dociśnięte, stopy stabilnie " +
+              "na podłodze. Sztanga do dolnej części klatki, bez odbijania. Przy 4 × 6–8 asekuracja obowiązkowa.",
+          },
+          {
+            name: "Wyciskanie na ławce skośnej",
+            sets: "3 × 8–10",
+            load: "45 / 55 / 60 kg",
+            rest: "2 min",
+            desc: "Oparcie 30–45° głową w górę. Górne pasmo klatki i przednie aktony naramiennych.",
+          },
+          {
+            name: "Wyciskanie na maszynie (Nautilus)",
+            sets: "3 × 10–12",
+            load: "35 / 45 / 55 kg",
+            rest: "90 s",
+            desc: "Tor wymuszony, bezpieczna praca do wysokiego zmęczenia. Uchwyty na wysokości środka klatki.",
+          },
+          {
+            name: "Pec deck",
+            sets: "3 × 12–15",
+            load: "27,5 / 32,5 / 35 kg",
+            rest: "60 s",
+            desc: "Przywodzenie ramion w płaszczyźnie poziomej, łokcie lekko ugięte. Kontrolowana faza negatywna.",
+          },
+          {
+            name: "Pompki",
+            sets: "2 serie do upadku",
+            load: "masa ciała",
+            rest: "60 s",
+            desc:
+              "Tułów w linii prostej, łokcie ok. 45° do tułowia. Na koniec sesji służą do domknięcia " +
+              "objętości, nie do siły.",
+          },
+        ],
+      },
+      tue: {
+        title: "Plecy i tylne aktony barków",
+        short: "Plecy",
+        primary: ["latissimus", "trapezius", "deltoid_back"],
+        support: ["infraspinatus", "erector_spinae", "biceps", "forearm_front"],
+        changes:
+          "Wiosłowanie drążkiem T przesunięte na początek — to najcięższy technicznie ruch dnia " +
+          "i wymaga świeżego grzbietu. Dołożone dwa ćwiczenia na tylne aktony barków, które " +
+          "w oryginale nie występowały w ogóle przy pięciu wyciskaniach tygodniowo.",
+        exercises: [
+          {
+            name: "Podciąganie",
+            sets: "4 serie do upadku",
+            load: "masa ciała · docelowo 25 powtórzeń łącznie",
+            rest: "2 min",
+            desc:
+              "Chwyt nachwytem szerszy od barków. Ciąg łokciami w dół i do tyłu, klatka do drążka, " +
+              "bez bujania. Pełny wyprost na dole.",
+          },
+          {
+            name: "Wiosłowanie drążkiem T",
+            sets: "3 × 8–10",
+            load: "35 / 42,5 / 50 kg",
+            rest: "2 min",
+            desc:
+              "Tułów pochylony ok. 45°, kręgosłup neutralny, ciąg do brzucha. Najwyższe obciążenie " +
+              "osiowe spośród wiosłowań.",
+          },
+          {
+            name: "Ściąganie drążka wyciągu górnego",
+            sets: "3 × 10–12",
+            load: "60 / 67,5 / 75 kg",
+            rest: "90 s",
+            desc: "Drążek do górnej części klatki, klatka wypchnięta, łokcie w dół wzdłuż tułowia. Nigdy za kark.",
+          },
+          {
+            name: "Wiosłowanie siedząc (wyciąg dolny)",
+            sets: "3 × 10–12",
+            load: "35 / 37,5 / 40 kg",
+            rest: "90 s",
+            desc: "Plecy proste, uchwyt do dolnych żeber, łopatki ściągane na końcu ruchu.",
+          },
+          {
+            name: "Face pull",
+            sets: "3 × 15–20",
+            load: "20 / 22,5 / 25 kg",
+            rest: "60 s",
+            added: true,
+            desc:
+              "Lina na wyciągu na wysokości twarzy. Ciągniesz w stronę czoła, rozdzielając dłonie " +
+              "i rotując ramiona na zewnątrz. Bezpośrednia przeciwwaga dla protrakcji barków wywołanej " +
+              "objętością wyciskań. Ciężar drugorzędny, zakres ruchu pierwszorzędny.",
+          },
+          {
+            name: "Odwrotne rozpiętki",
+            sets: "3 × 15",
+            load: "2 × 6 kg",
+            rest: "60 s",
+            added: true,
+            desc:
+              "Tułów w opadzie lub na ławce skośnej piersią w dół, hantle unoszone bokiem przy niemal " +
+              "wyprostowanych łokciach. Ruch bez rozpędu, obciążenie celowo niskie.",
+          },
+        ],
+      },
+      wed: {
+        title: "Nogi",
+        short: "Nogi",
+        added: true,
+        primary: ["quadriceps", "hamstrings", "gluteus", "gastrocnemius"],
+        support: ["adductors", "erector_spinae", "sartorius"],
+        intro:
+          "Oryginalny plan nie zawierał ani jednego ćwiczenia na nogi. Przy pięciu sesjach siłowych " +
+          "w tygodniu to najpoważniejsza luka — strukturalna, sylwetkowa i funkcjonalna.",
+        loadNote:
+          "Obciążeń nie podaję, bo nie ma punktu odniesienia — plan wyjściowy nie zawierał żadnego " +
+          "ruchu na dolną część ciała. Pierwsze dwa tygodnie: ciężar pozwalający wykonać wszystkie " +
+          "serie z 3–4 powtórzeniami zapasu i bez utraty technicznej. Progres 2,5–5 kg tygodniowo " +
+          "w przysiadzie i martwym ciągu, dopóki technika się trzyma.",
+        exercises: [
+          {
+            name: "Przysiad ze sztangą z tyłu",
+            sets: "4 × 6–8",
+            rest: "3 min",
+            desc:
+              "Sztanga na kapturach lub na tylnych aktonach naramiennych, stopy na szerokość barków, " +
+              "palce lekko na zewnątrz. Schodzisz do co najmniej równoległości ud z podłogą, kolana " +
+              "podążają za linią stóp, kręgosłup neutralny przez cały ruch. Podstawowy ruch na " +
+              "czworogłowe, pośladki i mięśnie posturalne.",
+          },
+          {
+            name: "Martwy ciąg rumuński",
+            sets: "3 × 8–10",
+            rest: "2–3 min",
+            desc:
+              "Start z pozycji stojącej, sztanga blisko ud. Cofasz biodra, kolana ugięte tylko lekko " +
+              "i nieruchome, sztanga sunie po udach do połowy łydki. Praca na dwugłowe uda i pośladki " +
+              "w rozciągnięciu. Plecy nie mogą się zaokrąglić — w momencie utraty neutralnej pozycji " +
+              "seria jest skończona.",
+          },
+          {
+            name: "Wypychanie na suwnicy",
+            sets: "3 × 12",
+            rest: "2 min",
+            desc:
+              "Stopy na środku platformy na szerokość bioder. Zginasz kolana do kąta ok. 90°, lędźwie " +
+              "nie odrywają się od oparcia. Bezpieczna objętość dodatkowa bez obciążania kręgosłupa.",
+          },
+          {
+            name: "Wykroki chodzone",
+            sets: "3 × 10 na nogę",
+            rest: "90 s",
+            desc:
+              "Długi krok w przód, kolano tylnej nogi schodzi tuż nad podłogę, tułów pionowo. " +
+              "Praca jednostronna, koryguje asymetrie siły między nogami.",
+          },
+          {
+            name: "Uginanie nóg leżąc",
+            sets: "3 × 12–15",
+            rest: "60 s",
+            desc:
+              "Izolacja dwugłowej uda w jej funkcji zginania kolana. Uzupełnia martwy ciąg rumuński, " +
+              "który obciąża ją głównie w funkcji biodrowej.",
+          },
+          {
+            name: "Wspięcia na palce",
+            sets: "4 × 15",
+            rest: "45 s",
+            desc:
+              "Pełny zakres: maksymalne opuszczenie pięty pod poziom stopnia, pełne wypięcie w górze, " +
+              "pauza. Łydka reaguje na zakres ruchu i objętość, nie na rozpęd.",
+          },
+        ],
+      },
+      thu: {
+        title: "Barki",
+        short: "Barki",
+        primary: ["deltoid_front", "deltoid_back", "trapezius"],
+        support: ["triceps"],
+        changes:
+          "Unoszenie w przód zredukowane z trzech serii do dwóch — akton przedni dostaje już pełną " +
+          "porcję pracy w poniedziałek przy wyciskaniach i nie potrzebuje osobnej objętości. " +
+          "Uwolniona objętość poszła na czworoboczne, które w oryginale nie były trenowane bezpośrednio.",
+        exercises: [
+          {
+            name: "Wyciskanie Arnoldowe",
+            sets: "4 × 8–10",
+            load: "2 × 12,5 kg",
+            rest: "2 min",
+            desc:
+              "Siedząc, hantle na wysokości barków, dłonie do siebie. W trakcie wyciskania obracasz " +
+              "nadgarstki o 180°, kończysz z dłońmi na zewnątrz.",
+          },
+          {
+            name: "Unoszenie ramion bokiem",
+            sets: "4 × 12–15",
+            load: "2 × 7 kg",
+            rest: "60 s",
+            desc:
+              "Łokcie minimalnie ugięte i stale wyżej niż nadgarstki, unoszenie do wysokości barków, " +
+              "bez pracy tułowia. Główny bodziec na szerokość barku.",
+          },
+          {
+            name: "Unoszenie ramion w przód",
+            sets: "2 × 12–15",
+            load: "2 × 5,5 kg",
+            rest: "60 s",
+            desc: "Do wysokości oczu, tempo kontrolowane, bez zarzucania.",
+          },
+          {
+            name: "Szrugsy",
+            sets: "3 × 12–15",
+            load: "2 × 25 kg",
+            rest: "90 s",
+            added: true,
+            desc:
+              "Hantle wzdłuż tułowia, unoszenie barków pionowo w górę z krótką pauzą u szczytu. " +
+              "Bez rotacji barków w tył — to zbędne obciążenie stawu.",
+          },
+        ],
+      },
+      fri: {
+        title: "Biceps i triceps",
+        short: "Ramiona",
+        primary: ["biceps", "triceps"],
+        support: ["forearm_front", "forearm_back"],
+        changes:
+          "Obciążenia bicepsa obniżone. W oryginale preacher curl szedł do wartości wyższej niż " +
+          "pushdown na tricepsie — to odwrotność normalnego rozkładu siły i niemal na pewno efekt " +
+          "liczenia stosu maszyny bez uwzględnienia dźwigni. Dołożone drugie ćwiczenie na triceps, " +
+          "bo pojedynczy pushdown nie pokrywał głowy długiej, która pracuje wyłącznie przy ramieniu " +
+          "uniesionym lub cofniętym. Triceps na początku sesji, bo stanowi około dwóch trzecich masy " +
+          "ramienia i zasługuje na świeży start.",
+        exercises: [
+          {
+            name: "Prostowanie ramion na wyciągu (pushdown)",
+            sets: "3 × 10–12",
+            load: "32,5 / 40 / 45 kg",
+            rest: "90 s",
+            desc: "Łokcie przyklejone do tułowia, ruch tylko w łokciach, pełny wyprost na dole.",
+          },
+          {
+            name: "Wyciskanie francuskie leżąc",
+            sets: "3 × 10–12",
+            load: "25 / 30 / 32,5 kg",
+            rest: "90 s",
+            added: true,
+            desc:
+              "Sztanga EZ, ramiona pionowo lub lekko cofnięte za głowę. Zginasz łokcie, opuszczając " +
+              "gryf do czoła lub za nie, ramiona nieruchome. Jedyny w planie ruch obciążający głowę " +
+              "długą tricepsa w rozciągnięciu.",
+          },
+          {
+            name: "Uginanie na modlitewniku",
+            sets: "3 × 10–12",
+            load: "27,5 / 32,5 / 35 kg",
+            rest: "90 s",
+            desc:
+              "Ramiona oparte o skośną poduszkę, brak bujania. Najwyższe napięcie w dolnej fazie — " +
+              "nie prostuj łokcia gwałtownie.",
+          },
+          {
+            name: "Uginanie ze sztangą łamaną EZ",
+            sets: "3 × 10–12",
+            load: "22,5 / 27,5 / 30 kg",
+            rest: "90 s",
+            desc: "Łamany gryf odciąża nadgarstki, łokcie przy tułowiu, ruch tylko w łokciu.",
+          },
+          {
+            name: "Uginanie młotkowe",
+            sets: "3 × 12",
+            load: "2 × 7 / 2 × 10 / 2 × 12,5 kg",
+            rest: "60 s",
+            desc: "Chwyt neutralny. Mięsień ramienno-promieniowy i głowa długa bicepsa.",
+          },
+        ],
+      },
+      sat: {
+        title: "Cardio",
+        short: "Cardio",
+        primary: ["quadriceps", "hamstrings", "gastrocnemius", "gluteus"],
+        support: ["tibialis"],
+        cardio: {
+          machine: "Bieżnia",
+          variants: [
+            { name: "Podstawowy", time: "50–60 min", hrFrom: 65, hrTo: 75, desc: "tempo ciągłe" },
+            {
+              name: "Alternatywny",
+              time: "25–30 min",
+              hrFrom: 85,
+              hrTo: 90,
+              desc: "interwały: 8–10 × 1 min pracy / 2 min truchtu",
+            },
+          ],
+        },
+        changes:
+          "Godzina przy 80–90% HRmax to praca na progu mleczanowym i powyżej — realnie utrzymasz " +
+          "taką intensywność 20–40 minut, i to będąc dobrze wytrenowanym. Po pięciu dniach siłowych " +
+          "taka sesja zjada regenerację bez proporcjonalnego zysku. Praca ciągła przy 65–75% daje " +
+          "lepszy bilans wydatku do kosztu regeneracyjnego; jeśli zależy ci na wysokim tętnie, " +
+          "dostajesz je w wariancie interwałowym przy jednej trzeciej czasu.",
+        exercises: [],
+      },
+      sun: {
+        title: "Wolne",
+        short: "Wolne",
+        rest: true,
+        primary: [],
+        support: [],
+        exercises: [],
+        desc:
+          "Dzień bez treningu. Po pięciu sesjach siłowych i cardio regeneracja jest jedynym " +
+          "momentem, w którym powstaje adaptacja — trening ją tylko wywołuje.",
       },
     },
   },

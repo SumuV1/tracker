@@ -176,6 +176,13 @@ podświetlają się na sylwetce. Dane siedzą w osobnym module, bo są treścią
 a nie logiką — dopisanie kolejnego planu to dopisanie obiektu do
 `TRAINING_PLANS`, bez dotykania komponentów.
 
+Pola dnia poza listą ćwiczeń są opcjonalne i pokazują się tylko wtedy, gdy plan
+je podaje: `warmup`, `intro`, `remark`, `loadNote`, `changes`. Tak samo
+w ćwiczeniu — `load`, `rest` i znacznik `added`. Cardio opisujemy wariantami
+(`cardio.variants`), bo jeden dzień potrafi mieć wersję ciągłą i interwałową
+o różnych zakresach tętna. Plan może mieć własne `rules` — rozwijane zasady
+wspólne nad paskiem dni.
+
 Każdy dzień rozdziela mięśnie na dwie role:
 
 | Rola | Znaczenie | Jak wygląda |
