@@ -61,6 +61,7 @@ tracker/
 │   └── src/
 │       ├── main.jsx
 │       ├── api.js            # klient API (zastąpił shim window.storage)
+│       ├── plans.js          # dane planów treningowych
 │       └── App.jsx
 └── scripts/
     ├── deploy.sh
@@ -167,6 +168,35 @@ i 6 głębokich. Przełącznik pokazuje jedną naraz — mięśnie spoza wybrane
 zostają ledwie widocznym tłem i **nie reagują na kliknięcia**. To rozwiązuje
 problem zasłaniania: zębaty przedni schowany pod piersiowym czy prostownik
 grzbietu pod najszerszym są dostępne bez walki z tym, co leży na wierzchu.
+
+#### Plany treningowe — `frontend/src/plans.js`
+
+Plan to tydzień: każdy dzień ma partię, listę ćwiczeń i mięśnie, które
+podświetlają się na sylwetce. Dane siedzą w osobnym module, bo są treścią,
+a nie logiką — dopisanie kolejnego planu to dopisanie obiektu do
+`TRAINING_PLANS`, bez dotykania komponentów.
+
+Każdy dzień rozdziela mięśnie na dwie role:
+
+| Rola | Znaczenie | Jak wygląda |
+|---|---|---|
+| `primary` | partia, pod którą ułożony jest dzień | pełny kolor, biały obrys, poświata |
+| `support` | mięśnie wspomagające i stabilizujące w tych ćwiczeniach | kolor przygaszony, bez obrysu |
+
+Identyfikatory muszą pokrywać się z kluczami `MUSCLES`. Partia dnia potrafi
+leżeć w obu warstwach naraz (plecy: najszerszy jest powierzchowny, prostownik
+grzbietu głęboki), więc mięśnie dnia **prześwitują też spod nieaktywnej
+warstwy** — widać, że coś tam jest, a nad sylwetką pojawia się skrót do
+przełączenia warstwy. Kliknięcie etykiety mięśnia w karcie dnia przełącza
+warstwę samo.
+
+Dzień cardio liczy zakres tętna ze wzoru Tanaki (`208 − 0,7 × wiek`), biorąc
+wiek z profilu. Bez uzupełnionego profilu pokazuje sam wzór i odsyła do
+zakładki „Kalorie & BMI".
+
+Plany są **tylko do odczytu** — nic z nich nie trafia do bazy. Postępu
+treningowego świadomie nie zapisujemy, dopóki nie wiadomo, w jakiej formie
+miałby być prowadzony.
 
 ---
 

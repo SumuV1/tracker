@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "./api.js";
+import { TRAINING_PLANS, WEEKDAYS, todayKey, maxHeartRate } from "./plans.js";
 
 // ── RESPONSYWNOŚĆ ─────────────────────────────────────────────────────────
 // Layout jest budowany na stylach inline, więc breakpointy bierzemy z JS
@@ -481,7 +482,7 @@ const BACK_PATHS = {
 // ekranach dwie sylwetki naraz są za małe, żeby trafić w mięsień palcem.
 const BODY_VIEW = { both:"0 0 900 780", front:"85 10 235 765", back:"585 10 235 765" };
 
-function BodySVG({selected,hovered,onHover,onClick,layer,viewBox=BODY_VIEW.both}){
+function BodySVG({selected,hovered,onHover,onClick,layer,viewBox=BODY_VIEW.both,plan=null}){
   const entries=[...Object.entries(FRONT_PATHS),...Object.entries(BACK_PATHS)];
   const markup=BODY_SVG_MARKUP.replace('viewBox="0 0 900 780"',`viewBox="${viewBox}"`);
   return(
@@ -492,16 +493,27 @@ function BodySVG({selected,hovered,onHover,onClick,layer,viewBox=BODY_VIEW.both}
           const m=MUSCLES[id];
           const onLayer=MUSCLE_LAYER[id]===layer;
           const isHov=hovered===id, isSel=selected===id;
+          // Rola w wybranym dniu planu: główna partia, mięsień wspomagający
+          // albo nic. Bez planu wszystkie mięśnie są równorzędne.
+          const role=plan?(plan.primary.has(id)?"primary":plan.support.has(id)?"support":"off"):null;
           // Mięsień spoza wybranej warstwy zostaje ledwie widocznym tłem i nie
           // reaguje na kliknięcia — to on zasłaniał wcześniej to, co pod nim.
-          const fill=!onLayer?0.06:isSel?0.95:isHov?0.8:0.62;
+          // Przy aktywnym planie mięśnie dnia prześwitują też spod warstwy,
+          // żeby było widać, że coś tam jest — kliknąć da się po zmianie warstwy.
+          const fill=role
+            ?(onLayer
+              ?(role==="primary"?(isSel?0.95:isHov?0.9:0.82):role==="support"?(isSel||isHov?0.6:0.42):isHov?0.22:0.1)
+              :(role==="primary"?0.3:role==="support"?0.16:0.05))
+            :(!onLayer?0.06:isSel?0.95:isHov?0.8:0.62);
+          const outlined=onLayer&&(isSel||isHov||role==="primary");
+          const glow=isSel||(onLayer&&role==="primary");
           return dArr.map((d,i)=>(
             <path key={id+i} d={d} fill={m?.color||"#fff"} fillOpacity={fill}
-              stroke={onLayer?(isSel||isHov?"#fff":"#0e0e10"):"#0e0e10"}
-              strokeWidth={isSel?1.8:isHov?1.4:1}
-              strokeOpacity={onLayer?(isSel||isHov?0.9:0.55):0.25}
+              stroke={outlined?"#fff":"#0e0e10"}
+              strokeWidth={isSel?1.8:role==="primary"&&onLayer?1.5:isHov?1.4:1}
+              strokeOpacity={onLayer?(outlined?0.9:0.55):0.25}
               style={{cursor:onLayer?"pointer":"default",pointerEvents:onLayer?"all":"none",
-                filter:isSel?`drop-shadow(0 0 7px ${m?.color}bb)`:"none",
+                filter:glow?`drop-shadow(0 0 7px ${m?.color}bb)`:"none",
                 transition:"fill-opacity 0.14s, filter 0.14s"}}
               onMouseEnter={()=>onLayer&&onHover(id)} onMouseLeave={()=>onHover(null)}
               onClick={()=>onLayer&&onClick(id)}/>
@@ -555,13 +567,111 @@ function ExercisePanel({muscleId,onClose}){
   );
 }
 
-function MuscleMap(){
+// Kafel jednego ćwiczenia z planu — obciążenie trzymamy osobno od serii,
+// bo w oryginale to dwie różne kolumny tabeli.
+function PlanExercise({ex,accent}){
+  return(
+    <div style={{background:"#0a0a0a",border:`1px solid ${accent}28`,borderLeft:`3px solid ${accent}`,borderRadius:10,padding:"11px 13px",marginBottom:9}}>
+      <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0",lineHeight:1.35}}>{ex.name}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:5}}>
+        <span style={{fontSize:10,fontWeight:700,background:accent+"30",color:accent,padding:"1px 8px",borderRadius:20}}>{ex.sets}</span>
+        <span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{ex.load}</span>
+      </div>
+      <div style={{fontSize:11.5,color:"#9a9a9a",lineHeight:1.55,marginTop:7}}>{ex.desc}</div>
+    </div>
+  );
+}
+
+function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
+  const label=WEEKDAYS.find(d=>d.key===dayKey)?.label||"";
+  // Akcent karty bierzemy z pierwszego mięśnia dnia, żeby kolor panelu zgadzał
+  // się z tym, co świeci na sylwetce.
+  const accent=MUSCLES[day.primary[0]]?.color||"#5DCAA5";
+  const hm=hovered?MUSCLES[hovered]:null;
+  const chip=(id,primary)=>{
+    const m=MUSCLES[id];
+    if(!m)return null;
+    return(
+      <button key={id} onClick={()=>onPickMuscle(id)} title={`${m.name} — ${MUSCLE_LAYER[id]==="deep"?"warstwa głęboka":"warstwa powierzchowna"}`}
+        style={{background:primary?m.color+"33":"transparent",border:`1px solid ${m.color}${primary?"88":"44"}`,
+          borderRadius:20,padding:"3px 10px",color:primary?"#f0f0f0":"#9a9a9a",fontSize:11,fontWeight:primary?600:500,cursor:"pointer"}}>
+        <span style={{color:m.color,marginRight:5}}>●</span>{m.name}
+      </button>
+    );
+  };
+  const hr=day.cardio&&maxHeartRate(age);
+  return(
+    <div style={{display:"flex",flexDirection:"column",maxHeight:isMobile?"none":640}}>
+      <div style={{background:accent+"1e",borderBottom:`1px solid ${accent}44`,padding:"14px 16px 12px",flexShrink:0}}>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:accent,fontFamily:"monospace",marginBottom:4}}>{plan.name.toUpperCase()} · {label.toUpperCase()}</div>
+        <div style={{fontSize:17,fontWeight:700,color:"#f0f0f0",lineHeight:1.25}}>{day.title}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>
+          {day.primary.map(id=>chip(id,true))}
+          {day.support.map(id=>chip(id,false))}
+        </div>
+        {day.support.length>0&&<div style={{fontSize:10.5,color:"#666",marginTop:8}}>Wypełnione — partia dnia. Obrysowane — mięśnie wspomagające.</div>}
+      </div>
+      <div style={{padding:"6px 16px",borderBottom:"1px solid #1e2130",fontSize:11,color:hm?hm.color:"#444",flexShrink:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+        {hm?<>● {hm.name} — kliknij, aby zobaczyć ćwiczenia</>:<>Kliknij mięsień na sylwetce lub etykietę powyżej</>}
+      </div>
+      <div style={{overflowY:isMobile?"visible":"auto",flex:1,padding:"12px 16px 18px"}}>
+        {day.remark&&<div style={{fontSize:11.5,color:"#c8a24a",background:"#2a1e00",border:"1px solid #4a3a10",borderRadius:8,padding:"8px 11px",marginBottom:11,lineHeight:1.5}}>{day.remark}</div>}
+        {day.rest&&<div style={{fontSize:12.5,color:"#9a9a9a",lineHeight:1.65}}>{day.desc}</div>}
+        {day.cardio&&(
+          <div style={{background:"#0a0a0a",border:`1px solid ${accent}28`,borderLeft:`3px solid ${accent}`,borderRadius:10,padding:"12px 13px",marginBottom:10}}>
+            <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0"}}>{day.cardio.machine}</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
+              <span style={{fontSize:10,fontWeight:700,background:accent+"30",color:accent,padding:"1px 8px",borderRadius:20}}>{day.cardio.minutes} min</span>
+              <span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{day.cardio.hrFrom}–{day.cardio.hrTo}% HRmax</span>
+            </div>
+            <div style={{fontSize:11.5,color:"#9a9a9a",lineHeight:1.55,marginTop:8}}>
+              Tętno maksymalne wg wzoru <span style={{color:"#c9c9c9",fontFamily:"monospace"}}>208 − 0,7 × wiek</span> — dokładniejszego niż popularne 220 − wiek.
+            </div>
+            {hr?(
+              <div style={{marginTop:9,paddingTop:9,borderTop:"1px solid #1c1c1c",fontSize:12,color:"#c9c9c9",lineHeight:1.7}}>
+                Dla Twoich <b>{age} lat</b>: HRmax ≈ <b style={{color:accent}}>{hr}</b> ud./min,
+                <br/>zakres treningowy <b style={{color:accent}}>{Math.round(hr*day.cardio.hrFrom/100)}–{Math.round(hr*day.cardio.hrTo/100)}</b> ud./min.
+              </div>
+            ):(
+              <div style={{marginTop:9,paddingTop:9,borderTop:"1px solid #1c1c1c",fontSize:11.5,color:"#666"}}>
+                Podaj wiek w zakładce „Kalorie &amp; BMI”, a policzę Twój zakres w uderzeniach na minutę.
+              </div>
+            )}
+          </div>
+        )}
+        {day.exercises.map((ex,i)=><PlanExercise key={i} ex={ex} accent={accent}/>)}
+        {plan.note&&<div style={{marginTop:6,fontSize:10.5,color:"#5a5a5a",lineHeight:1.6,borderTop:"1px solid #1a1a1a",paddingTop:10}}>{plan.note}</div>}
+      </div>
+    </div>
+  );
+}
+
+function MuscleMap({profile}){
   const isMobile=useMedia(MOBILE);
   const [hovered,setHovered]=useState(null);
   const [selected,setSelected]=useState(null);
   const [side,setSide]=useState("front");
   const [layer,setLayer]=useState("surface");
+  const [planId,setPlanId]=useState(null);
+  const [dayKey,setDayKey]=useState(todayKey);
   const hoveredMuscle=hovered?MUSCLES[hovered]:null;
+  const plan=TRAINING_PLANS.find(p=>p.id===planId)||null;
+  const day=plan?plan.days[dayKey]:null;
+  // Zbiory zamiast tablic — BodySVG pyta o przynależność raz na mięsień.
+  const planHl=day?{primary:new Set(day.primary),support:new Set(day.support)}:null;
+  // Partia dnia potrafi leżeć w obu warstwach (np. plecy: najszerszy jest
+  // powierzchowny, prostownik głęboki). Podpowiadamy przełączenie zamiast
+  // ukrywać połowę dnia.
+  const hiddenPrimary=day?day.primary.filter(id=>MUSCLE_LAYER[id]!==layer):[];
+  const pickPlan=id=>{
+    setPlanId(prev=>prev===id?null:id);
+    setDayKey(todayKey());
+    setSelected(null);setHovered(null);
+  };
+  const pickMuscle=id=>{
+    setLayer(MUSCLE_LAYER[id]);
+    setSelected(id);setHovered(null);
+  };
   // na desktopie pokazujemy obie sylwetki naraz, na telefonie jedną wybraną
   const viewBox=isMobile?BODY_VIEW[side]:BODY_VIEW.both;
   const switchLayer=l=>{
@@ -577,6 +687,46 @@ function MuscleMap(){
         <div style={{fontSize:isMobile?18:22,fontWeight:700,color:"#f5f5f0"}}>Mapa Mięśni Człowieka</div>
         <div style={{marginTop:6,fontSize:12,color:"#666"}}>{isMobile?"Dotknij mięśnia, aby zobaczyć ćwiczenia":"Najedź, aby podejrzeć · Kliknij, aby zobaczyć ćwiczenia"}</div>
       </div>
+      <div style={{background:"#13161f",border:"1px solid #1e2130",borderRadius:14,padding:isMobile?"12px 12px 14px":"14px 16px 16px",marginBottom:16}}>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:"#5DCAA5",fontFamily:"monospace",marginBottom:9}}>PLAN TRENINGOWY</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {TRAINING_PLANS.map(p=>(
+            <button key={p.id} onClick={()=>pickPlan(p.id)} style={{background:planId===p.id?"#5DCAA522":"#0d0f16",
+              border:`1px solid ${planId===p.id?"#5DCAA5":"#262a38"}`,borderRadius:10,padding:"8px 14px",
+              color:planId===p.id?"#5DCAA5":"#9a9a9a",fontWeight:600,fontSize:13,cursor:"pointer"}}>
+              {planId===p.id?"✓ ":""}{p.name}
+            </button>
+          ))}
+          {plan&&(
+            <button onClick={()=>pickPlan(planId)} style={{background:"transparent",border:"1px solid #262a38",borderRadius:10,
+              padding:"8px 14px",color:"#666",fontWeight:600,fontSize:13,cursor:"pointer"}}>Wyłącz plan</button>
+          )}
+        </div>
+        {plan&&(
+          <>
+            <div style={{fontSize:11.5,color:"#7a7a7a",marginTop:10,lineHeight:1.5}}>{plan.summary}</div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(4,1fr)":"repeat(7,1fr)",gap:6,marginTop:12}}>
+              {WEEKDAYS.map(w=>{
+                const d=plan.days[w.key];
+                const on=dayKey===w.key, isToday=todayKey()===w.key;
+                const c=MUSCLES[d.primary[0]]?.color||"#5a5a5a";
+                return(
+                  <button key={w.key} onClick={()=>{setDayKey(w.key);setSelected(null);}}
+                    style={{background:on?c+"26":"#0d0f16",border:`1px solid ${on?c:"#262a38"}`,borderRadius:10,
+                      padding:"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                    <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.08em",fontFamily:"monospace",color:on?c:"#5a5a5a"}}>
+                      {w.short.toUpperCase()}{isToday?" •":""}
+                    </span>
+                    <span style={{fontSize:11,fontWeight:600,color:on?"#f0f0f0":d.rest?"#4a4a4a":"#8a8a8a"}}>{d.short}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{fontSize:10.5,color:"#4a4a4a",marginTop:7}}>Kropka oznacza dzisiejszy dzień.</div>
+          </>
+        )}
+      </div>
+
       <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:14,maxWidth:420,marginLeft:"auto",marginRight:"auto"}}>
         {[["surface","Powierzchowne"],["deep","Głębokie"]].map(([k,l])=>(
           <button key={k} onClick={()=>switchLayer(k)} style={{flex:1,background:layer===k?"#2a2a2a":"transparent",
@@ -590,6 +740,15 @@ function MuscleMap(){
         {layer==="surface"
           ? "Warstwa powierzchowna — mięśnie widoczne bezpośrednio pod skórą."
           : "Warstwa głęboka — mięśnie leżące pod powierzchownymi, te przygaszone są nad nimi."}
+        {hiddenPrimary.length>0&&(
+          <div style={{marginTop:6,color:"#c8a24a"}}>
+            {hiddenPrimary.length===1?"Jeden mięsień":`${hiddenPrimary.length} mięśnie`} z tego dnia leży w drugiej warstwie —{" "}
+            <button onClick={()=>switchLayer(layer==="surface"?"deep":"surface")}
+              style={{background:"none",border:"none",padding:0,color:"#c8a24a",textDecoration:"underline",cursor:"pointer",font:"inherit"}}>
+              przełącz warstwę
+            </button>.
+          </div>
+        )}
       </div>
 
       <div style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
@@ -607,11 +766,15 @@ function MuscleMap(){
             </div>
           )}
           <div style={{borderRadius:12,border:"1px solid #1e2130",overflow:"hidden"}}>
-            <BodySVG viewBox={viewBox} layer={layer} selected={selected} hovered={hovered} onHover={setHovered} onClick={id=>setSelected(p=>p===id?null:id)}/>
+            <BodySVG viewBox={viewBox} layer={layer} plan={planHl} selected={selected} hovered={hovered} onHover={setHovered} onClick={id=>setSelected(p=>p===id?null:id)}/>
           </div>
         </div>
-        <div style={{flex:"1 1 260px",minWidth:0,minHeight:selected?460:isMobile?0:460,background:"#13161f",border:`1px solid ${selected?MUSCLES[selected]?.color+"55":"#1e2130"}`,borderRadius:14,position:"relative",overflow:"hidden"}}>
-          {!selected&&(
+        <div style={{flex:"1 1 260px",minWidth:0,minHeight:selected?460:isMobile?0:460,background:"#13161f",border:`1px solid ${selected?MUSCLES[selected]?.color+"55":day?(MUSCLES[day.primary[0]]?.color||"#5DCAA5")+"44":"#1e2130"}`,borderRadius:14,position:"relative",overflow:"hidden"}}>
+          {!selected&&day&&(
+            <PlanDayPanel plan={plan} dayKey={dayKey} day={day} age={profile?.ageYears??null}
+              hovered={hovered} onPickMuscle={pickMuscle} isMobile={isMobile}/>
+          )}
+          {!selected&&!day&&(
             <div style={{padding:"20px 18px"}}>
               {hoveredMuscle?(
                 <div>
@@ -1301,7 +1464,7 @@ export default function App() {
         )}
 
         {/* ═══ MIĘŚNIE ═══ */}
-        {mainTab==="miesnie"&&<MuscleMap/>}
+        {mainTab==="miesnie"&&<MuscleMap profile={serverProfile}/>}
 
         {/* ═══ DOŁEK ═══ */}
         {mainTab==="dolек"&&(
