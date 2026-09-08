@@ -307,6 +307,25 @@ BMI, podstawowa (PPM) i całkowita przemiana materii (CPM) liczone są w
 `routes/profile.js` i wracają razem z profilem. Wzory żyją w jednym miejscu
 po stronie serwera — frontend je tylko wyświetla, zamiast liczyć równolegle.
 
+Tam samo liczona jest **tkanka tłuszczowa metodą US Navy (Hodgdon–Beckett)**,
+w wariancie metrycznym, z obwodów szyi i talii (u kobiet dodatkowo bioder).
+Funkcja zwraca `null` zawsze, gdy wynik nie ma prawa być traktowany serio:
+
+- brakuje któregoś obwodu,
+- argument logarytmu wychodzi niedodatni (`talia − szyja ≤ 0`),
+- pomiar leży poza zakresem kalibracji modelu (wzrost 120–250, szyja 20–70,
+  talia 40–200, biodra 50–200 cm),
+- wynik wypada poza 0–70 %, co oznacza błąd pomiaru albo cale wpisane jako
+  centymetry.
+
+Cicho zwrócona liczba byłaby tu gorsza niż jej brak — wzór zawiera logarytm,
+więc naruszenie warunku daje wynik niezdefiniowany, a nie komunikat o błędzie.
+Razem z procentem wracają masa tłuszczu, masa beztłuszczowa, kategoria ACE
+oraz masa ciała przy niższych progach procentowych przy założeniu, że masa
+beztłuszczowa się nie zmieni. Rachunek idzie na pełnej precyzji, zaokrąglenie
+do jednego miejsca następuje dopiero przy zwrocie. Błąd standardowy metody to
+±3–4 punkty procentowe — interfejs pisze to przy wyniku.
+
 ---
 
 ## 3. Baza danych (`db-pod`)
@@ -323,7 +342,7 @@ Na bazie, która już istnieje, ten sam schemat zakłada `./scripts/db-init.sh`
 | `sessions` | tokeny sesji z datą wygaśnięcia, kasowalne (wylogowanie działa naprawdę) |
 | `habits` | nawyki: nazwa, kategoria, godzina przypomnienia, kolejność |
 | `habit_logs` | odhaczenia, klucz `(habit_id, day)` — obecność wiersza znaczy „zrobione" |
-| `profiles` | waga, wzrost, wiek, płeć, poziom aktywności — jeden wiersz na konto |
+| `profiles` | waga, wzrost, wiek, płeć, poziom aktywności, obwody szyi / talii / bioder — jeden wiersz na konto |
 | `foods` | katalog produktów: `builtin` (wspólne), `custom` (prywatne), `off` (cache OpenFoodFacts) |
 | `meal_entries` | dziennik posiłków — wartości odżywcze zapisane w chwili dodania |
 | `anchors` | kotwice z zakładki „Z dołka" |

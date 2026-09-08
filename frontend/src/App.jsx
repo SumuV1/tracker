@@ -64,6 +64,17 @@ function getBMILabel(bmi){
   if(bmi<30)return{label:"Nadwaga",color:"#f59e0b"};
   return{label:"Otyłość",color:"#ef4444"};
 }
+// Skala ACE do procentu tkanki tłuszczowej. Kategorię wybiera serwer — tutaj
+// leżą wyłącznie zakresy i kolory legendy, tak samo jak przy poziomach
+// aktywności. Progi są orientacyjne, nie diagnostyczne.
+const BF_SCALE = {
+  M: [["Tłuszcz niezbędny","2–5 %","#3b82f6"],["Sportowcy","6–13 %","#22c55e"],
+      ["Fitness","14–17 %","#a3e635"],["Akceptowalny","18–24 %","#f59e0b"],["Otyłość","≥ 25 %","#ef4444"]],
+  F: [["Tłuszcz niezbędny","10–13 %","#3b82f6"],["Sportowcy","14–20 %","#22c55e"],
+      ["Fitness","21–24 %","#a3e635"],["Akceptowalny","25–31 %","#f59e0b"],["Otyłość","≥ 32 %","#ef4444"]],
+};
+const bfColor=(sex,category)=>(BF_SCALE[sex]||BF_SCALE.M).find(([l])=>l===category)?.[2]||"#888";
+
 // Etykiety poziomów aktywności. Same współczynniki i wzory należą do serwera —
 // tutaj są tylko po to, żeby opisać pozycje listy wyboru.
 const ACTIVITY = [
@@ -78,7 +89,8 @@ const ACTIVITY = [
 // Wzory pod wynikami. Wszystkie liczby — łącznie z PPM i współczynnikiem —
 // pochodzą z odpowiedzi serwera, więc działanie nie może rozminąć się z wynikiem.
 function FormulaPanel({profile}){
-  const {weightKg:w, heightCm:h, ageYears:age, sex, bmi, bmr, tdee, activityFactor:factor}=profile;
+  const {weightKg:w, heightCm:h, ageYears:age, sex, bmi, bmr, tdee, activityFactor:factor,
+         neckCm:neck, waistCm:waist, hipsCm:hips, bodyFat:bf}=profile;
   const act=ACTIVITY[profile.activity]||ACTIVITY[0];
   const n=v=>String(Math.round(v*100)/100).replace(".",",");
   const mono={fontFamily:"monospace",fontSize:12.5,color:"#bbb",lineHeight:1.9,whiteSpace:"nowrap"};
@@ -108,7 +120,7 @@ function FormulaPanel({profile}){
         </div>
       </div>
 
-      <div>
+      <div style={{marginBottom:bf?18:0}}>
         <div style={head}>CPM — CAŁKOWITA PRZEMIANA MATERII</div>
         <div style={note}>PPM przemnożona przez współczynnik aktywności ({act.label} = {n(factor)}). To jest dzienne zapotrzebowanie.</div>
         <div style={{overflowX:"auto"}}>
@@ -116,6 +128,41 @@ function FormulaPanel({profile}){
           <div style={mono}>{"    "}= {bmr} × {n(factor)} = <span style={res}>{tdee} kcal</span></div>
         </div>
       </div>
+
+      {bf&&(
+        <div>
+          <div style={head}>TKANKA TŁUSZCZOWA — METODA US NAVY</div>
+          <div style={note}>
+            Wzór Hodgdona–Becketta w wersji metrycznej ({sex==="M"?"mężczyzna":"kobieta"}) — szacunek
+            z obwodów ciała. Logarytm dziesiętny, wszystkie wymiary w centymetrach.
+          </div>
+          <div style={{overflowX:"auto"}}>
+            {sex==="F"?(
+              <>
+                <div style={mono}>BF% = 495 / (1,29579 − 0,35004×log(talia + biodra − szyja) + 0,221×log(wzrost)) − 450</div>
+                <div style={mono}>{"    "}= 495 / (1,29579 − 0,35004×log({n(waist)}+{n(hips)}−{n(neck)}) + 0,221×log({n(h)})) − 450</div>
+              </>
+            ):(
+              <>
+                <div style={mono}>BF% = 495 / (1,0324 − 0,19077×log(talia − szyja) + 0,15456×log(wzrost)) − 450</div>
+                <div style={mono}>{"    "}= 495 / (1,0324 − 0,19077×log({n(waist)}−{n(neck)}) + 0,15456×log({n(h)})) − 450</div>
+              </>
+            )}
+            <div style={mono}>{"    "}= <span style={res}>{String(bf.pct).replace(".",",")} %</span></div>
+            <div style={{...mono,marginTop:8}}>masa tłuszczu = waga × BF% / 100 = {n(w)} × {String(bf.pct).replace(".",",")}/100 = <span style={res}>{String(bf.fatMassKg).replace(".",",")} kg</span></div>
+            <div style={mono}>masa beztłuszczowa = waga − masa tłuszczu = <span style={res}>{String(bf.leanMassKg).replace(".",",")} kg</span></div>
+            {bf.milestones.length>0&&(
+              <div style={mono}>masa przy X% = masa beztłuszczowa / (1 − X/100)</div>
+            )}
+          </div>
+          <div style={{...note,marginTop:10,marginBottom:0}}>
+            Błąd standardowy metody to ±3–4 punkty procentowe względem DXA, więc różnica między
+            18 % a 17 % mieści się w szumie. Wartość ma sens w trendzie: mierz co 2–4 tygodnie
+            w identycznych warunkach. Wzór zawyża wynik przy wąskiej szyi i szerokim tułowiu,
+            zaniża u osób z rozbudowanym karkiem; nie stosuje się go u dzieci ani w ciąży.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -929,7 +976,7 @@ export default function App() {
 
   const [user,setUser]=useState(null);
   const [authChecked,setAuthChecked]=useState(false);
-  const [profile,setProfile]=useState({weight:"",height:"",age:"",sex:"M",activity:1});
+  const [profile,setProfile]=useState({weight:"",height:"",age:"",sex:"M",activity:1,neck:"",waist:"",hips:""});
   const [serverProfile,setServerProfile]=useState(null);
   const [offQuery,setOffQuery]=useState("");
   const [offResults,setOffResults]=useState(null);   // null = tryb bazy lokalnej
@@ -938,7 +985,11 @@ export default function App() {
   const [modal,setModal]=useState(false);
   const [search,setSearch]=useState("");
   const [selCat,setSelCat]=useState("Wszystkie");
-  const [grams,setGrams]=useState(100);
+  // Gramatura trzymana jako tekst, nie liczba: inaczej wyczyszczenie pola
+  // natychmiast wskakiwało na 1 i nie dawało się wpisać wartości od początku.
+  const [grams,setGrams]=useState("100");
+  // "" i "abc" → 0; wtedy dodawanie jest zablokowane zamiast wysyłać śmieć.
+  const gramsNum=Number(grams)||0;
   const [selFood,setSelFood]=useState(null);
   const [showCustomForm,setShowCustomForm]=useState(false);
   const [customForm,setCustomForm]=useState({name:"",cal:"",p:"",c:"",f:""});
@@ -1052,6 +1103,7 @@ export default function App() {
         setProfile({
           weight:p.weightKg??"",height:p.heightCm??"",age:p.ageYears??"",
           sex:p.sex||"M",activity:p.activity??1,
+          neck:p.neckCm??"",waist:p.waistCm??"",hips:p.hipsCm??"",
         });
         await Promise.all([reloadLogs(),reloadTotals(),reloadDay(calDate)]);
       }catch(e){
@@ -1117,10 +1169,15 @@ export default function App() {
 
   // ── Profil ──
   const calcAll=()=>run(async()=>{
-    const {weight:w,height:h,age,sex,activity}=profile;
+    const {weight:w,height:h,age,sex,activity,neck,waist,hips}=profile;
     if(!w||!h||!age)return;
     const p=await api.saveProfile({
       weightKg:+w,heightCm:+h,ageYears:+age,sex,activity:+activity,
+      // Puste pole zostaje puste — serwer traktuje "" jako brak pomiaru
+      // i po prostu nie liczy z niego tkanki tłuszczowej. Biodra zapisujemy
+      // także dla mężczyzn: pole jest wtedy ukryte, ale wpisana wcześniej
+      // wartość nie znika przy zmianie płci w formularzu.
+      neckCm:neck,waistCm:waist,hipsCm:hips,
     });
     setServerProfile(p);
   });
@@ -1136,8 +1193,8 @@ export default function App() {
 
   // ── Posiłki ──
   const addFood=()=>run(async()=>{
-    if(!selFood)return;
-    const ratio=grams/100;
+    if(!selFood||!(gramsNum>0))return;
+    const ratio=gramsNum/100;
     const r1=v=>Math.round((v||0)*ratio*10)/10;
     // Produkt z Open Food Facts trafia najpierw do naszego katalogu — serwer
     // sam pobiera wartości po kodzie kreskowym, nie ufając temu, co przyszło
@@ -1149,13 +1206,13 @@ export default function App() {
       await Promise.all([reloadFoods(),api.foodCategories().then(setFoodCats)]);
     }
     await api.addMeal({
-      day:calDate,foodId,name:selFood.name,grams,
+      day:calDate,foodId,name:selFood.name,grams:gramsNum,
       kcal:Math.round(selFood.kcal*ratio),
       proteinG:r1(selFood.proteinG),carbsG:r1(selFood.carbsG),
       fatG:r1(selFood.fatG),fiberG:r1(selFood.fiberG),saltG:r1(selFood.saltG),
     });
     await Promise.all([reloadDay(calDate),reloadTotals()]);
-    setModal(false);setSelFood(null);setSearch("");setGrams(100);setOffResults(null);setOffQuery("");
+    setModal(false);setSelFood(null);setSearch("");setGrams("100");setOffResults(null);setOffQuery("");
   });
   const removeEntry=id=>run(async()=>{
     await api.deleteMeal(id);
@@ -1190,6 +1247,8 @@ export default function App() {
       return matchCat&&f.name.toLowerCase().includes(search.toLowerCase());
     });
   const bmiInfo=bmiVal?getBMILabel(bmiVal):null;
+  const bf=serverProfile?.bodyFat??null;
+  const bfCol=bf?bfColor(serverProfile.sex,bf.category):null;
   const days7=getLast7();
 
   const splash=txt=><div style={{background:"#0a0a0a",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:"#666",fontFamily:"'Inter',sans-serif"}}>{txt}</div>;
@@ -1403,6 +1462,27 @@ export default function App() {
                       </select>
                     </div>
                   </div>
+                  {/* Obwody są opcjonalne — bez nich liczy się wszystko poza
+                      tkanką tłuszczową. Podpowiedzi pomiarowe są przy polach,
+                      bo metoda jest wrażliwsza na technikę niż na cokolwiek innego. */}
+                  <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:10,padding:"12px 13px",marginBottom:16}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"#aaa",marginBottom:3}}>Obwody — tkanka tłuszczowa (opcjonalnie)</div>
+                    <div style={{fontSize:11,color:"#666",marginBottom:10,lineHeight:1.5}}>Mierz rano, na czczo, po wydechu. Taśma przylega, ale nie wgniata skóry.</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:12}}>
+                      {[["Szyja (cm)","neck","Poniżej krtani, taśma lekko skośna w dół z przodu."],
+                        ["Talia (cm)","waist",profile.sex==="F"?"W najwęższym miejscu tułowia.":"Na wysokości pępka, taśma poziomo."],
+                        ...(profile.sex==="F"?[["Biodra (cm)","hips","W najszerszym miejscu pośladków, stopy razem."]]:[])
+                      ].map(([label,key,hint])=>(
+                        <div key={key} style={{display:"flex",flexDirection:"column",gap:6}}>
+                          <label style={{fontSize:12,color:"#888"}}>{label}</label>
+                          <input type="number" step="any" inputMode="decimal" value={profile[key]}
+                            onChange={e=>setProfile(p=>({...p,[key]:e.target.value}))}
+                            style={{background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none"}} placeholder={label}/>
+                          <div style={{fontSize:10.5,color:"#5a5a5a",lineHeight:1.45}}>{hint}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                   <div style={{marginBottom:16}}>
                     <label style={{fontSize:12,color:"#888",display:"block",marginBottom:6}}>Poziom aktywności</label>
                     <select value={profile.activity} onChange={e=>setProfile(p=>({...p,activity:+e.target.value}))}
@@ -1437,6 +1517,53 @@ export default function App() {
                       </div>
                     </div>
                   </div>
+                  {bf&&(
+                    <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,marginTop:12}}>
+                      <div style={{display:"grid",gridTemplateColumns:isWide?"minmax(200px,260px) 1fr":"1fr",gap:18,alignItems:"start"}}>
+                        <div style={{textAlign:"center"}}>
+                          <div style={{fontSize:12,color:"#888",marginBottom:6}}>Tkanka tłuszczowa</div>
+                          <div style={{fontSize:isMobile?40:48,fontWeight:800,color:bfCol}}>{String(bf.pct).replace(".",",")}<span style={{fontSize:24}}> %</span></div>
+                          <div style={{display:"inline-block",marginTop:6,padding:"3px 14px",borderRadius:20,background:bfCol+"22",color:bfCol,fontWeight:700,fontSize:13}}>{bf.category}</div>
+                          <div style={{marginTop:10,fontSize:11,color:"#666"}}>± 3–4 p.p. — tyle wynosi błąd metody</div>
+                        </div>
+                        <div>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10,marginBottom:14}}>
+                            <div style={{background:"#0a0a0a",borderRadius:10,padding:"10px 12px"}}>
+                              <div style={{fontSize:19,fontWeight:800,color:NUTRIENT.fat}}>{String(bf.fatMassKg).replace(".",",")} kg</div>
+                              <div style={{fontSize:10.5,color:"#666",marginTop:2}}>masa tłuszczu</div>
+                            </div>
+                            <div style={{background:"#0a0a0a",borderRadius:10,padding:"10px 12px"}}>
+                              <div style={{fontSize:19,fontWeight:800,color:NUTRIENT.protein}}>{String(bf.leanMassKg).replace(".",",")} kg</div>
+                              <div style={{fontSize:10.5,color:"#666",marginTop:2}}>masa beztłuszczowa</div>
+                            </div>
+                          </div>
+                          {bf.milestones.length>0&&(
+                            <div style={{marginBottom:14}}>
+                              <div style={{fontSize:11,color:"#888",marginBottom:6}}>
+                                Masa ciała przy niższym poziomie, jeśli masa beztłuszczowa się nie zmieni:
+                              </div>
+                              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                                {bf.milestones.map(m=>(
+                                  <span key={m.pct} style={{background:"#0a0a0a",border:"1px solid #262626",borderRadius:20,padding:"4px 12px",fontSize:12,color:"#bbb"}}>
+                                    {m.pct} % → <b style={{color:"#e8e8e8"}}>{String(m.weightKg).replace(".",",")} kg</b>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:6}}>
+                            {(BF_SCALE[serverProfile.sex]||BF_SCALE.M).map(([label,range,color])=>(
+                              <div key={label} style={{display:"flex",alignItems:"center",gap:7,fontSize:11,
+                                color:label===bf.category?"#e8e8e8":"#5a5a5a",fontWeight:label===bf.category?700:400}}>
+                                <span style={{width:8,height:8,borderRadius:2,background:color,flexShrink:0,opacity:label===bf.category?1:0.5}}/>
+                                {label} <span style={{color:"#4a4a4a"}}>{range}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {serverProfile?.bmr&&<FormulaPanel profile={serverProfile}/>}
                   </div>
                 )}
@@ -1638,12 +1765,12 @@ export default function App() {
 
       {modal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:20}}
-          onClick={e=>{if(e.target===e.currentTarget){setModal(false);setSelFood(null);setSearch("");setGrams(100);}}}>
+          onClick={e=>{if(e.target===e.currentTarget){setModal(false);setSelFood(null);setSearch("");setGrams("100");}}}>
           {/* na telefonie panel dolny, na desktopie wyśrodkowane okno */}
           <div style={{background:"#161616",borderRadius:isMobile?"20px 20px 0 0":16,padding:isMobile?"20px 16px calc(20px + env(safe-area-inset-bottom))":24,width:"100%",maxWidth:600,maxHeight:isMobile?"88vh":"85vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.4)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <h3 style={{margin:0,fontSize:17,fontWeight:700}}>Dodaj produkt</h3>
-              <button onClick={()=>{setModal(false);setSelFood(null);setSearch("");setGrams(100);}} style={{background:"#222",border:"none",borderRadius:8,color:"#aaa",fontSize:18,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+              <button onClick={()=>{setModal(false);setSelFood(null);setSearch("");setGrams("100");}} style={{background:"#222",border:"none",borderRadius:8,color:"#aaa",fontSize:18,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
             </div>
             <div style={{display:"flex",gap:4,background:"#0a0a0a",borderRadius:10,padding:3,marginBottom:10}}>
               {[[false,"📦 Baza lokalna"],[true,"🌍 Open Food Facts"]].map(([online,label])=>(
@@ -1727,11 +1854,13 @@ export default function App() {
               <div style={{background:"#0a0a0a",borderRadius:12,padding:12,marginBottom:12}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
                   <label style={{fontSize:13,fontWeight:600,color:"#888",whiteSpace:"nowrap"}}>Ilość (g):</label>
-                  <input type="number" value={grams} min={1} onChange={e=>setGrams(+e.target.value||1)}
-                    style={{width:80,padding:"7px 10px",borderRadius:8,border:"1px solid #333",background:"#161616",color:"#fff",fontSize:14,outline:"none"}}/>
+                  <input type="number" value={grams} min={0} step="any" inputMode="decimal"
+                    onChange={e=>setGrams(e.target.value)}
+                    style={{width:90,padding:"7px 10px",borderRadius:8,border:`1px solid ${grams!==""&&!(gramsNum>0)?"#6b2020":"#333"}`,background:"#161616",color:"#fff",fontSize:14,outline:"none"}}/>
+                  {!(gramsNum>0)&&<span style={{fontSize:11,color:"#666"}}>Wpisz ilość większą od zera</span>}
                 </div>
                 <div style={{display:"flex",gap:8}}>
-                  {[["Kcal",Math.round(selFood.kcal*grams/100),NUTRIENT.kcal],["B",(selFood.proteinG*grams/100).toFixed(1)+"g",NUTRIENT.protein],["W",(selFood.carbsG*grams/100).toFixed(1)+"g",NUTRIENT.carbs],["T",(selFood.fatG*grams/100).toFixed(1)+"g",NUTRIENT.fat]].map(([k,v,c])=>(
+                  {[["Kcal",Math.round(selFood.kcal*gramsNum/100),NUTRIENT.kcal],["B",(selFood.proteinG*gramsNum/100).toFixed(1)+"g",NUTRIENT.protein],["W",(selFood.carbsG*gramsNum/100).toFixed(1)+"g",NUTRIENT.carbs],["T",(selFood.fatG*gramsNum/100).toFixed(1)+"g",NUTRIENT.fat]].map(([k,v,c])=>(
                     <div key={k} style={{flex:1,textAlign:"center",background:"#161616",borderRadius:8,padding:"8px 4px"}}>
                       <div style={{fontSize:15,fontWeight:800,color:c}}>{v}</div>
                       <div style={{fontSize:10,color:"#555"}}>{k}</div>
@@ -1740,7 +1869,7 @@ export default function App() {
                 </div>
               </div>
             )}
-            <button onClick={addFood} disabled={!selFood} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:selFood?"linear-gradient(135deg,#667eea,#764ba2)":"#222",color:selFood?"#fff":"#555",fontWeight:700,fontSize:15,cursor:selFood?"pointer":"not-allowed"}}>
+            <button onClick={addFood} disabled={!selFood||!(gramsNum>0)} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:selFood&&gramsNum>0?"linear-gradient(135deg,#667eea,#764ba2)":"#222",color:selFood&&gramsNum>0?"#fff":"#555",fontWeight:700,fontSize:15,cursor:selFood&&gramsNum>0?"pointer":"not-allowed"}}>
               ✅ Dodaj produkt
             </button>
           </div>

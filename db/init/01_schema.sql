@@ -55,8 +55,18 @@ CREATE TABLE IF NOT EXISTS profiles (
   age_years  int          CHECK (age_years > 0 AND age_years < 130),
   sex        char(1)      CHECK (sex IN ('M','F')),
   activity   smallint NOT NULL DEFAULT 1 CHECK (activity BETWEEN 0 AND 4),
+  -- Obwody do metody US Navy. Zakresy to granice walidacji modelu, nie
+  -- fizjologii — poza nimi wzór przestaje cokolwiek znaczyć.
+  neck_cm    numeric(5,2) CHECK (neck_cm  BETWEEN 20 AND 70),
+  waist_cm   numeric(5,2) CHECK (waist_cm BETWEEN 40 AND 200),
+  hips_cm    numeric(5,2) CHECK (hips_cm  BETWEEN 50 AND 200),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+-- Dla baz założonych przed dodaniem obwodów. ADD COLUMN IF NOT EXISTS pomija
+-- kolumnę razem z jej ograniczeniem, więc ponowne uruchomienie nic nie psuje.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS neck_cm  numeric(5,2) CHECK (neck_cm  BETWEEN 20 AND 70);
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS waist_cm numeric(5,2) CHECK (waist_cm BETWEEN 40 AND 200);
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS hips_cm  numeric(5,2) CHECK (hips_cm  BETWEEN 50 AND 200);
 
 -- ── Produkty ──────────────────────────────────────────────────────────────
 -- source: 'builtin' — baza wbudowana, wspólna dla wszystkich
