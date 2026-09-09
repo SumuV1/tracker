@@ -991,6 +991,9 @@ export default function App() {
   // "" i "abc" → 0; wtedy dodawanie jest zablokowane zamiast wysyłać śmieć.
   const gramsNum=Number(grams)||0;
   const [selFood,setSelFood]=useState(null);
+  const [editGramsId,setEditGramsId]=useState(null);
+  const [editGramsVal,setEditGramsVal]=useState("");
+  const [openGroups,setOpenGroups]=useState({});
   const [showCustomForm,setShowCustomForm]=useState(false);
   const [customForm,setCustomForm]=useState({name:"",cal:"",p:"",c:"",f:"",fb:"",s:""});
 
@@ -1117,6 +1120,8 @@ export default function App() {
   // cały dziennik — sumy roczne przychodzą osobno, policzone w SQL.
   useEffect(()=>{
     if(user&&!loading)reloadDay(calDate).catch(e=>setError(e.message));
+    // Edycja dotyczy konkretnego wpisu — po zmianie dnia nie ma czego edytować.
+    setEditGramsId(null);
   },[calDate,user]);
 
   const run=async fn=>{
@@ -1184,6 +1189,27 @@ export default function App() {
 
   const todayStr=today();
   const todayEntries=dayEntries;
+  // Ten sam produkt dopisany kilka razy w ciągu dnia pokazuje się jako jedna
+  // pozycja z sumą. Wpisy zostają osobnymi wierszami w bazie — grupujemy
+  // dopiero przy wyświetlaniu, więc każdy da się nadal poprawić i skasować.
+  const dayGroups=(()=>{
+    const map=new Map();
+    for(const e of todayEntries){
+      // Produkt usunięty z katalogu ma foodId = null; wtedy łączy nazwa.
+      const key=e.foodId!=null?`f:${e.foodId}`:`n:${e.name}`;
+      const g=map.get(key);
+      if(g){
+        g.entries.push(e);
+        for(const k of ["grams","kcal","proteinG","carbsG","fatG","fiberG","saltG"])g[k]+=e[k];
+      }else{
+        map.set(key,{key,name:e.name,entries:[e],
+          grams:e.grams,kcal:e.kcal,proteinG:e.proteinG,carbsG:e.carbsG,
+          fatG:e.fatG,fiberG:e.fiberG,saltG:e.saltG});
+      }
+    }
+    return [...map.values()];
+  })();
+  const n1=v=>Math.round(v*10)/10;
   const totToday=todayEntries.reduce((a,e)=>({
     cal:a.cal+e.kcal,p:a.p+e.proteinG,c:a.c+e.carbsG,
     f:a.f+e.fatG,fb:a.fb+e.fiberG,s:a.s+e.saltG,
@@ -1218,6 +1244,41 @@ export default function App() {
     await api.deleteMeal(id);
     await Promise.all([reloadDay(calDate),reloadTotals()]);
   });
+  const saveGrams=id=>run(async()=>{
+    const g=Number(editGramsVal);
+    if(!(g>0))return;
+    // Serwer przeskalowuje wartości odżywcze sam — przeglądarka wysyła samą
+    // gramaturę i przyjmuje to, co wróci.
+    await api.updateMeal(id,{grams:g});
+    setEditGramsId(null);setEditGramsVal("");
+    await Promise.all([reloadDay(calDate),reloadTotals()]);
+  });
+  // Przyciski wpisu — albo edycja gramatury w miejscu, albo ołówek i kosz.
+  // Ta sama funkcja obsługuje wiersz pojedynczego produktu i wpis rozwinięty
+  // z grupy, żeby oba zachowywały się identycznie.
+  const iconBtn={borderRadius:7,cursor:"pointer",fontSize:13,width:28,height:28,
+    display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0};
+  const entryActions=e=>editGramsId===e.id?(
+    <div style={{display:"flex",alignItems:"center",gap:6}}>
+      <input autoFocus type="number" step="any" min={0} inputMode="decimal" value={editGramsVal}
+        onChange={ev=>setEditGramsVal(ev.target.value)}
+        onKeyDown={ev=>{if(ev.key==="Enter")saveGrams(e.id);if(ev.key==="Escape")setEditGramsId(null);}}
+        style={{width:72,padding:"5px 8px",borderRadius:7,border:"1px solid #444",background:"#0a0a0a",color:"#fff",fontSize:13,outline:"none"}}/>
+      <span style={{fontSize:11,color:"#666"}}>g</span>
+      <button onClick={()=>saveGrams(e.id)} disabled={!(Number(editGramsVal)>0)}
+        style={{...iconBtn,background:Number(editGramsVal)>0?"#14351f":"#222",border:`1px solid ${Number(editGramsVal)>0?"#2f6b40":"#333"}`,
+          color:Number(editGramsVal)>0?"#4ade80":"#555",cursor:Number(editGramsVal)>0?"pointer":"not-allowed"}}>✓</button>
+      <button onClick={()=>setEditGramsId(null)} style={{...iconBtn,background:"#222",border:"1px solid #333",color:"#999"}}>✕</button>
+    </div>
+  ):(
+    <>
+      <button onClick={()=>{setEditGramsId(e.id);setEditGramsVal(String(e.grams));}} title="Zmień gramaturę"
+        style={{...iconBtn,background:"#1c2030",border:"1px solid #2f3550",color:"#8fa6e8"}}>✎</button>
+      <button onClick={()=>removeEntry(e.id)} title="Usuń wpis"
+        style={{...iconBtn,background:"#3a1a1a",border:"1px solid #6b2020",color:"#f87171"}}>✕</button>
+    </>
+  );
+
   const addCustomFood=()=>run(async()=>{
     const {name,cal,p,c,f,fb,s}=customForm;
     if(!name||!cal)return;
@@ -1591,7 +1652,7 @@ export default function App() {
                       <button onClick={()=>{const d=new Date(calDate+"T00:00:00");d.setDate(d.getDate()-1);setCalDate(toISO(d));}} style={{background:"#222",border:"none",borderRadius:8,color:"#aaa",cursor:"pointer",fontSize:16,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>‹</button>
                       <div style={{textAlign:"center",minWidth:118}}>
                         <div style={{fontWeight:700,fontSize:15,textTransform:"capitalize"}}>{(()=>{const t=today();if(calDate===t)return"Dzisiaj";const y=new Date();y.setDate(y.getDate()-1);if(calDate===toISO(y))return"Wczoraj";return new Date(calDate+"T00:00:00").toLocaleDateString("pl-PL",{weekday:"short",day:"numeric",month:"short"});})()}</div>
-                        <div style={{fontSize:11,color:"#666"}}>{todayEntries.length} produktów</div>
+                        <div style={{fontSize:11,color:"#666"}}>{dayGroups.length} produktów{todayEntries.length!==dayGroups.length?` · ${todayEntries.length} wpisów`:""}</div>
                       </div>
                       <button onClick={()=>{if(calDate>=today())return;const d=new Date(calDate+"T00:00:00");d.setDate(d.getDate()+1);setCalDate(toISO(d));}} disabled={calDate>=today()} style={{background:calDate>=today()?"#161616":"#222",border:"none",borderRadius:8,color:calDate>=today()?"#333":"#aaa",cursor:calDate>=today()?"default":"pointer",fontSize:16,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>›</button>
                     </div>
@@ -1610,18 +1671,49 @@ export default function App() {
                   )}
                   {todayEntries.length>0&&(
                     <div style={{marginTop:12,borderTop:"1px solid #1e1e1e",paddingTop:12}}>
-                      {todayEntries.map((e,ri)=>(
-                        <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:ri<todayEntries.length-1?"1px solid #1a1a1a":"none"}}>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:13,fontWeight:600}}>{e.name}</div>
-                            <div style={{fontSize:11,color:"#555"}}>{e.grams}g · T:{e.fatG}g W:{e.carbsG}g B:{e.proteinG}g Bł:{e.fiberG}g Sól:{e.saltG}g</div>
+                      {dayGroups.map((g,gi)=>{
+                        const multi=g.entries.length>1;
+                        const open=!!openGroups[g.key];
+                        return(
+                          <div key={g.key} style={{padding:"7px 0",borderBottom:gi<dayGroups.length-1?"1px solid #1a1a1a":"none"}}>
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                                  <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.name}</span>
+                                  {multi&&(
+                                    <button onClick={()=>setOpenGroups(o=>({...o,[g.key]:!o[g.key]}))}
+                                      title={open?"Zwiń wpisy":"Pokaż pojedyncze wpisy"}
+                                      style={{flexShrink:0,background:"#222",border:"1px solid #333",borderRadius:20,color:"#999",
+                                        cursor:"pointer",fontSize:10,fontWeight:700,padding:"1px 7px"}}>
+                                      ×{g.entries.length} {open?"▾":"▸"}
+                                    </button>
+                                  )}
+                                </div>
+                                <div style={{fontSize:11,color:"#555"}}>{n1(g.grams)}g · T:{n1(g.fatG)}g W:{n1(g.carbsG)}g B:{n1(g.proteinG)}g Bł:{n1(g.fiberG)}g Sól:{n1(g.saltG)}g</div>
+                              </div>
+                              <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                                <span style={{fontSize:14,fontWeight:700,color:NUTRIENT.kcal}}>{Math.round(g.kcal)} kcal</span>
+                                {!multi&&entryActions(g.entries[0])}
+                              </div>
+                            </div>
+                            {multi&&open&&(
+                              <div style={{marginTop:6,paddingLeft:10,borderLeft:"2px solid #222"}}>
+                                {g.entries.map(e=>(
+                                  <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"5px 0"}}>
+                                    <div style={{fontSize:11,color:"#777",flex:1,minWidth:0}}>
+                                      {n1(e.grams)}g · T:{n1(e.fatG)}g W:{n1(e.carbsG)}g B:{n1(e.proteinG)}g
+                                    </div>
+                                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                                      <span style={{fontSize:12,fontWeight:700,color:NUTRIENT.kcal}}>{Math.round(e.kcal)} kcal</span>
+                                      {entryActions(e)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <span style={{fontSize:14,fontWeight:700,color:NUTRIENT.kcal}}>{e.kcal} kcal</span>
-                            <button onClick={()=>removeEntry(e.id)} style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:7,color:"#f87171",cursor:"pointer",fontSize:13,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

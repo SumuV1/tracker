@@ -152,6 +152,11 @@ Cały interfejs w jednym komponencie. Warstwa danych trzyma się kilku zasad:
   a błąd zapytania cofa go, dociągając odhaczenia z serwera.
 - **Dziennik posiłków nie jest trzymany w całości** — wybrany dzień pobierany
   jest osobno, a mapa roku dostaje gotowe sumy dzienne policzone w SQL.
+- **Ten sam produkt dopisany kilka razy jednego dnia jest sumowany dopiero
+  przy wyświetlaniu.** W bazie zostają osobne wpisy, więc każdy da się nadal
+  poprawić i skasować — grupa rozwija się w listę pojedynczych wpisów.
+  Kluczem grupowania jest `foodId`, a dla produktów usuniętych z katalogu
+  (`foodId` = `null`) sama nazwa.
 - **Wzorów nie ma po stronie przeglądarki.** BMI, PPM i CPM przychodzą razem
   z profilem; komponent je wyłącznie wyświetla.
 
@@ -257,6 +262,7 @@ w ogóle istnieje.
 | POST/DELETE | `/api/foods`, `/api/foods/:id` | własne produkty |
 | GET/POST | `/api/meals?day=` | dziennik dnia |
 | GET | `/api/meals/daily-totals?year=` | sumy kalorii per dzień |
+| PATCH | `/api/meals/:id` | zmiana gramatury wpisu (wartości odżywcze skalują się proporcjonalnie) |
 | DELETE | `/api/meals/:id` | usunięcie wpisu |
 | GET/POST/DELETE | `/api/anchors` | kotwice |
 | GET | `/api/off/search?q=` | wyszukiwanie w Open Food Facts |

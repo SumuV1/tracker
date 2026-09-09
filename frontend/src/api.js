@@ -56,6 +56,7 @@ export const api = {
   meals: day => request(`/meals?${qs({ day })}`),
   dailyTotals: year => request(`/meals/daily-totals?${qs({ year })}`),
   addMeal: body => request("/meals", { method: "POST", body }),
+  updateMeal: (id, body) => request(`/meals/${id}`, { method: "PATCH", body }),
   deleteMeal: id => request(`/meals/${id}`, { method: "DELETE" }),
 
   anchors: () => request("/anchors"),

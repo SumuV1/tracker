@@ -70,6 +70,36 @@ mealRoutes.post("/", wrap(async (req, res) => {
   res.status(201).json(rows[0]);
 }));
 
+// Zmiana gramatury istniejącego wpisu. Wartości odżywcze skalujemy
+// proporcjonalnie do tego, co zapisano przy dodaniu, zamiast liczyć je od nowa
+// z produktu: wpis jest migawką z chwili dodania i ma nią zostać, a produkt
+// mógł od tamtej pory zniknąć (food_id ma ON DELETE SET NULL). Każda zmiana
+// zaokrągla do 0,01 g, czyli o rząd wielkości poniżej tego, co widać
+// w interfejsie — powrót do poprzedniej gramatury odtwarza wartości z tą
+// dokładnością, a nie co do cyfry.
+// Wszystkie wyrażenia po prawej stronie SET widzą wartości sprzed zmiany,
+// dlatego dzielenie przez `grams` bierze jeszcze starą gramaturę.
+mealRoutes.patch("/:id", wrap(async (req, res) => {
+  const grams = reqNumber((req.body || {}).grams, "grams", { min: 0.1, max: 100000 });
+  const { rows } = await query(
+    `UPDATE meal_entries SET
+       kcal      = round(kcal      * $3::numeric / grams, 2),
+       protein_g = round(protein_g * $3::numeric / grams, 2),
+       carbs_g   = round(carbs_g   * $3::numeric / grams, 2),
+       fat_g     = round(fat_g     * $3::numeric / grams, 2),
+       fiber_g   = round(fiber_g   * $3::numeric / grams, 2),
+       salt_g    = round(salt_g    * $3::numeric / grams, 2),
+       grams     = $3::numeric
+     WHERE id = $1 AND user_id = $2
+     RETURNING id, day, food_id AS "foodId", name, grams, kcal,
+               protein_g AS "proteinG", carbs_g AS "carbsG",
+               fat_g AS "fatG", fiber_g AS "fiberG", salt_g AS "saltG"`,
+    [reqId(req.params.id), req.user.id, grams]
+  );
+  if (!rows.length) return res.status(404).json({ error: "Nie ma takiego wpisu." });
+  res.json(rows[0]);
+}));
+
 mealRoutes.delete("/:id", wrap(async (req, res) => {
   const { rowCount } = await query(
     "DELETE FROM meal_entries WHERE id = $1 AND user_id = $2",
