@@ -62,6 +62,44 @@ foodRoutes.post("/", wrap(async (req, res) => {
   res.status(201).json(rows[0]);
 }));
 
+// Poprawiać, tak jak kasować, można wyłącznie własne produkty. Zmiana nie
+// rusza wpisów w dzienniku: te trzymają wartości odżywcze skopiowane w chwili
+// dodania i mają nimi zostać, bo opisują zjedzony posiłek, a nie dzisiejszą
+// treść katalogu.
+foodRoutes.patch("/:id", wrap(async (req, res) => {
+  const b = req.body || {};
+  // COALESCE zostawia pole nietknięte, gdy nie przyszło w żądaniu.
+  const { rows } = await query(
+    `UPDATE foods SET
+        name      = COALESCE($3, name),
+        category  = COALESCE($4, category),
+        kcal      = COALESCE($5, kcal),
+        protein_g = COALESCE($6, protein_g),
+        carbs_g   = COALESCE($7, carbs_g),
+        fat_g     = COALESCE($8, fat_g),
+        fiber_g   = COALESCE($9, fiber_g),
+        salt_g    = COALESCE($10, salt_g)
+      WHERE id = $1 AND user_id = $2 AND source = 'custom'
+      RETURNING id, source, name, category, kcal,
+                protein_g AS "proteinG", carbs_g AS "carbsG",
+                fat_g AS "fatG", fiber_g AS "fiberG", salt_g AS "saltG"`,
+    [
+      reqId(req.params.id),
+      req.user.id,
+      optText(b.name, "name", { max: 120 }),
+      optText(b.category, "category", { max: 60 }),
+      optNumber(b.kcal, "kcal", { min: 0, max: 9999 }),
+      optNumber(b.proteinG, "proteinG", { min: 0, max: 999 }),
+      optNumber(b.carbsG, "carbsG", { min: 0, max: 999 }),
+      optNumber(b.fatG, "fatG", { min: 0, max: 999 }),
+      optNumber(b.fiberG, "fiberG", { min: 0, max: 999 }),
+      optNumber(b.saltG, "saltG", { min: 0, max: 999 }),
+    ]
+  );
+  if (!rows.length) return res.status(404).json({ error: "Nie ma takiego własnego produktu." });
+  res.json(rows[0]);
+}));
+
 // Kasować można wyłącznie własne produkty — wspólnych nie ruszamy.
 foodRoutes.delete("/:id", wrap(async (req, res) => {
   const { rowCount } = await query(

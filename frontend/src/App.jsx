@@ -1003,6 +1003,7 @@ export default function App() {
   const [editGramsVal,setEditGramsVal]=useState("");
   const [openGroups,setOpenGroups]=useState({});
   const [showCustomForm,setShowCustomForm]=useState(false);
+  const [editFoodId,setEditFoodId]=useState(null);
   const [customForm,setCustomForm]=useState({name:"",cal:"",p:"",c:"",f:"",fb:"",s:""});
 
   const [mainTab,setMainTab]=useState("nawyki");
@@ -1279,7 +1280,7 @@ export default function App() {
       fatG:r1(selFood.fatG),fiberG:r1(selFood.fiberG),saltG:r1(selFood.saltG),
     });
     await Promise.all([reloadDay(calDate),reloadTotals()]);
-    setModal(false);setSelFood(null);setSearch("");setGrams("100");setOffResults(null);setOffQuery("");
+    setModal(false);setSelFood(null);setSearch("");setGrams("100");setOffResults(null);setOffQuery("");closeCustomForm();
   });
   const removeEntry=id=>run(async()=>{
     await api.deleteMeal(id);
@@ -1422,17 +1423,34 @@ export default function App() {
     </>
   );
 
-  const addCustomFood=()=>run(async()=>{
+  const closeCustomForm=()=>{
+    setCustomForm({name:"",cal:"",p:"",c:"",f:"",fb:"",s:""});
+    setShowCustomForm(false);setEditFoodId(null);
+  };
+  const startEditFood=food=>{
+    setEditFoodId(food.id);
+    setCustomForm({name:food.name,cal:String(food.kcal),p:String(food.proteinG),
+      c:String(food.carbsG),f:String(food.fatG),fb:String(food.fiberG),s:String(food.saltG)});
+    setShowCustomForm(true);
+  };
+  const saveCustomFood=()=>run(async()=>{
     const {name,cal,p,c,f,fb,s}=customForm;
-    if(!name||!cal)return;
+    if(!name||cal==="")return;
     // Błonnik i sól mają własne pierścienie i dzienne cele, więc produkt bez
     // nich zaniżałby dzienną sumę zamiast po prostu jej nie ruszać.
-    await api.addFood({name,kcal:+cal,proteinG:+p||0,carbsG:+c||0,fatG:+f||0,fiberG:+fb||0,saltG:+s||0});
+    const body={name,kcal:+cal,proteinG:+p||0,carbsG:+c||0,fatG:+f||0,fiberG:+fb||0,saltG:+s||0};
+    // Poprawka katalogu nie rusza wpisów w dzienniku — te trzymają wartości
+    // z chwili dodania i opisują zjedzony posiłek, a nie dzisiejszy katalog.
+    if(editFoodId)await api.patchFood(editFoodId,body);
+    else await api.addFood(body);
     await Promise.all([reloadFoods(),api.foodCategories().then(setFoodCats)]);
-    setCustomForm({name:"",cal:"",p:"",c:"",f:"",fb:"",s:""});setShowCustomForm(false);
+    closeCustomForm();
   });
   const deleteCustomFood=id=>run(async()=>{
     await api.deleteFood(id);
+    // Kasowanie produktu, który akurat siedzi w formularzu, zostawiłoby
+    // otwartą edycję czegoś, czego już nie ma.
+    if(editFoodId===id)closeCustomForm();
     await Promise.all([reloadFoods(),api.foodCategories().then(setFoodCats)]);
   });
 
@@ -2022,12 +2040,12 @@ export default function App() {
 
       {modal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:20}}
-          onClick={e=>{if(e.target===e.currentTarget){setModal(false);setSelFood(null);setSearch("");setGrams("100");}}}>
+          onClick={e=>{if(e.target===e.currentTarget){setModal(false);setSelFood(null);setSearch("");setGrams("100");closeCustomForm();}}}>
           {/* na telefonie panel dolny, na desktopie wyśrodkowane okno */}
           <div style={{background:"#161616",borderRadius:isMobile?"20px 20px 0 0":16,padding:isMobile?"20px 16px calc(20px + env(safe-area-inset-bottom))":24,width:"100%",maxWidth:600,maxHeight:isMobile?"88vh":"85vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.4)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <h3 style={{margin:0,fontSize:17,fontWeight:700}}>Dodaj produkt</h3>
-              <button onClick={()=>{setModal(false);setSelFood(null);setSearch("");setGrams("100");}} style={{background:"#222",border:"none",borderRadius:8,color:"#aaa",fontSize:18,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+              <button onClick={()=>{setModal(false);setSelFood(null);setSearch("");setGrams("100");closeCustomForm();}} style={{background:"#222",border:"none",borderRadius:8,color:"#aaa",fontSize:18,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
             </div>
             <div style={{display:"flex",gap:4,background:"#0a0a0a",borderRadius:10,padding:3,marginBottom:10}}>
               {[[false,"📦 Baza lokalna"],[true,"🌍 Open Food Facts"]].map(([online,label])=>(
@@ -2067,13 +2085,17 @@ export default function App() {
             </div>
               </>
             )}
-            <button onClick={()=>setShowCustomForm(!showCustomForm)} style={{width:"100%",padding:"9px",borderRadius:10,border:`2px dashed ${showCustomForm?"#ef4444":"#667eea"}`,background:"transparent",color:showCustomForm?"#ef4444":"#667eea",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:10}}>
+            <button onClick={()=>showCustomForm?closeCustomForm():setShowCustomForm(true)} style={{width:"100%",padding:"9px",borderRadius:10,border:`2px dashed ${showCustomForm?"#ef4444":"#667eea"}`,background:"transparent",color:showCustomForm?"#ef4444":"#667eea",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:10}}>
               {showCustomForm?"❌ Anuluj":"➕ Dodaj własny produkt"}
             </button>
             {showCustomForm&&(
               <div style={{background:"#0a0a0a",borderRadius:12,padding:14,marginBottom:12,border:"1px solid #2a2a2a"}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#c084fc",marginBottom:2}}>Własny produkt (na 100g)</div>
-                <div style={{fontSize:11,color:"#666",marginBottom:10}}>Wymagane są nazwa i kalorie. Puste pole składnika liczy się jako zero.</div>
+                <div style={{fontSize:13,fontWeight:700,color:"#c084fc",marginBottom:2}}>{editFoodId?"Edycja własnego produktu (na 100g)":"Własny produkt (na 100g)"}</div>
+                <div style={{fontSize:11,color:"#666",marginBottom:10}}>
+                  {editFoodId
+                    ?"Zmiana dotyczy katalogu. Wpisy już dodane do dziennika zostają z wartościami z chwili dodania."
+                    :"Wymagane są nazwa i kalorie. Puste pole składnika liczy się jako zero."}
+                </div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8}}>
                   <input placeholder="Nazwa" value={customForm.name} onChange={e=>setCustomForm(f=>({...f,name:e.target.value}))}
                     style={{gridColumn:"1/-1",padding:"8px 12px",borderRadius:8,border:"1px solid #333",background:"#161616",color:"#fff",fontSize:13,outline:"none"}}/>
@@ -2085,7 +2107,18 @@ export default function App() {
                       style={{padding:"8px 12px",borderRadius:8,border:`1px solid ${customForm[key]!==""?color+"66":"#333"}`,background:"#161616",color:"#fff",fontSize:13,outline:"none"}}/>
                   ))}
                 </div>
-                <button onClick={addCustomFood} style={{width:"100%",marginTop:10,padding:"9px",borderRadius:8,border:"none",background:customForm.name&&customForm.cal?"#c084fc":"#333",color:customForm.name&&customForm.cal?"#000":"#666",fontWeight:700,fontSize:13,cursor:"pointer"}}>✅ Zapisz</button>
+                <div style={{display:"flex",gap:8,marginTop:10}}>
+                  <button onClick={saveCustomFood} disabled={!customForm.name||customForm.cal===""}
+                    style={{flex:1,padding:"9px",borderRadius:8,border:"none",
+                      background:customForm.name&&customForm.cal!==""?"#c084fc":"#333",
+                      color:customForm.name&&customForm.cal!==""?"#000":"#666",fontWeight:700,fontSize:13,
+                      cursor:customForm.name&&customForm.cal!==""?"pointer":"not-allowed"}}>
+                    {editFoodId?"💾 Zapisz zmiany":"✅ Zapisz"}
+                  </button>
+                  {editFoodId&&(
+                    <button onClick={closeCustomForm} style={{background:"#222",border:"1px solid #444",borderRadius:8,color:"#aaa",padding:"9px 16px",fontSize:13,cursor:"pointer"}}>Anuluj</button>
+                  )}
+                </div>
               </div>
             )}
             <div style={{maxHeight:220,overflowY:"auto",border:"1px solid #2a2a2a",borderRadius:10,marginBottom:14}}>
@@ -2106,7 +2139,13 @@ export default function App() {
                   </div>
                   <div style={{textAlign:"right",fontSize:11,display:"flex",alignItems:"center",gap:8}}>
                     <div><div style={{fontWeight:700,color:NUTRIENT.kcal}}>{f.kcal} kcal</div><div style={{color:"#555"}}>B:{f.proteinG}g W:{f.carbsG}g T:{f.fatG}g</div></div>
-                    {f.source==="custom"&&<button onClick={e=>{e.stopPropagation();deleteCustomFood(f.id);}} style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:6,color:"#f87171",cursor:"pointer",fontSize:12,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
+                    {f.source==="custom"&&(
+                      <button onClick={e=>{e.stopPropagation();startEditFood(f);}} title="Edytuj produkt"
+                        style={{background:editFoodId===f.id?"#2a1a3a":"#1c2030",border:`1px solid ${editFoodId===f.id?"#c084fc":"#2f3550"}`,borderRadius:6,
+                          color:editFoodId===f.id?"#c084fc":"#8fa6e8",cursor:"pointer",fontSize:12,width:26,height:26,
+                          display:"flex",alignItems:"center",justifyContent:"center"}}>✎</button>
+                    )}
+                    {f.source==="custom"&&<button onClick={e=>{e.stopPropagation();deleteCustomFood(f.id);}} title="Usuń produkt" style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:6,color:"#f87171",cursor:"pointer",fontSize:12,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
                   </div>
                 </div>
               ))}

@@ -51,6 +51,7 @@ export const api = {
   foods: params => request(`/foods?${qs(params)}`),
   foodCategories: () => request("/foods/categories"),
   addFood: body => request("/foods", { method: "POST", body }),
+  patchFood: (id, body) => request(`/foods/${id}`, { method: "PATCH", body }),
   deleteFood: id => request(`/foods/${id}`, { method: "DELETE" }),
 
   meals: day => request(`/meals?${qs({ day })}`),

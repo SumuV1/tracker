@@ -280,7 +280,7 @@ w ogóle istnieje.
 | GET/PUT | `/api/profile` | profil wraz z BMI, PPM i CPM |
 | GET | `/api/foods?q=&category=` | katalog: wspólne + własne |
 | GET | `/api/foods/categories` | kategorie z licznikami |
-| POST/DELETE | `/api/foods`, `/api/foods/:id` | własne produkty |
+| POST/PATCH/DELETE | `/api/foods`, `/api/foods/:id` | własne produkty (poprawiać i kasować można wyłącznie swoje) |
 | GET/POST | `/api/meals?day=` | dziennik dnia |
 | GET | `/api/meals/daily-totals?year=` | sumy kalorii per dzień |
 | PATCH | `/api/meals/:id` | zmiana gramatury wpisu (wartości odżywcze skalują się proporcjonalnie) |
@@ -382,8 +382,9 @@ Trzy decyzje projektowe, które nie są oczywiste z samego DDL:
   z `profiles`, liczone przy odczycie. W starym modelu zapisany wynik potrafił
   rozjechać się z profilem po edycji wagi bez kliknięcia „Oblicz".
 - **`meal_entries` duplikuje wartości odżywcze** zamiast liczyć je z `foods`.
-  To celowe: korekta produktu w katalogu nie może zmieniać tego, co zostało
-  zjedzone w zeszłym miesiącu. `food_id` zostaje wyłącznie jako informacja
+  To celowe: korekta produktu w katalogu (`PATCH /api/foods/:id`) nie zmienia
+  tego, co zostało zjedzone w zeszłym miesiącu — wpis zachowuje nawet nazwę
+  sprzed poprawki. `food_id` zostaje wyłącznie jako informacja
   o pochodzeniu i przechodzi w `NULL`, gdy produkt zniknie z katalogu.
 - **Odhaczenie to jeden wiersz, nie nadpisanie bloba.** W modelu klucz–wartość
   każde kliknięcie przepisywało całą strukturę nawyków, więc dwa otwarte
