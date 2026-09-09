@@ -992,7 +992,7 @@ export default function App() {
   const gramsNum=Number(grams)||0;
   const [selFood,setSelFood]=useState(null);
   const [showCustomForm,setShowCustomForm]=useState(false);
-  const [customForm,setCustomForm]=useState({name:"",cal:"",p:"",c:"",f:""});
+  const [customForm,setCustomForm]=useState({name:"",cal:"",p:"",c:"",f:"",fb:"",s:""});
 
   const [mainTab,setMainTab]=useState("nawyki");
 
@@ -1219,11 +1219,13 @@ export default function App() {
     await Promise.all([reloadDay(calDate),reloadTotals()]);
   });
   const addCustomFood=()=>run(async()=>{
-    const {name,cal,p,c,f}=customForm;
+    const {name,cal,p,c,f,fb,s}=customForm;
     if(!name||!cal)return;
-    await api.addFood({name,kcal:+cal,proteinG:+p||0,carbsG:+c||0,fatG:+f||0});
+    // Błonnik i sól mają własne pierścienie i dzienne cele, więc produkt bez
+    // nich zaniżałby dzienną sumę zamiast po prostu jej nie ruszać.
+    await api.addFood({name,kcal:+cal,proteinG:+p||0,carbsG:+c||0,fatG:+f||0,fiberG:+fb||0,saltG:+s||0});
     await Promise.all([reloadFoods(),api.foodCategories().then(setFoodCats)]);
-    setCustomForm({name:"",cal:"",p:"",c:"",f:""});setShowCustomForm(false);
+    setCustomForm({name:"",cal:"",p:"",c:"",f:"",fb:"",s:""});setShowCustomForm(false);
   });
   const deleteCustomFood=id=>run(async()=>{
     await api.deleteFood(id);
@@ -1815,13 +1817,17 @@ export default function App() {
             </button>
             {showCustomForm&&(
               <div style={{background:"#0a0a0a",borderRadius:12,padding:14,marginBottom:12,border:"1px solid #2a2a2a"}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#c084fc",marginBottom:10}}>Własny produkt (na 100g)</div>
+                <div style={{fontSize:13,fontWeight:700,color:"#c084fc",marginBottom:2}}>Własny produkt (na 100g)</div>
+                <div style={{fontSize:11,color:"#666",marginBottom:10}}>Wymagane są nazwa i kalorie. Puste pole składnika liczy się jako zero.</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8}}>
                   <input placeholder="Nazwa" value={customForm.name} onChange={e=>setCustomForm(f=>({...f,name:e.target.value}))}
                     style={{gridColumn:"1/-1",padding:"8px 12px",borderRadius:8,border:"1px solid #333",background:"#161616",color:"#fff",fontSize:13,outline:"none"}}/>
-                  {[["Kalorie (kcal)","cal"],["Białko (g)","p"],["Węglowodany (g)","c"],["Tłuszcze (g)","f"]].map(([label,key])=>(
-                    <input key={key} type="number" placeholder={label} value={customForm[key]} onChange={e=>setCustomForm(f=>({...f,[key]:e.target.value}))}
-                      style={{padding:"8px 12px",borderRadius:8,border:"1px solid #333",background:"#161616",color:"#fff",fontSize:13,outline:"none"}}/>
+                  {[["Kalorie (kcal)","cal",NUTRIENT.kcal],["Białko (g)","p",NUTRIENT.protein],
+                    ["Węglowodany (g)","c",NUTRIENT.carbs],["Tłuszcze (g)","f",NUTRIENT.fat],
+                    ["Błonnik (g)","fb",NUTRIENT.fiber],["Sól (g)","s",NUTRIENT.salt]].map(([label,key,color])=>(
+                    <input key={key} type="number" step="any" inputMode="decimal" placeholder={label} value={customForm[key]}
+                      onChange={e=>setCustomForm(f=>({...f,[key]:e.target.value}))}
+                      style={{padding:"8px 12px",borderRadius:8,border:`1px solid ${customForm[key]!==""?color+"66":"#333"}`,background:"#161616",color:"#fff",fontSize:13,outline:"none"}}/>
                   ))}
                 </div>
                 <button onClick={addCustomFood} style={{width:"100%",marginTop:10,padding:"9px",borderRadius:8,border:"none",background:customForm.name&&customForm.cal?"#c084fc":"#333",color:customForm.name&&customForm.cal?"#000":"#666",fontWeight:700,fontSize:13,cursor:"pointer"}}>✅ Zapisz</button>
