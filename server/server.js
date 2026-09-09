@@ -9,6 +9,7 @@ import { profileRoutes } from "./routes/profile.js";
 import { foodRoutes } from "./routes/foods.js";
 import { mealRoutes } from "./routes/meals.js";
 import { anchorRoutes } from "./routes/anchors.js";
+import { avoidRoutes } from "./routes/avoid.js";
 import { offRoutes } from "./routes/off.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -30,6 +31,7 @@ app.use("/api/profile", requireAuth, profileRoutes);
 app.use("/api/foods", requireAuth, foodRoutes);
 app.use("/api/meals", requireAuth, mealRoutes);
 app.use("/api/anchors", requireAuth, anchorRoutes);
+app.use("/api/avoid", requireAuth, avoidRoutes);
 app.use("/api/off", requireAuth, offRoutes);
 
 // Nieznana ścieżka /api/* musi kończyć się błędem, a nie stroną aplikacji —

@@ -160,6 +160,27 @@ Cały interfejs w jednym komponencie. Warstwa danych trzyma się kilku zasad:
 - **Wzorów nie ma po stronie przeglądarki.** BMI, PPM i CPM przychodzą razem
   z profilem; komponent je wyłącznie wyświetla.
 
+#### Zakładka nawyków
+
+Nawyki nie są jedną listą, tylko czterema kaflami — po jednym na kategorię
+(`CATEGORIES`), zajmującymi dwie trzecie szerokości. Kafel pokazuje w nagłówku
+dzisiejsze odhaczenia w obrębie swojej kategorii. Nawyk z nieznaną kategorią
+trafia do pierwszego kafla, tak samo jak `CAT_MAP` domyśla się dla niego koloru.
+
+**Postęp przeniósł się z osobnej podzakładki do rozwinięcia pod nawykiem.**
+Strzałka na dole karty odsłania te same trzy horyzonty (tydzień, miesiąc, rok)
+w wariancie zwartym: `MonthView` i `YearView` przyjmują `compact`, które ścieśnia
+odstępy i podpisy oraz zmniejsza kafelki miesięcy w widoku rocznym z 100 px do
+52 px, żeby dwanaście miesięcy zmieściło się w kolumnie kategorii. Z tego samego
+powodu `TimePicker` przyjmuje `stacked` — cztery kolumny godzin po 36 px nie
+mieszczą się w karcie szerokiej na ~175 px, więc w kaflu schodzą do 30 px,
+a przyciski lądują pod siatką zamiast obok niej.
+
+Ostatnia trzecia część szerokości to **lista niewolnika**: rzeczy, od których
+użytkownik trzyma się z daleka. To odwrotność nawyku, więc świadomie nie ma tam
+odhaczania ani dziennika — tabela `avoid_items` trzyma samą nazwę, opcjonalne
+uzasadnienie i kolejność.
+
 #### Mapa mięśni
 
 Sylwetka jest rysowana wyłącznie dla prawej połowy ciała, lewa powstaje przez
@@ -265,6 +286,7 @@ w ogóle istnieje.
 | PATCH | `/api/meals/:id` | zmiana gramatury wpisu (wartości odżywcze skalują się proporcjonalnie) |
 | DELETE | `/api/meals/:id` | usunięcie wpisu |
 | GET/POST/DELETE | `/api/anchors` | kotwice |
+| GET/POST/PATCH/DELETE | `/api/avoid`, `/api/avoid/:id` | lista niewolnika |
 | GET | `/api/off/search?q=` | wyszukiwanie w Open Food Facts |
 | POST | `/api/off/import` | pobranie produktu po kodzie i zapis do katalogu |
 
@@ -352,6 +374,7 @@ Na bazie, która już istnieje, ten sam schemat zakłada `./scripts/db-init.sh`
 | `foods` | katalog produktów: `builtin` (wspólne), `custom` (prywatne), `off` (cache OpenFoodFacts) |
 | `meal_entries` | dziennik posiłków — wartości odżywcze zapisane w chwili dodania |
 | `anchors` | kotwice z zakładki „Z dołka" |
+| `avoid_items` | lista niewolnika — rzeczy, od których użytkownik trzyma się z daleka |
 
 Trzy decyzje projektowe, które nie są oczywiste z samego DDL:
 

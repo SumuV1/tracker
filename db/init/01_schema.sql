@@ -119,6 +119,19 @@ CREATE TABLE IF NOT EXISTS meal_entries (
 );
 CREATE INDEX IF NOT EXISTS meal_entries_user_day_idx ON meal_entries (user_id, day);
 
+-- ── Lista niewolnika ──────────────────────────────────────────────────────
+-- Odwrotność nawyku: rzeczy, od których użytkownik trzyma się z daleka.
+-- Nie ma dziennika odhaczeń, bo nie ma czego odhaczać — liczy się sama lista.
+CREATE TABLE IF NOT EXISTS avoid_items (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name       text NOT NULL CHECK (length(btrim(name)) > 0),
+  note       text,
+  position   int NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS avoid_items_user_idx ON avoid_items (user_id);
+
 -- ── Z dołka ───────────────────────────────────────────────────────────────
 -- Na razie wyłącznie kotwice. Tabeli na odhaczone techniki świadomie tu nie
 -- ma: struktura poziomów i technik zmieni się przy przebudowie zakładki,

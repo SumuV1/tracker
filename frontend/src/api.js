@@ -59,6 +59,11 @@ export const api = {
   updateMeal: (id, body) => request(`/meals/${id}`, { method: "PATCH", body }),
   deleteMeal: id => request(`/meals/${id}`, { method: "DELETE" }),
 
+  avoid: () => request("/avoid"),
+  addAvoid: body => request("/avoid", { method: "POST", body }),
+  patchAvoid: (id, body) => request(`/avoid/${id}`, { method: "PATCH", body }),
+  deleteAvoid: id => request(`/avoid/${id}`, { method: "DELETE" }),
+
   anchors: () => request("/anchors"),
   addAnchor: body => request("/anchors", { method: "POST", body }),
   deleteAnchor: id => request(`/anchors/${id}`, { method: "DELETE" }),

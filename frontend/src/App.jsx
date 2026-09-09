@@ -9,6 +9,8 @@ const MOBILE = "(max-width: 640px)";
 const NARROW = "(max-width: 380px)";
 // poniżej tej szerokości kolumny obok siebie robią się za ciasne
 const WIDE = "(min-width: 1000px)";
+// cztery kafle kategorii obok siebie mają sens dopiero przy takiej szerokości
+const XWIDE = "(min-width: 1360px)";
 
 function useMedia(query) {
   const [matches, setMatches] = useState(
@@ -245,23 +247,26 @@ function NutrientRings({totals,targets}){
   );
 }
 
-function makeSel(active){return{background:active?"#fff":"#1a1a1a",color:active?"#000":"#aaa",border:"none",borderRadius:7,cursor:"pointer",fontWeight:active?700:400,fontSize:13,textAlign:"center",width:TILE,height:TILE,flexShrink:0,transition:"background 0.15s"};}
+function makeSel(active,size=TILE){return{background:active?"#fff":"#1a1a1a",color:active?"#000":"#aaa",border:"none",borderRadius:7,cursor:"pointer",fontWeight:active?700:400,fontSize:size<34?11.5:13,textAlign:"center",width:size,height:size,flexShrink:0,transition:"background 0.15s"};}
 
-function TimePicker({value,onChange,onClose,onRemove}){
-  const isMobile=useMedia(MOBILE);
+function TimePicker({value,onChange,onClose,onRemove,stacked=false}){
+  const narrow=useMedia(MOBILE)||stacked;
+  // W kaflu kategorii siatka w domyślnym rozmiarze wychodziłaby poza kartę:
+  // cztery kolumny po 36 px to 192 px, a karta ma wewnątrz około 175 px.
+  const tile=stacked?30:TILE;
   const [h,setH]=useState(value?value.split(":")[0]:"08");
   const [m,setM]=useState(value?value.split(":")[1]:"00");
   const btn=extra=>({borderRadius:10,cursor:"pointer",fontSize:14,fontWeight:700,padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"center",gap:7,width:"100%",border:"none",...extra});
   return(
     // na wąskim ekranie siatka godzin i przyciski nie zmieszczą się obok siebie
-    <div style={{marginLeft:isMobile?0:42,display:"flex",flexDirection:isMobile?"column":"row",gap:12,alignItems:isMobile?"stretch":"center"}}>
+    <div style={{marginLeft:narrow?0:42,display:"flex",flexDirection:narrow?"column":"row",gap:12,alignItems:narrow?"stretch":"center"}}>
       <div style={{background:"#111",border:"1px solid #2a2a2a",borderRadius:12,padding:3,display:"inline-block",flexShrink:0}}>
         <div style={{display:"flex",gap:3}}>
-          <div style={{display:"grid",gridTemplateColumns:`repeat(4,${TILE}px)`,gap:3}}>
-            {HOURS.map(hr=><button key={hr} onClick={()=>setH(hr)} style={makeSel(h===hr)}>{hr}</button>)}
+          <div style={{display:"grid",gridTemplateColumns:`repeat(4,${tile}px)`,gap:3}}>
+            {HOURS.map(hr=><button key={hr} onClick={()=>setH(hr)} style={makeSel(h===hr,tile)}>{hr}</button>)}
           </div>
-          <div style={{display:"grid",gridTemplateColumns:`${TILE}px`,gap:3}}>
-            {MINUTES.map(mn=><button key={mn} onClick={()=>setM(mn)} style={makeSel(m===mn)}>{mn}</button>)}
+          <div style={{display:"grid",gridTemplateColumns:`${tile}px`,gap:3}}>
+            {MINUTES.map(mn=><button key={mn} onClick={()=>setM(mn)} style={makeSel(m===mn,tile)}>{mn}</button>)}
           </div>
         </div>
       </div>
@@ -304,7 +309,9 @@ function TimePickerForm({value,onChange}){
   );
 }
 
-function MonthView({habitId,logs,color,toggle}){
+// `compact` = widok wchodzi do wąskiego kafla kategorii, a nie na całą
+// szerokość zakładki: mniejsze odstępy, mniejsze podpisy, ten sam układ.
+function MonthView({habitId,logs,color,toggle,compact=false}){
   const now=new Date();
   const [year,setYear]=useState(now.getFullYear());
   const [month,setMonth]=useState(now.getMonth());
@@ -318,26 +325,26 @@ function MonthView({habitId,logs,color,toggle}){
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
         <button onClick={prevM} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:"0 6px"}}>‹</button>
-        <span style={{fontSize:13,fontWeight:600,color:"#ccc"}}>{MONTHS_PL[month]} {year} — {rate}%</span>
+        <span style={{fontSize:compact?11.5:13,fontWeight:600,color:"#ccc"}}>{MONTHS_PL[month]} {year} — {rate}%</span>
         <button onClick={nextM} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:"0 6px"}}>›</button>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
-        {DAY_LABELS.map(l=><div key={l} style={{fontSize:10,color:"#555",textAlign:"center"}}>{l}</div>)}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:compact?2:3,marginBottom:4}}>
+        {DAY_LABELS.map(l=><div key={l} style={{fontSize:compact?8.5:10,color:"#555",textAlign:"center"}}>{l}</div>)}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:compact?2:3}}>
         {Array(firstDow).fill(null).map((_,i)=><div key={`b${i}`}/>)}
         {days.map(d=>{
           const checked=logs[`${habitId}_${d}`];
           const day=parseInt(d.slice(8));
           const isT=d===today();
-          return <div key={d} onClick={()=>toggle(habitId,d)} style={{aspectRatio:"1",borderRadius:5,background:checked?color:"#2a2a2a",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:checked?"#000":isT?"#fff":"#555",fontWeight:isT?700:400,outline:isT?`2px solid ${color}`:"none",outlineOffset:-1,transition:"background 0.15s"}}>{day}</div>;
+          return <div key={d} onClick={()=>toggle(habitId,d)} style={{aspectRatio:"1",borderRadius:compact?4:5,background:checked?color:"#2a2a2a",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:compact?8:10,color:checked?"#000":isT?"#fff":"#555",fontWeight:isT?700:400,outline:isT?`2px solid ${color}`:"none",outlineOffset:-1,transition:"background 0.15s"}}>{day}</div>;
         })}
       </div>
     </div>
   );
 }
 
-function YearView({habitId,logs,color}){
+function YearView({habitId,logs,color,compact=false}){
   const [year,setYear]=useState(new Date().getFullYear());
   const days=getDaysInYear(year);
   const done=days.filter(d=>logs[`${habitId}_${d}`]).length;
@@ -347,21 +354,21 @@ function YearView({habitId,logs,color}){
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
         <button onClick={()=>setYear(y=>y-1)} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:"0 6px"}}>‹</button>
-        <span style={{fontSize:13,fontWeight:600,color:"#ccc"}}>{year} — {rate}% ({done}/{days.length})</span>
+        <span style={{fontSize:compact?11.5:13,fontWeight:600,color:"#ccc"}}>{year} — {rate}% ({done}/{days.length})</span>
         <button onClick={()=>setYear(y=>y+1)} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:"0 6px"}}>›</button>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))",gap:6}}>
+      <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${compact?52:100}px,1fr))`,gap:compact?4:6}}>
         {byMonth.map((mDays,mi)=>{
           const mDone=mDays.filter(d=>logs[`${habitId}_${d}`]).length;
           const mRate=mDays.length?mDone/mDays.length:0;
           return(
             <div key={mi}>
-              <div style={{fontSize:10,color:"#555",marginBottom:3,textAlign:"center"}}>{MONTHS_PL[mi]}</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+              <div style={{fontSize:compact?8.5:10,color:"#555",marginBottom:compact?2:3,textAlign:"center"}}>{MONTHS_PL[mi]}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:compact?1:2}}>
                 {Array(new Date(year,mi,1).getDay()).fill(null).map((_,i)=><div key={`b${i}`}/>)}
-                {mDays.map(d=><div key={d} style={{aspectRatio:"1",borderRadius:2,background:logs[`${habitId}_${d}`]?color:"#2a2a2a",opacity:logs[`${habitId}_${d}`]?0.85:0.4}} title={d}/>)}
+                {mDays.map(d=><div key={d} style={{aspectRatio:"1",borderRadius:compact?1.5:2,background:logs[`${habitId}_${d}`]?color:"#2a2a2a",opacity:logs[`${habitId}_${d}`]?0.85:0.4}} title={d}/>)}
               </div>
-              <div style={{marginTop:3,background:"#2a2a2a",borderRadius:99,height:3,overflow:"hidden"}}>
+              <div style={{marginTop:compact?2:3,background:"#2a2a2a",borderRadius:99,height:compact?2:3,overflow:"hidden"}}>
                 <div style={{width:`${mRate*100}%`,height:"100%",background:color,borderRadius:99}}/>
               </div>
             </div>
@@ -963,6 +970,7 @@ export default function App() {
   const isMobile=useMedia(MOBILE);
   const isNarrow=useMedia(NARROW);
   const isWide=useMedia(WIDE);
+  const isXWide=useMedia(XWIDE);
   const [habits,setHabits]=useState([]);
   const [habitLogs,setHabitLogs]=useState({});
   const [editTimeId,setEditTimeId]=useState(null);
@@ -1037,6 +1045,28 @@ export default function App() {
     await api.deleteAnchor(id);
     setKotwice(k=>k.filter(x=>x.id!==id));
   };
+  // ── Lista niewolnika ──
+  const addAvoid=()=>run(async()=>{
+    if(!avoidName.trim())return;
+    const it=await api.addAvoid({name:avoidName.trim(),note:avoidNote.trim()});
+    setAvoidItems(l=>[...l,it]);
+    setAvoidName("");setAvoidNote("");setShowAvoidForm(false);
+  });
+  const saveAvoid=id=>run(async()=>{
+    if(!editAvoidVal.trim()){setEditAvoidId(null);return;}
+    // Notatkę wysyłamy zawsze — wyczyszczone pole ma ją skasować, a nie zostawić.
+    const it=await api.patchAvoid(id,{name:editAvoidVal.trim(),note:editAvoidNote.trim()});
+    setAvoidItems(l=>l.map(x=>x.id===id?it:x));
+    setEditAvoidId(null);
+  });
+  const startEditAvoid=it=>{
+    setEditAvoidId(it.id);setEditAvoidVal(it.name);setEditAvoidNote(it.note||"");
+  };
+  const deleteAvoid=id=>run(async()=>{
+    await api.deleteAvoid(id);
+    setAvoidItems(l=>l.filter(x=>x.id!==id));
+  });
+
   const toggleTechnique=key=>setDolekExpanded(p=>({...p,[key]:!p[key]}));
   const markDone=(lvl,idx)=>{
     if(dolekCompleted[lvl].includes(idx))return;
@@ -1047,7 +1077,14 @@ export default function App() {
     l2:{bg:"#2a1000",border:"#d97340",text:"#d97340",tag:"#7a3a10",tagBg:"#2a1000"},
     l3:{bg:"#2a0000",border:"#c94040",text:"#c94040",tag:"#7a1010",tagBg:"#2a0000"},
   }[lvl]);
-  const [habitTab,setHabitTab]=useState("dzisiaj");
+  const [expandedHabit,setExpandedHabit]=useState({});
+  const [avoidItems,setAvoidItems]=useState([]);
+  const [avoidName,setAvoidName]=useState("");
+  const [avoidNote,setAvoidNote]=useState("");
+  const [showAvoidForm,setShowAvoidForm]=useState(false);
+  const [editAvoidId,setEditAvoidId]=useState(null);
+  const [editAvoidVal,setEditAvoidVal]=useState("");
+  const [editAvoidNote,setEditAvoidNote]=useState("");
   const [bmiTab,setBmiTab]=useState("bmi");
   const [saving,setSaving]=useState(false);
   const [loading,setLoading]=useState(true);
@@ -1099,10 +1136,10 @@ export default function App() {
     if(!user)return;
     (async()=>{
       try{
-        const [h,p,f,c,a]=await Promise.all([
-          api.habits(),api.profile(),api.foods({}),api.foodCategories(),api.anchors(),
+        const [h,p,f,c,a,av]=await Promise.all([
+          api.habits(),api.profile(),api.foods({}),api.foodCategories(),api.anchors(),api.avoid(),
         ]);
-        setHabits(h);setServerProfile(p);setFoods(f);setFoodCats(c);setKotwice(a);
+        setHabits(h);setServerProfile(p);setFoods(f);setFoodCats(c);setKotwice(a);setAvoidItems(av);
         setProfile({
           weight:p.weightKg??"",height:p.heightCm??"",age:p.ageYears??"",
           sex:p.sex||"M",activity:p.activity??1,
@@ -1167,10 +1204,14 @@ export default function App() {
   const getWeeklyRate=id=>{const d=getLast7();return Math.round((d.filter(x=>habitLogs[`${id}_${x}`]).length/7)*100);};
   const getView=id=>progressView[id]||"7dni";
   const setView=(id,v)=>setProgressView(p=>({...p,[id]:v}));
+  // Nawyk z nieznaną kategorią trafia do pierwszego kafla — tak samo, jak
+  // CAT_MAP domyśla się dla niego koloru.
+  const habitsByCat=Object.fromEntries(CATEGORIES.map(c=>[c.label,[]]));
   const sortedHabits=[...habits].sort((a,b)=>{
     const at=a.reminderTime,bt=b.reminderTime;
     if(!at&&!bt)return 0;if(!at)return 1;if(!bt)return-1;return at.localeCompare(bt);
   });
+  for(const h of sortedHabits)(habitsByCat[h.category]||habitsByCat[CATEGORIES[0].label]).push(h);
 
   // ── Profil ──
   const calcAll=()=>run(async()=>{
@@ -1253,6 +1294,108 @@ export default function App() {
     setEditGramsId(null);setEditGramsVal("");
     await Promise.all([reloadDay(calDate),reloadTotals()]);
   });
+  // Kafel pojedynczego nawyku wewnątrz kolumny kategorii. Postęp siedzi
+  // w rozwinięciu pod spodem, więc zakładka nie potrzebuje już osobnego
+  // widoku „Postęp" — te same trzy horyzonty są tutaj, w wersji zwartej.
+  const renderHabitCard=(habit,cat)=>{
+    const checked=isChecked(habit.id,todayStr);
+    const streak=getStreak(habit.id);
+    const rate7=getWeeklyRate(habit.id);
+    const open=!!expandedHabit[habit.id];
+    const view=getView(habit.id);
+    const isEditingTime=editTimeId===habit.id;
+    const smallBtn={borderRadius:6,cursor:"pointer",fontSize:11,width:24,height:24,
+      display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0};
+    return(
+      <div key={habit.id} style={{background:"#161616",border:`1px solid ${checked?cat.color+"44":"#1e1e1e"}`,
+        borderRadius:12,padding:"10px 11px",marginBottom:8,transition:"border-color 0.2s"}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:9}}>
+          <button onClick={()=>toggleHabit(habit.id,todayStr)}
+            style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${cat.color}`,padding:0,
+              background:checked?cat.color:"transparent",cursor:"pointer",flexShrink:0,marginTop:1,
+              display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.2s"}}>
+            {checked&&<span style={{color:"#000",fontSize:12,fontWeight:700}}>✓</span>}
+          </button>
+          <div style={{flex:1,minWidth:0}}>
+            {editNameId===habit.id?(
+              <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                <input value={editNameVal} autoFocus
+                  onChange={e=>setEditNameVal(e.target.value)}
+                  onKeyDown={e=>{if(e.key==="Enter")updateName(habit.id,editNameVal);if(e.key==="Escape")setEditNameId(null);}}
+                  style={{flex:1,minWidth:0,background:"#0a0a0a",border:`1px solid ${cat.color}`,borderRadius:6,padding:"4px 8px",color:"#fff",fontSize:13,fontWeight:600,outline:"none"}}/>
+                <button onClick={()=>updateName(habit.id,editNameVal)} style={{...smallBtn,background:"#1a3a1a",border:"1px solid #2d6b20",color:"#86efac"}}>✓</button>
+                <button onClick={()=>setEditNameId(null)} style={{...smallBtn,background:"#222",border:"1px solid #444",color:"#aaa"}}>✕</button>
+              </div>
+            ):(
+              <div onClick={()=>{setEditNameId(habit.id);setEditNameVal(habit.name);}} title="Kliknij, aby zmienić nazwę"
+                style={{fontWeight:600,fontSize:13.5,lineHeight:1.3,wordBreak:"break-word",cursor:"pointer",
+                  opacity:checked?0.5:1,textDecoration:checked?"line-through":"none"}}>{habit.name}</div>
+            )}
+            <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:3}}>
+              {streak>0&&<span style={{fontSize:11,color:"#888"}}>🔥 {streak}</span>}
+              <button onClick={()=>setEditTimeId(isEditingTime?null:habit.id)} title="Godzina przypomnienia"
+                style={{background:habit.reminderTime?"#222":"none",border:"none",borderRadius:6,
+                  padding:habit.reminderTime?"2px 7px":"2px 2px",color:habit.reminderTime?"#aaa":"#444",fontSize:11,cursor:"pointer"}}>
+                🕐{habit.reminderTime?` ${habit.reminderTime}`:""}
+              </button>
+            </div>
+          </div>
+          <button onClick={()=>deleteHabit(habit.id)} title="Usuń nawyk"
+            style={{...smallBtn,background:"#3a1a1a",border:"1px solid #6b2020",color:"#f87171"}}>✕</button>
+        </div>
+        {isEditingTime&&(
+          <div style={{marginTop:9}}>
+            {/* stacked: w wąskim kaflu siatka godzin i przyciski nie zmieszczą się obok siebie */}
+            <TimePicker stacked value={habit.reminderTime} onChange={t=>updateTime(habit.id,t)}
+              onClose={()=>setEditTimeId(null)} onRemove={habit.reminderTime?()=>updateTime(habit.id,""):null}/>
+          </div>
+        )}
+        <button onClick={()=>setExpandedHabit(p=>({...p,[habit.id]:!p[habit.id]}))}
+          style={{width:"100%",marginTop:8,background:open?"#1c1c1c":"transparent",border:"1px solid #232323",
+            borderRadius:8,color:open?"#999":"#666",cursor:"pointer",fontSize:10.5,fontWeight:600,padding:"3px 0",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+          {open?"▲ Zwiń":"▼ Postęp"}
+        </button>
+        {open&&(
+          <div style={{marginTop:9,paddingTop:9,borderTop:"1px solid #1e1e1e"}}>
+            <div style={{display:"flex",gap:3,marginBottom:9}}>
+              {["7dni","miesiąc","rok"].map(v=>(
+                <button key={v} onClick={()=>setView(habit.id,v)}
+                  style={{flex:1,background:view===v?cat.color:"#1f1f1f",color:view===v?"#000":"#777",border:"none",
+                    borderRadius:6,padding:"3px 0",fontSize:10.5,fontWeight:700,cursor:"pointer"}}>{v}</button>
+              ))}
+            </div>
+            {view==="7dni"&&(
+              <div>
+                <div style={{display:"flex",gap:3,marginBottom:8}}>
+                  {days7.map(d=>{
+                    const done=isChecked(habit.id,d);
+                    const di=new Date(d+"T00:00:00").getDay();
+                    return(
+                      <div key={d} style={{flex:1,minWidth:0,textAlign:"center"}}>
+                        <div onClick={()=>toggleHabit(habit.id,d)} title={d}
+                          style={{height:24,borderRadius:5,background:done?cat.color:"#2a2a2a",cursor:"pointer",transition:"background 0.2s"}}/>
+                        <div style={{fontSize:9,color:"#555",marginTop:3}}>{DAY_LABELS[di]}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{background:"#2a2a2a",borderRadius:99,height:5,overflow:"hidden"}}>
+                  <div style={{width:`${rate7}%`,height:"100%",background:cat.color,borderRadius:99,transition:"width 0.4s"}}/>
+                </div>
+              </div>
+            )}
+            {view==="miesiąc"&&<MonthView compact habitId={habit.id} logs={habitLogs} color={cat.color} toggle={toggleHabit}/>}
+            {view==="rok"&&<YearView compact habitId={habit.id} logs={habitLogs} color={cat.color}/>}
+            <div style={{fontSize:10.5,color:"#5a5a5a",marginTop:8,lineHeight:1.4}}>
+              {streak>0?`🔥 ${streak} dni z rzędu`:"Zacznij serię już dziś!"}{view==="7dni"?` · ${rate7}% w tygodniu`:""}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Przyciski wpisu — albo edycja gramatury w miejscu, albo ołówek i kosz.
   // Ta sama funkcja obsługuje wiersz pojedynczego produktu i wpis rozwinięty
   // z grupy, żeby oba zachowywały się identycznie.
@@ -1362,135 +1505,155 @@ export default function App() {
         </div>
       </div>
 
-      {/* mapa mięśni potrzebuje więcej szerokości niż reszta zakładek */}
-      <div style={{maxWidth:mainTab==="miesnie"||mainTab==="kalorie"?1180:680,margin:"0 auto"}}>
+      {/* mapa mięśni i licznik kalorii potrzebują więcej szerokości; nawyki
+          jeszcze więcej, bo mieszczą cztery kafle kategorii obok listy niewolnika */}
+      <div style={{maxWidth:mainTab==="nawyki"?1400:mainTab==="miesnie"||mainTab==="kalorie"?1180:680,margin:"0 auto"}}>
 
         {/* ═══ NAWYKI ═══ */}
         {mainTab==="nawyki"&&(
-          <div>
-            <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:20}}>
-              {[["dzisiaj","Dzisiaj"],["postep","Postęp"]].map(([k,l])=>(
-                <button key={k} onClick={()=>setHabitTab(k)} style={{flex:1,background:habitTab===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"8px",color:habitTab===k?"#fff":"#666",fontWeight:600,cursor:"pointer",fontSize:14}}>{l}</button>
-              ))}
+          <div style={{display:"grid",gap:16,alignItems:"start",gridTemplateColumns:isWide?"2fr 1fr":"1fr"}}>
+
+            {/* dwie trzecie szerokości: nawyki rozłożone na kafle kategorii */}
+            <div style={{minWidth:0}}>
+              {habits.length===0&&(
+                <div style={{textAlign:"center",padding:"60px 0",color:"#555"}}>
+                  <div style={{fontSize:40,marginBottom:12}}>🌱</div>
+                  <p>Brak nawyków. Dodaj swój pierwszy!</p>
+                </div>
+              )}
+              {habits.length>0&&(
+                <div style={{display:"grid",gap:12,
+                  gridTemplateColumns:isMobile?"1fr":isXWide?"repeat(4,1fr)":"repeat(2,1fr)"}}>
+                  {CATEGORIES.map(cat=>{
+                    const list=habitsByCat[cat.label];
+                    const doneToday=list.filter(h=>isChecked(h.id,todayStr)).length;
+                    return(
+                      <div key={cat.label} style={{background:"#121317",border:`1px solid ${cat.color}2e`,
+                        borderRadius:14,padding:12,minWidth:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
+                          <span style={{width:9,height:9,borderRadius:3,background:cat.color,flexShrink:0}}/>
+                          <span style={{fontSize:13,fontWeight:700,color:cat.color,flex:1,minWidth:0,
+                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cat.label}</span>
+                          <span style={{fontSize:11,color:"#666",flexShrink:0}}>{doneToday}/{list.length}</span>
+                        </div>
+                        {/* pasek pokazuje dzisiejsze odhaczenia w obrębie kategorii */}
+                        <div style={{background:"#232323",borderRadius:99,height:4,overflow:"hidden",marginBottom:10}}>
+                          <div style={{width:list.length?`${(doneToday/list.length)*100}%`:"0%",height:"100%",
+                            background:cat.color,borderRadius:99,transition:"width 0.3s"}}/>
+                        </div>
+                        {list.length===0&&(
+                          <div style={{fontSize:11.5,color:"#4a4a4a",fontStyle:"italic",padding:"4px 0 8px"}}>Nic tu jeszcze nie ma.</div>
+                        )}
+                        {list.map(h=>renderHabitCard(h,cat))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {showForm&&(
+                <div style={{background:"#161616",border:"1px solid #2a2a2a",borderRadius:14,padding:16,marginTop:12}}>
+                  <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addHabit()} placeholder="Nazwa nawyku…"
+                    style={{width:"100%",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"10px 12px",color:"#fff",fontSize:14,boxSizing:"border-box",marginBottom:10,outline:"none"}} autoFocus/>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+                    {CATEGORIES.map(c=><button key={c.label} onClick={()=>setNewCat(c.label)} style={{border:`2px solid ${newCat===c.label?c.color:"#333"}`,background:newCat===c.label?c.bg:"transparent",color:c.color,borderRadius:20,padding:"4px 12px",cursor:"pointer",fontSize:13,fontWeight:600}}>{c.label}</button>)}
+                  </div>
+                  <div style={{marginBottom:14}}>
+                    <label style={{fontSize:12,color:"#888",display:"block",marginBottom:8}}>Godzina przypomnienia (opcjonalnie)</label>
+                    <TimePickerForm value={newTime} onChange={setNewTime}/>
+                    {newTime&&<button onClick={()=>setNewTime("")} style={{marginTop:6,background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12}}>Usuń godzinę ×</button>}
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={addHabit} style={{background:"#fff",color:"#000",border:"none",borderRadius:8,padding:"8px 20px",fontWeight:600,cursor:"pointer",flex:1}}>Dodaj</button>
+                    <button onClick={()=>{setShowForm(false);setNewName("");setNewTime("");}} style={{background:"#222",color:"#aaa",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>Anuluj</button>
+                  </div>
+                </div>
+              )}
+              {!showForm&&(
+                <button onClick={()=>setShowForm(true)} style={{width:"100%",marginTop:12,padding:"13px",
+                  borderRadius:12,border:"2px dashed #333",background:"transparent",color:"#888",
+                  fontWeight:600,fontSize:14,cursor:"pointer"}}>
+                  + Dodaj nawyk
+                </button>
+              )}
             </div>
 
-            {habits.length===0&&(
-              <div style={{textAlign:"center",padding:"60px 0",color:"#555"}}>
-                <div style={{fontSize:40,marginBottom:12}}>🌱</div>
-                <p>Brak nawyków. Dodaj swój pierwszy!</p>
+            {/* jedna trzecia szerokości: lista niewolnika */}
+            <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:17}}>⛓️</span>
+                <div style={{fontWeight:700,fontSize:15,color:"#f1f1f1"}}>Lista niewolnika</div>
+                <span style={{marginLeft:"auto",fontSize:11,color:"#666"}}>{avoidItems.length}</span>
               </div>
-            )}
+              <div style={{fontSize:11.5,color:"#666",lineHeight:1.55,margin:"6px 0 14px"}}>
+                Rzeczy, od których trzymasz się z daleka. Odwrotność nawyku — nie ma tu czego odhaczać,
+                liczy się sama lista.
+              </div>
 
-            {/* Dzisiaj */}
-            {habitTab==="dzisiaj"&&sortedHabits.map(habit=>{
-              const cat=CAT_MAP[habit.category]||CATEGORIES[0];
-              const checked=isChecked(habit.id,todayStr);
-              const streak=getStreak(habit.id);
-              const isEditingTime=editTimeId===habit.id;
-              return(
-                <div key={habit.id} style={{background:"#161616",border:`1px solid ${checked?cat.color+"44":"#1e1e1e"}`,borderRadius:14,padding:"14px 16px",marginBottom:10,transition:"border-color 0.2s"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:14}}>
-                    <button onClick={()=>toggleHabit(habit.id,todayStr)} style={{width:28,height:28,borderRadius:"50%",border:`2px solid ${cat.color}`,background:checked?cat.color:"transparent",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.2s"}}>
-                      {checked&&<span style={{color:"#000",fontSize:14,fontWeight:700}}>✓</span>}
-                    </button>
-                    <div style={{flex:1,minWidth:0}}>
-                      {editNameId===habit.id?(
-                        <div style={{display:"flex",gap:6,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
-                          <input
-                            value={editNameVal}
-                            onChange={e=>setEditNameVal(e.target.value)}
-                            onKeyDown={e=>{if(e.key==="Enter")updateName(habit.id,editNameVal);if(e.key==="Escape")setEditNameId(null);}}
-                            autoFocus
-                            style={{flex:1,background:"#0a0a0a",border:`1px solid ${cat.color}`,borderRadius:7,padding:"5px 10px",color:"#fff",fontSize:15,fontWeight:600,outline:"none"}}
-                          />
-                          <button onClick={()=>updateName(habit.id,editNameVal)} style={{background:"#1a3a1a",border:"1px solid #2d6b20",borderRadius:7,color:"#86efac",cursor:"pointer",fontSize:13,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✓</button>
-                          <button onClick={()=>setEditNameId(null)} style={{background:"#222",border:"1px solid #444",borderRadius:7,color:"#aaa",cursor:"pointer",fontSize:13,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+              {avoidItems.length===0&&(
+                <div style={{textAlign:"center",padding:"24px 0",color:"#4a4a4a"}}>
+                  <div style={{fontSize:26,marginBottom:8}}>🚫</div>
+                  <div style={{fontSize:12.5}}>Lista jest pusta.</div>
+                </div>
+              )}
+              {avoidItems.map(it=>(
+                <div key={it.id} style={{background:"#0f0f0f",border:"1px solid #241818",borderLeft:"3px solid #b03b3b",
+                  borderRadius:10,padding:"9px 11px",marginBottom:8,display:"flex",alignItems:"flex-start",gap:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    {editAvoidId===it.id?(
+                      <div>
+                        <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                          <input value={editAvoidVal} autoFocus
+                            onChange={e=>setEditAvoidVal(e.target.value)}
+                            onKeyDown={e=>{if(e.key==="Enter")saveAvoid(it.id);if(e.key==="Escape")setEditAvoidId(null);}}
+                            style={{flex:1,minWidth:0,background:"#0a0a0a",border:"1px solid #b03b3b",borderRadius:6,padding:"4px 8px",color:"#fff",fontSize:13,fontWeight:600,outline:"none"}}/>
+                          <button onClick={()=>saveAvoid(it.id)} style={{background:"#1a3a1a",border:"1px solid #2d6b20",borderRadius:6,color:"#86efac",cursor:"pointer",fontSize:11,width:24,height:24,flexShrink:0}}>✓</button>
+                          <button onClick={()=>setEditAvoidId(null)} style={{background:"#222",border:"1px solid #444",borderRadius:6,color:"#aaa",cursor:"pointer",fontSize:11,width:24,height:24,flexShrink:0}}>✕</button>
                         </div>
-                      ):(
-                        <div onClick={()=>{setEditNameId(habit.id);setEditNameVal(habit.name);}} style={{fontWeight:600,fontSize:15,opacity:checked?0.5:1,textDecoration:checked?"line-through":"none",cursor:"pointer"}} title="Kliknij aby edytować nazwę">{habit.name}</div>
-                      )}
-                      <div style={{fontSize:12,color:cat.color,marginTop:2}}>{habit.category}{streak>0&&` · 🔥 ${streak} dni z rzędu`}</div>
-                    </div>
-                    {habit.reminderTime&&!isEditingTime&&<button onClick={()=>setEditTimeId(habit.id)} style={{background:"#222",border:"none",borderRadius:8,padding:"4px 10px",color:"#aaa",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>🕐 {habit.reminderTime}</button>}
-                    {!habit.reminderTime&&!isEditingTime&&<button onClick={()=>setEditTimeId(habit.id)} style={{background:"none",border:"none",color:"#444",cursor:"pointer",fontSize:16,padding:4}}>🕐</button>}
-                    <button onClick={()=>deleteHabit(habit.id)} style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:8,color:"#f87171",cursor:"pointer",fontSize:16,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
-                  </div>
-                  {isEditingTime&&(
-                    <div style={{marginTop:10}}>
-                      <TimePicker value={habit.reminderTime} onChange={t=>updateTime(habit.id,t)} onClose={()=>setEditTimeId(null)} onRemove={habit.reminderTime?()=>updateTime(habit.id,""):null}/>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Postęp */}
-            {habitTab==="postep"&&sortedHabits.map(habit=>{
-              const cat=CAT_MAP[habit.category]||CATEGORIES[0];
-              const streak=getStreak(habit.id);
-              const rate7=getWeeklyRate(habit.id);
-              const view=getView(habit.id);
-              return(
-                <div key={habit.id} style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,marginBottom:12}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12}}>
-                    <div style={{minWidth:0}}>
-                      <div style={{fontWeight:600,fontSize:15,wordBreak:"break-word"}}>{habit.name}</div>
-                      <div style={{fontSize:12,color:cat.color,marginTop:2}}>{habit.category}{habit.reminderTime&&<span style={{color:"#666"}}> · 🕐 {habit.reminderTime}</span>}</div>
-                    </div>
-                    <div style={{display:"flex",gap:3}}>
-                      {["7dni","miesiąc","rok"].map(v=><button key={v} onClick={()=>setView(habit.id,v)} style={{background:view===v?cat.color:"#222",color:view===v?"#000":"#666",border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,fontWeight:600,cursor:"pointer"}}>{v}</button>)}
-                    </div>
-                  </div>
-                  {view==="7dni"&&(
-                    <div>
-                      <div style={{display:"flex",gap:4,marginBottom:10}}>
-                        {days7.map(d=>{const done=isChecked(habit.id,d);const di=new Date(d+"T00:00:00").getDay();return(<div key={d} style={{flex:1,textAlign:"center"}}><div onClick={()=>toggleHabit(habit.id,d)} style={{height:32,borderRadius:6,background:done?cat.color:"#2a2a2a",cursor:"pointer",transition:"background 0.2s"}}/><div style={{fontSize:10,color:"#555",marginTop:4}}>{DAY_LABELS[di]}</div></div>);})}
+                        <input value={editAvoidNote} placeholder="Dlaczego (opcjonalnie)"
+                          onChange={e=>setEditAvoidNote(e.target.value)}
+                          onKeyDown={e=>{if(e.key==="Enter")saveAvoid(it.id);if(e.key==="Escape")setEditAvoidId(null);}}
+                          style={{width:"100%",boxSizing:"border-box",marginTop:6,background:"#0a0a0a",border:"1px solid #2a2a2a",borderRadius:6,padding:"4px 8px",color:"#ccc",fontSize:11.5,outline:"none"}}/>
                       </div>
-                      <div style={{background:"#2a2a2a",borderRadius:99,height:6,overflow:"hidden"}}><div style={{width:`${rate7}%`,height:"100%",background:cat.color,borderRadius:99,transition:"width 0.4s"}}/></div>
-                      <div style={{fontSize:12,color:"#666",marginTop:8}}>{streak>0?`🔥 ${streak} dni z rzędu`:"Zacznij serię już dziś!"} · {rate7}%</div>
-                    </div>
-                  )}
-                  {view==="miesiąc"&&(
-                    <div>
-                      <MonthView habitId={habit.id} logs={habitLogs} color={cat.color} toggle={toggleHabit}/>
-                      <div style={{fontSize:12,color:"#666",marginTop:10}}>{streak>0?`🔥 ${streak} dni z rzędu`:"Zacznij serię już dziś!"}</div>
-                    </div>
-                  )}
-                  {view==="rok"&&(
-                    <div>
-                      <YearView habitId={habit.id} logs={habitLogs} color={cat.color}/>
-                      <div style={{fontSize:12,color:"#666",marginTop:10}}>{streak>0?`🔥 ${streak} dni z rzędu`:"Zacznij serię już dziś!"}</div>
-                    </div>
-                  )}
+                    ):(
+                      <>
+                        <div onClick={()=>startEditAvoid(it)} title="Kliknij, aby zmienić"
+                          style={{fontSize:13,fontWeight:600,color:"#e8e8e8",cursor:"pointer",wordBreak:"break-word",lineHeight:1.35}}>{it.name}</div>
+                        {it.note&&(
+                          <div onClick={()=>startEditAvoid(it)} style={{fontSize:11,color:"#6a6a6a",marginTop:4,lineHeight:1.5,cursor:"pointer"}}>{it.note}</div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <button onClick={()=>deleteAvoid(it.id)} title="Usuń z listy"
+                    style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:6,color:"#f87171",cursor:"pointer",
+                      fontSize:11,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
                 </div>
-              );
-            })}
+              ))}
 
-            {showForm&&(
-              <div style={{background:"#161616",border:"1px solid #2a2a2a",borderRadius:14,padding:16,marginTop:12}}>
-                <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addHabit()} placeholder="Nazwa nawyku…"
-                  style={{width:"100%",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"10px 12px",color:"#fff",fontSize:14,boxSizing:"border-box",marginBottom:10,outline:"none"}} autoFocus/>
-                <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
-                  {CATEGORIES.map(c=><button key={c.label} onClick={()=>setNewCat(c.label)} style={{border:`2px solid ${newCat===c.label?c.color:"#333"}`,background:newCat===c.label?c.bg:"transparent",color:c.color,borderRadius:20,padding:"4px 12px",cursor:"pointer",fontSize:13,fontWeight:600}}>{c.label}</button>)}
+              {showAvoidForm?(
+                <div style={{background:"#0f0f0f",border:"1px solid #2a2a2a",borderRadius:10,padding:11,marginTop:10}}>
+                  <input value={avoidName} onChange={e=>setAvoidName(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&addAvoid()} placeholder="Od czego trzymasz się z daleka?" autoFocus
+                    style={{width:"100%",boxSizing:"border-box",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 11px",color:"#fff",fontSize:13,marginBottom:8,outline:"none"}}/>
+                  <input value={avoidNote} onChange={e=>setAvoidNote(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&addAvoid()} placeholder="Dlaczego (opcjonalnie)"
+                    style={{width:"100%",boxSizing:"border-box",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 11px",color:"#fff",fontSize:12.5,marginBottom:10,outline:"none"}}/>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={addAvoid} disabled={!avoidName.trim()}
+                      style={{flex:1,background:avoidName.trim()?"#b03b3b":"#222",color:avoidName.trim()?"#fff":"#555",border:"none",borderRadius:8,padding:"8px 16px",fontWeight:700,fontSize:13,cursor:avoidName.trim()?"pointer":"not-allowed"}}>Dodaj</button>
+                    <button onClick={()=>{setShowAvoidForm(false);setAvoidName("");setAvoidNote("");}}
+                      style={{background:"#222",color:"#aaa",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:13}}>Anuluj</button>
+                  </div>
                 </div>
-                <div style={{marginBottom:14}}>
-                  <label style={{fontSize:12,color:"#888",display:"block",marginBottom:8}}>Godzina przypomnienia (opcjonalnie)</label>
-                  <TimePickerForm value={newTime} onChange={setNewTime}/>
-                  {newTime&&<button onClick={()=>setNewTime("")} style={{marginTop:6,background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12}}>Usuń godzinę ×</button>}
-                </div>
-                <div style={{display:"flex",gap:8}}>
-                  <button onClick={addHabit} style={{background:"#fff",color:"#000",border:"none",borderRadius:8,padding:"8px 20px",fontWeight:600,cursor:"pointer",flex:1}}>Dodaj</button>
-                  <button onClick={()=>{setShowForm(false);setNewName("");setNewTime("");}} style={{background:"#222",color:"#aaa",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>Anuluj</button>
-                </div>
-              </div>
-            )}
-            {!showForm&&(
-              <button onClick={()=>setShowForm(true)} style={{width:"100%",marginTop:12,padding:"13px",
-                borderRadius:12,border:"2px dashed #333",background:"transparent",color:"#888",
-                fontWeight:600,fontSize:14,cursor:"pointer"}}>
-                + Dodaj nawyk
-              </button>
-            )}
+              ):(
+                <button onClick={()=>setShowAvoidForm(true)} style={{width:"100%",marginTop:8,padding:"11px",
+                  borderRadius:12,border:"2px dashed #3a2020",background:"transparent",color:"#a05555",
+                  fontWeight:600,fontSize:13,cursor:"pointer"}}>
+                  + Dodaj do listy
+                </button>
+              )}
+            </div>
           </div>
         )}
 
