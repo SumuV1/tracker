@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#35617f"/>
+      <stop offset="34%"  stop-color="#7fa8c2"/>
+      <stop offset="54%"  stop-color="#e6edf1"/>
+      <stop offset="78%"  stop-color="#c2ced6"/>
+      <stop offset="100%" stop-color="#93a4ae"/>
+    </linearGradient>
+    <linearGradient id="fin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#5b87a5"/>
+      <stop offset="100%" stop-color="#3d6884"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0f1318"/>
+
+  <!-- płetwa grzbietowa i brzuszna wychodzą spod ciała, żeby nie odstawały -->
+  <path d="M25 26 L33 15 L37 27 Z" fill="url(#fin)"/>
+  <path d="M27 39 L32 48 L37 39 Z" fill="url(#fin)"/>
+
+  <!-- ciało z ogonem jednym konturem: wrzeciono zwężające się w trzon ogonowy,
+       spiczasty pysk po lewej, głęboko wcięta płetwa ogonowa po prawej -->
+  <path d="M4 32
+           Q10 24 17 22 Q26 19 34 21 Q42 24 45.5 29
+           L57 20 L52.5 32 L57 44 L45.5 35
+           Q42 40 34 43 Q26 45 17 42 Q10 40 4 32 Z"
+        fill="url(#body)"/>
+
+  <!-- pokrywa skrzelowa -->
+  <path d="M16.5 23.5 Q20 32 16.5 40.5" fill="none" stroke="#4f7692" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+  <!-- linia boczna -->
+  <path d="M20 31.5 Q33 30.5 45 31" fill="none" stroke="#7f9cad" stroke-width="1.1" stroke-linecap="round" opacity="0.75"/>
+
+  <!-- oko -->
+  <circle cx="12.6" cy="29.6" r="3.1" fill="#f4f8fa"/>
+  <circle cx="12.6" cy="29.6" r="1.8" fill="#101f28"/>
+  <circle cx="11.8" cy="28.8" r="0.65" fill="#ffffff"/>
+</svg>

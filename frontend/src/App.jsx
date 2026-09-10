@@ -1089,7 +1089,7 @@ function LoginScreen({onLogged}){
       justifyContent:"center",padding:20,fontFamily:"'Inter',sans-serif",color:"#f1f1f1"}}>
       <form onSubmit={submit} style={{width:"100%",maxWidth:360,background:"#161616",
         border:"1px solid #1e1e1e",borderRadius:16,padding:28}}>
-        <h1 style={{margin:"0 0 4px",fontSize:24,fontWeight:700}}>Tracker</h1>
+        <h1 style={{margin:"0 0 4px",fontSize:24,fontWeight:700}}>🐟 Śledzik 🐠</h1>
         <p style={{margin:"0 0 22px",color:"#888",fontSize:13}}>Zaloguj się, aby zobaczyć swoje dane.</p>
 
         <label style={{fontSize:12,color:"#888",display:"block",marginBottom:6}}>Login</label>
@@ -1670,7 +1670,7 @@ export default function App() {
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:isMobile?16:24}}>
           <div style={{minWidth:0}}>
-            <h1 style={{margin:0,fontSize:isMobile?20:24,fontWeight:700}}>Tracker</h1>
+            <h1 style={{margin:0,fontSize:isMobile?20:24,fontWeight:700}}>🐟 Śledzik 🐠</h1>
             <p style={{margin:0,color:"#888",fontSize:isMobile?12:13,textTransform:"capitalize"}}>{new Date().toLocaleDateString("pl-PL",{weekday:"long",month:"long",day:"numeric"})}</p>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>

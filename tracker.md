@@ -60,6 +60,7 @@ tracker/
 │   ├── index.html
 │   └── src/
 │       ├── main.jsx
+│   ├── public/              # ikony i manifest, kopiowane do dist bez zmian
 │       ├── api.js            # klient API (zastąpił shim window.storage)
 │       ├── plans.js          # dane planów treningowych
 │       └── App.jsx
@@ -109,6 +110,21 @@ export default defineConfig({
   server: { proxy: { "/api": "http://localhost:3000" } },
 });
 ```
+
+### Nazwa i ikona
+
+Aplikacja nazywa się **Śledzik**. Ikona to śledź narysowany ręcznie w SVG
+(`frontend/public/favicon.svg`); warianty PNG (32, 180, 192, 512 px) są
+wyrenderowane z tego samego pliku, więc nie ma dwóch źródeł prawdy dla kształtu.
+
+Dwa szczegóły, które łatwo przeoczyć:
+
+- **Ikona iOS jest bez zaokrąglonych rogów.** System przycina ją własną maską,
+  a nasze `rx` dawałoby ciemne obwódki po jego zaokrągleniu.
+- **`manifest.webmanifest`** sprawia, że „dodaj do ekranu głównego" bierze nazwę
+  i ikonę stamtąd, a aplikacja otwiera się bez paska przeglądarki. Ma to sens
+  dopiero od kiedy wejście idzie przez Tailscale: instalacja jako PWA wymaga
+  bezpiecznego kontekstu, a więc zaufanego certyfikatu.
 
 ### `frontend/index.html`
 ```html
