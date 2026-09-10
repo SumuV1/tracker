@@ -84,6 +84,11 @@ else
   echo "✅ Gotowe. Porty słuchają tylko na $BIND_ADDR — wejście przez Tailscale:"
   command -v tailscale >/dev/null && tailscale serve status 2>/dev/null | head -2 \
     || echo "   (skonfiguruj: tailscale serve --bg https+insecure://localhost:${HTTPS_PORT})"
+  # Przy wejściu przez Tailscale certyfikat self-signed nie dociera do
+  # przeglądarki — obsługuje tylko odcinek tailscaled → nginx po pętli zwrotnej.
+  echo "   Certyfikat widziany przez przeglądarkę wystawia Tailscale (Let's Encrypt)."
 fi
-echo "   Certyfikat jest self-signed — przeglądarka pokaże ostrzeżenie,"
-echo "   patrz tracker.md, sekcja o zaufaniu certyfikatowi."
+if [[ "$BIND_ADDR" == "0.0.0.0" ]]; then
+  echo "   Certyfikat jest self-signed — przeglądarka pokaże ostrzeżenie,"
+  echo "   patrz tracker.md, sekcja o zaufaniu certyfikatowi."
+fi
