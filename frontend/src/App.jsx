@@ -432,6 +432,163 @@ function CalYearView({calLogs,tdee}){
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  WYKRES POMIARÓW
+// ══════════════════════════════════════════════════════════════════
+// Jedna seria na raz — nigdy dwie osie Y. Przełącznik zmienia mierzoną
+// wielkość, a nie dokłada drugiej skali do tej samej ramki.
+// Kolor serii dobrany walidatorem dostępności (tryb ciemny): przechodzi pasmo
+// jasności, próg nasycenia i kontrast do tła, a od najbliższego koloru obecnego
+// na tej zakładce dzieli go ΔE 16,5 — nie da się go pomylić z makroskładnikiem.
+const SERIES = "#8d4fbc";
+const AXIS_INK = "#8a8a8a";   // 5,3:1 na tle karty — czytelne, nie krzyczy
+const GRID = "#242424";       // jeden odcień od powierzchni, linia ciągła
+
+const plDate = iso => {
+  const [y, m, d] = iso.split("-");
+  return `${d}.${m}.${y}`;
+};
+
+const METRICS = {
+  weightKg:   { label: "Waga",              unit: "kg", digits: 1 },
+  bodyFatPct: { label: "Tkanka tłuszczowa", unit: "%",  digits: 1 },
+  waistCm:    { label: "Talia",             unit: "cm", digits: 1 },
+};
+
+function MeasurementChart({ rows, metric, isMobile }) {
+  const [hover, setHover] = useState(null);
+  const m = METRICS[metric];
+  const pts = rows.filter(r => r[metric] != null).map(r => ({ day: r.day, v: r[metric] }));
+
+  if (pts.length < 2) {
+    return (
+      <div style={{ padding: "34px 16px", textAlign: "center", color: "#5a5a5a", fontSize: 12.5, lineHeight: 1.6 }}>
+        {pts.length === 0
+          ? <>Brak pomiarów tej wielkości.</>
+          : <>Jeden pomiar to jeszcze nie trend.<br />Wykres pojawi się przy drugim.</>}
+      </div>
+    );
+  }
+
+  const W = isMobile ? 380 : 720, H = isMobile ? 240 : 300;
+  const PAD = { t: 18, r: 16, b: 34, l: isMobile ? 38 : 46 };
+  const iw = W - PAD.l - PAD.r, ih = H - PAD.t - PAD.b;
+
+  // Oś Y nie zaczyna się od zera: przy wadze zero jest poza sensem pomiaru,
+  // a zakres 0–90 kg schowałby całą zmianę w grubości linii.
+  const vs = pts.map(p => p.v);
+  let lo = Math.min(...vs), hi = Math.max(...vs);
+  const span = hi - lo || Math.max(1, hi * 0.02);
+  lo -= span * 0.15; hi += span * 0.15;
+  const step = niceStep((hi - lo) / 4);
+  lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  const ticks = [];
+  for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(6));
+
+  const t0 = new Date(pts[0].day).getTime();
+  const t1 = new Date(pts[pts.length - 1].day).getTime();
+  const spanT = t1 - t0 || 1;
+  const x = p => PAD.l + ((new Date(p.day).getTime() - t0) / spanT) * iw;
+  const y = v => PAD.t + ih - ((v - lo) / (hi - lo)) * ih;
+
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${x(p).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+  const area = `${line} L${x(pts[pts.length - 1]).toFixed(1)},${(PAD.t + ih).toFixed(1)} L${x(pts[0]).toFixed(1)},${(PAD.t + ih).toFixed(1)} Z`;
+
+  // Podpisów dat tyle, ile się zmieści bez nachodzenia — reszta jest w tabeli
+  // pod wykresem i w dymku.
+  const maxLabels = isMobile ? 3 : 5;
+  const spread = pts.length <= maxLabels
+    ? pts.map((_, i) => i)
+    : Array.from({ length: maxLabels }, (_, i) => Math.round((i * (pts.length - 1)) / (maxLabels - 1)));
+  // Punkty bywają zbite w czasie (dwa ważenia w jednym tygodniu), a podpisy
+  // stoją tam, gdzie punkt — więc te, które by na siebie nachodziły, odpadają.
+  const MIN_GAP = isMobile ? 96 : 84;
+  const labelIdx = spread.filter((idx, k) => k === 0 || x(pts[idx]) - x(pts[spread[k - 1]]) >= MIN_GAP);
+
+  const last = pts[pts.length - 1];
+  const first = pts[0];
+  const delta = last.v - first.v;
+  const fmt = v => v.toFixed(m.digits).replace(".", ",");
+  // Podziałka co najmniej jednostkowa nie potrzebuje miejsca po przecinku —
+  // „88" zamiast „88,0" odchudza oś, a dokładność i tak jest w dymku i tabeli.
+  const fmtTick = v => (step < 1 ? v.toFixed(1) : v.toFixed(0)).replace(".", ",");
+  const hp = hover != null ? pts[hover] : null;
+
+  const pick = e => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - box.left) / box.width) * W;
+    let best = 0, bd = Infinity;
+    pts.forEach((p, i) => { const d = Math.abs(x(p) - px); if (d < bd) { bd = d; best = i; } });
+    setHover(best);
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 2 }}>
+        <span style={{ fontSize: 22, fontWeight: 800, color: "#f1f1f1" }}>{fmt(last.v)} <span style={{ fontSize: 13, color: AXIS_INK, fontWeight: 600 }}>{m.unit}</span></span>
+        <span style={{ fontSize: 12, color: delta === 0 ? AXIS_INK : delta < 0 ? "#4ade80" : "#e8a54b" }}>
+          {delta > 0 ? "+" : ""}{fmt(delta)} {m.unit} od {plDate(first.day)}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", overflow: "visible" }}
+        onMouseMove={pick} onMouseLeave={() => setHover(null)} onTouchStart={pick} onTouchMove={pick}>
+        <defs>
+          <linearGradient id="mchart-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={SERIES} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={SERIES} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {ticks.map(t => (
+          <g key={t}>
+            <line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} stroke={GRID} strokeWidth="1" />
+            <text x={PAD.l - 7} y={y(t) + 3.5} textAnchor="end" fill={AXIS_INK}
+              style={{ fontSize: 10.5, fontVariantNumeric: "tabular-nums" }}>{fmtTick(t)}</text>
+          </g>
+        ))}
+
+        <path d={area} fill="url(#mchart-fill)" />
+        <path d={line} fill="none" stroke={SERIES} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+
+        {pts.map((p, i) => (
+          <circle key={p.day} cx={x(p)} cy={y(p.v)} r={hover === i ? 5 : 4}
+            fill={SERIES} stroke="#161616" strokeWidth="2" />
+        ))}
+
+        {hp && (
+          <line x1={x(hp)} x2={x(hp)} y1={PAD.t} y2={PAD.t + ih} stroke={SERIES} strokeWidth="1" strokeOpacity="0.5" />
+        )}
+
+        {labelIdx.map(i => (
+          <text key={i} x={Math.min(Math.max(x(pts[i]), PAD.l + 26), W - PAD.r - 26)} y={H - 12}
+            textAnchor="middle" fill={AXIS_INK} style={{ fontSize: 10, fontVariantNumeric: "tabular-nums" }}>
+            {plDate(pts[i].day)}
+          </text>
+        ))}
+      </svg>
+
+      {hp && (
+        <div style={{
+          position: "absolute", top: 30, left: `${(x(hp) / W) * 100}%`,
+          transform: `translateX(${x(hp) > W * 0.6 ? "-100%" : "0"})`, pointerEvents: "none",
+          background: "#0a0a0a", border: `1px solid ${SERIES}66`, borderRadius: 8, padding: "6px 10px",
+          fontSize: 11.5, color: "#e8e8e8", whiteSpace: "nowrap", zIndex: 3,
+        }}>
+          <div style={{ color: AXIS_INK, fontVariantNumeric: "tabular-nums" }}>{plDate(hp.day)}</div>
+          <div style={{ fontWeight: 700 }}>{fmt(hp.v)} {m.unit}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Krok osi z ładnej rodziny 1/2/5×10ⁿ — inaczej podpisy wychodzą typu 0,37.
+function niceStep(raw) {
+  const p = Math.pow(10, Math.floor(Math.log10(Math.max(raw, 1e-6))));
+  const n = raw / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  MAPA MIĘŚNI — dane i komponenty
 // ══════════════════════════════════════════════════════════════════
 const MUSCLES = {
@@ -1004,6 +1161,10 @@ export default function App() {
   const [openGroups,setOpenGroups]=useState({});
   const [showCustomForm,setShowCustomForm]=useState(false);
   const [editFoodId,setEditFoodId]=useState(null);
+  const [measurements,setMeasurements]=useState([]);
+  const [chartMetric,setChartMetric]=useState("weightKg");
+  const [showMeasForm,setShowMeasForm]=useState(false);
+  const [measForm,setMeasForm]=useState({day:"",weight:"",neck:"",waist:"",hips:""});
   const [customForm,setCustomForm]=useState({name:"",cal:"",p:"",c:"",f:"",fb:"",s:""});
 
   const [mainTab,setMainTab]=useState("nawyki");
@@ -1046,6 +1207,22 @@ export default function App() {
     await api.deleteAnchor(id);
     setKotwice(k=>k.filter(x=>x.id!==id));
   };
+  // ── Historia pomiarów ──
+  const addMeasurement=()=>run(async()=>{
+    const {day,weight,neck,waist,hips}=measForm;
+    if(!day)return;
+    await api.addMeasurement({day,weightKg:weight,neckCm:neck,waistCm:waist,hipsCm:hips});
+    setMeasurements(await api.measurements());
+    // Pomiar z dzisiaj serwer przepisuje też do profilu — dociągamy go, żeby
+    // formularz obok nie pokazywał starych liczb.
+    if(day===today())setServerProfile(await api.profile());
+    setMeasForm({day:"",weight:"",neck:"",waist:"",hips:""});setShowMeasForm(false);
+  });
+  const deleteMeasurement=id=>run(async()=>{
+    await api.deleteMeasurement(id);
+    setMeasurements(m=>m.filter(x=>x.id!==id));
+  });
+
   // ── Lista niewolnika ──
   const addAvoid=()=>run(async()=>{
     if(!avoidName.trim())return;
@@ -1137,10 +1314,12 @@ export default function App() {
     if(!user)return;
     (async()=>{
       try{
-        const [h,p,f,c,a,av]=await Promise.all([
+        const [h,p,f,c,a,av,ms]=await Promise.all([
           api.habits(),api.profile(),api.foods({}),api.foodCategories(),api.anchors(),api.avoid(),
+          api.measurements(),
         ]);
         setHabits(h);setServerProfile(p);setFoods(f);setFoodCats(c);setKotwice(a);setAvoidItems(av);
+        setMeasurements(ms);
         setProfile({
           weight:p.weightKg??"",height:p.heightCm??"",age:p.ageYears??"",
           sex:p.sex||"M",activity:p.activity??1,
@@ -1227,6 +1406,7 @@ export default function App() {
       neckCm:neck,waistCm:waist,hipsCm:hips,
     });
     setServerProfile(p);
+    setMeasurements(await api.measurements());
   });
 
   const todayStr=today();
@@ -1811,6 +1991,82 @@ export default function App() {
                   {serverProfile?.bmr&&<FormulaPanel profile={serverProfile}/>}
                   </div>
                 )}
+                <div style={{gridColumn:"1/-1",background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?14:20}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:12}}>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:700,color:"#ccc"}}>Historia pomiarów</div>
+                      <div style={{fontSize:11,color:"#666",marginTop:2}}>
+                        Każde kliknięcie „Oblicz" zapisuje pomiar z dzisiaj. Metoda US Navy ma błąd ±3–4 p.p. — liczy się przebieg, nie pojedynczy odczyt.
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:3,background:"#0f0f0f",borderRadius:8,padding:3,flexShrink:0}}>
+                      {[["weightKg","Waga"],["bodyFatPct","Tkanka tł."],["waistCm","Talia"]].map(([k,l])=>(
+                        <button key={k} onClick={()=>setChartMetric(k)}
+                          style={{background:chartMetric===k?"#2a2a2a":"transparent",border:"none",borderRadius:6,
+                            padding:"5px 11px",color:chartMetric===k?"#fff":"#777",fontWeight:600,fontSize:12,cursor:"pointer"}}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <MeasurementChart rows={measurements} metric={chartMetric} isMobile={isMobile}/>
+
+                  {measurements.length>0&&(
+                    <div style={{marginTop:16,borderTop:"1px solid #1e1e1e",paddingTop:12}}>
+                      {/* Widok tabelaryczny — każda liczba z wykresu jest też do odczytania tekstem. */}
+                      <div style={{display:"grid",gridTemplateColumns:"minmax(88px,1fr) repeat(3,minmax(52px,1fr)) 28px",
+                        gap:8,fontSize:10,color:"#666",fontWeight:700,letterSpacing:"0.06em",padding:"0 2px 6px"}}>
+                        <span>DATA</span><span style={{textAlign:"right"}}>WAGA</span>
+                        <span style={{textAlign:"right"}}>TALIA</span><span style={{textAlign:"right"}}>TK. TŁ.</span><span/>
+                      </div>
+                      <div style={{maxHeight:200,overflowY:"auto"}}>
+                        {[...measurements].reverse().map(r=>(
+                          <div key={r.id} style={{display:"grid",gridTemplateColumns:"minmax(88px,1fr) repeat(3,minmax(52px,1fr)) 28px",
+                            gap:8,alignItems:"center",padding:"5px 2px",borderTop:"1px solid #151515",fontSize:12,fontVariantNumeric:"tabular-nums"}}>
+                            <span style={{color:"#bbb"}}>{plDate(r.day)}</span>
+                            <span style={{textAlign:"right",color:"#e8e8e8"}}>{r.weightKg!=null?`${r.weightKg} kg`:"—"}</span>
+                            <span style={{textAlign:"right",color:"#8a8a8a"}}>{r.waistCm!=null?`${r.waistCm} cm`:"—"}</span>
+                            <span style={{textAlign:"right",color:"#8a8a8a"}}>{r.bodyFatPct!=null?`${String(r.bodyFatPct).replace(".",",")} %`:"—"}</span>
+                            <button onClick={()=>deleteMeasurement(r.id)} title="Usuń pomiar"
+                              style={{background:"none",border:"none",color:"#5a4040",cursor:"pointer",fontSize:12,padding:0}}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {showMeasForm?(
+                    <div style={{background:"#0f0f0f",border:"1px solid #2a2a2a",borderRadius:10,padding:12,marginTop:12}}>
+                      <div style={{fontSize:12,fontWeight:600,color:"#aaa",marginBottom:8}}>Pomiar z innego dnia</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:8,marginBottom:10}}>
+                        <input type="date" value={measForm.day} max={today()}
+                          onChange={e=>setMeasForm(f=>({...f,day:e.target.value}))}
+                          style={{background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"8px 10px",color:"#fff",fontSize:13,colorScheme:"dark",outline:"none"}}/>
+                        {[["Waga (kg)","weight"],["Szyja (cm)","neck"],["Talia (cm)","waist"],
+                          ...(profile.sex==="F"?[["Biodra (cm)","hips"]]:[])].map(([label,key])=>(
+                          <input key={key} type="number" step="any" inputMode="decimal" placeholder={label} value={measForm[key]}
+                            onChange={e=>setMeasForm(f=>({...f,[key]:e.target.value}))}
+                            style={{background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"8px 10px",color:"#fff",fontSize:13,outline:"none"}}/>
+                        ))}
+                      </div>
+                      <div style={{display:"flex",gap:8}}>
+                        <button onClick={addMeasurement} disabled={!measForm.day||!(measForm.weight||measForm.neck||measForm.waist||measForm.hips)}
+                          style={{flex:1,background:measForm.day&&(measForm.weight||measForm.neck||measForm.waist||measForm.hips)?"#8d4fbc":"#222",
+                            color:measForm.day&&(measForm.weight||measForm.neck||measForm.waist||measForm.hips)?"#fff":"#555",
+                            border:"none",borderRadius:8,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer"}}>Zapisz pomiar</button>
+                        <button onClick={()=>setShowMeasForm(false)} style={{background:"#222",border:"1px solid #444",borderRadius:8,color:"#aaa",padding:"9px 16px",fontSize:13,cursor:"pointer"}}>Anuluj</button>
+                      </div>
+                      <div style={{fontSize:10.5,color:"#5a5a5a",marginTop:8,lineHeight:1.5}}>
+                        Jeden pomiar na dzień — ponowny zapis tej samej daty nadpisuje poprzedni.
+                      </div>
+                    </div>
+                  ):(
+                    <button onClick={()=>{setMeasForm(f=>({...f,day:today()}));setShowMeasForm(true);}}
+                      style={{width:"100%",marginTop:12,padding:"10px",borderRadius:10,border:"2px dashed #333",
+                        background:"transparent",color:"#888",fontWeight:600,fontSize:13,cursor:"pointer"}}>
+                      + Dopisz pomiar z innego dnia
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 

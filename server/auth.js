@@ -53,24 +53,38 @@ function setSessionCookie(res, token, maxAgeMs) {
 
 // ── Ograniczenie prób logowania ───────────────────────────────────────────
 // Adres jest publiczny, więc gołe logowanie zaprasza do zgadywania haseł.
-// Licznik w pamięci wystarcza: proces jest jeden, a restart i tak zrywa sesje.
-const attempts = new Map();
+// Licznik siedzi w bazie, nie w pamięci procesu: wersja pamięciowa kasowała się
+// przy każdym restarcie kontenera, a przy wdrożeniu co kilkanaście minut
+// oznaczało to brak limitu w praktyce.
+// UWAGA: rootless Podman przepuszcza ruch przez własny forwarder portów, więc
+// nginx widzi jako adres klienta zawsze 10.89.0.x, a nie prawdziwy adres z sieci.
+// `X-Forwarded-For` niesie ten sam adres, przez co licznik jest w praktyce
+// wspólny dla wszystkich: cudze próby potrafią zablokować logowanie właścicielowi
+// na kwadrans. To świadomy wybór — wolimy tę uciążliwość niż zgadywanie hasła bez
+// limitu. Kolumna `ip` przestanie być fikcją, gdy nginx pójdzie na sieć hosta.
 const MAX_ATTEMPTS = 10;
-const WINDOW_MS = 15 * 60 * 1000;
+const WINDOW_MIN = 15;
+// Po tym czasie wiersze nie służą już do niczego — kasujemy je przy okazji
+// zapisu, żeby tabela nie rosła i nie trzeba było osobnego sprzątacza.
+const KEEP_HOURS = 24;
 
-function rateLimited(ip) {
-  const now = Date.now();
-  const rec = attempts.get(ip);
-  if (!rec || now > rec.resetAt) return false;
-  return rec.count >= MAX_ATTEMPTS;
+async function rateLimited(ip) {
+  const { rows } = await query(
+    `SELECT count(*)::int AS n FROM login_attempts
+      WHERE ip = $1 AND at > now() - ($2 || ' minutes')::interval`,
+    [ip, String(WINDOW_MIN)]
+  );
+  return rows[0].n >= MAX_ATTEMPTS;
 }
 
-function noteFailure(ip) {
-  const now = Date.now();
-  const rec = attempts.get(ip);
-  if (!rec || now > rec.resetAt) attempts.set(ip, { count: 1, resetAt: now + WINDOW_MS });
-  else rec.count++;
+async function noteFailure(ip) {
+  await query("INSERT INTO login_attempts (ip) VALUES ($1)", [ip]);
+  await query("DELETE FROM login_attempts WHERE at < now() - ($1 || ' hours')::interval", [String(KEEP_HOURS)]);
 }
+
+// Udane logowanie czyści licznik tego adresu — inaczej kwadrans po pomyłkach
+// blokowałby też właściciela konta, który już się przecież zalogował.
+const clearAttempts = ip => query("DELETE FROM login_attempts WHERE ip = $1", [ip]);
 
 // ── Middleware ────────────────────────────────────────────────────────────
 export async function requireAuth(req, res, next) {
@@ -100,7 +114,7 @@ export const authRoutes = express.Router();
 authRoutes.post("/login", async (req, res, next) => {
   try {
     const ip = req.ip || "?";
-    if (rateLimited(ip)) {
+    if (await rateLimited(ip)) {
       return res.status(429).json({ error: "Za dużo prób logowania. Spróbuj za kwadrans." });
     }
     const { login, password } = req.body || {};
@@ -116,7 +130,7 @@ authRoutes.post("/login", async (req, res, next) => {
     // Ta sama odpowiedź niezależnie od tego, czy zawiódł login czy hasło —
     // inaczej formularz zdradza, które konta istnieją.
     if (!user || !verifyPassword(password, user.password_hash)) {
-      noteFailure(ip);
+      await noteFailure(ip);
       return res.status(401).json({ error: "Nieprawidłowy login lub hasło." });
     }
 
@@ -127,7 +141,7 @@ authRoutes.post("/login", async (req, res, next) => {
       "INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, now() + ($3 || ' days')::interval)",
       [hashToken(token), user.id, String(SESSION_DAYS)]
     );
-    attempts.delete(ip);
+    await clearAttempts(ip);
     setSessionCookie(res, token, maxAgeMs);
     res.json({ user: { id: user.id, login: user.login } });
   } catch (e) {

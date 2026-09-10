@@ -160,6 +160,26 @@ Cały interfejs w jednym komponencie. Warstwa danych trzyma się kilku zasad:
 - **Wzorów nie ma po stronie przeglądarki.** BMI, PPM i CPM przychodzą razem
   z profilem; komponent je wyłącznie wyświetla.
 
+#### Wykres pomiarów
+
+`MeasurementChart` rysuje **jedną serię naraz** — przełącznik zmienia mierzoną
+wielkość (waga / tkanka tłuszczowa / talia), a nie dokłada drugiej osi Y do tej
+samej ramki. Dwie skale w jednym układzie to wykres, który wymyśla korelację
+nieobecną w danych.
+
+Oś Y nie zaczyna się od zera: przy wadze zero leży poza sensem pomiaru,
+a zakres 0–90 kg schowałby całą zmianę w grubości linii. Zakres liczy się
+z danych z 15 % marginesu, a krok podziałki wybierany jest z rodziny 1/2/5×10ⁿ,
+żeby na osi nie lądowały liczby typu 0,37.
+
+Kolor serii (`#8d4fbc`) dobrany jest walidatorem dostępności dla trybu ciemnego:
+przechodzi pasmo jasności, próg nasycenia i kontrast do tła, a od najbliższego
+koloru obecnego na tej zakładce dzieli go ΔE 16,5 — nie da się go pomylić
+z makroskładnikiem. Podpisów dat jest najwyżej pięć (trzy na telefonie)
+i odpadają te, które nachodziłyby na siebie przy pomiarach zbitych w czasie.
+Każda liczba z wykresu jest też do odczytania tekstem w tabeli pod nim —
+dymek niczego nie zamyka na wyłączność.
+
 #### Zakładka nawyków
 
 Nawyki nie są jedną listą, tylko czterema kaflami — po jednym na kategorię
@@ -287,6 +307,7 @@ w ogóle istnieje.
 | DELETE | `/api/meals/:id` | usunięcie wpisu |
 | GET/POST/DELETE | `/api/anchors` | kotwice |
 | GET/POST/PATCH/DELETE | `/api/avoid`, `/api/avoid/:id` | lista niewolnika |
+| GET/POST/DELETE | `/api/measurements`, `/api/measurements/:id` | historia pomiarów ciała |
 | GET | `/api/off/search?q=` | wyszukiwanie w Open Food Facts |
 | POST | `/api/off/import` | pobranie produktu po kodzie i zapis do katalogu |
 
@@ -375,8 +396,10 @@ Na bazie, która już istnieje, ten sam schemat zakłada `./scripts/db-init.sh`
 | `meal_entries` | dziennik posiłków — wartości odżywcze zapisane w chwili dodania |
 | `anchors` | kotwice z zakładki „Z dołka" |
 | `avoid_items` | lista niewolnika — rzeczy, od których użytkownik trzyma się z daleka |
+| `body_measurements` | historia pomiarów: waga i obwody, jeden wiersz na dzień |
+| `login_attempts` | nieudane logowania, do limitu prób |
 
-Trzy decyzje projektowe, które nie są oczywiste z samego DDL:
+Decyzje projektowe, które nie są oczywiste z samego DDL:
 
 - **BMI i przemiana materii nie są przechowywane.** To czyste funkcje pól
   z `profiles`, liczone przy odczycie. W starym modelu zapisany wynik potrafił
@@ -389,6 +412,18 @@ Trzy decyzje projektowe, które nie są oczywiste z samego DDL:
 - **Odhaczenie to jeden wiersz, nie nadpisanie bloba.** W modelu klucz–wartość
   każde kliknięcie przepisywało całą strukturę nawyków, więc dwa otwarte
   urządzenia cicho kasowały sobie nawzajem zmiany.
+
+- **Historia pomiarów jest osobną tabelą, a nie kolumną w profilu.** `profiles`
+  opisuje stan bieżący (i z niego liczą się BMI, PPM i CPM), `body_measurements`
+  przebieg w czasie. Bez tego rozdzielenia tkanka tłuszczowa liczona metodą
+  US Navy nie ma jak pokazać trendu, a przy błędzie ±3–4 p.p. tylko trend
+  cokolwiek znaczy. Jeden wiersz na dzień (`UNIQUE (user_id, day)`): kilka ważeń
+  tego samego dnia to szum, bo sama pora dnia zmienia obwód talii o 1–2 cm.
+  Zapis profilu dopisuje pomiar z dzisiaj, a pomiar z dzisiaj przepisuje się do
+  profilu — pomiar wsteczny profilu nie rusza.
+- **Limit prób logowania siedzi w bazie, nie w pamięci procesu.** Wersja
+  pamięciowa kasowała się przy każdym restarcie kontenera, więc przy wdrożeniu
+  co kilkanaście minut limitu w praktyce nie było.
 
 Brak tabeli na odhaczone techniki w „Z dołka" jest zamierzony — struktura
 poziomów zmieni się przy przebudowie zakładki, a klucz oparty o pozycję
@@ -551,6 +586,36 @@ echo "   podman restart nginx"
 Certyfikat trzyma się w bind-mouncie `certs/` (nie w wolumenie Podmana), żeby był
 łatwo dostępny do zaimportowania na maszyny klienckie — patrz sekcja 9.
 Katalog jest w `.gitignore`, klucz prywatny nigdy nie trafia do repo.
+
+### `scripts/backup-db.sh` i `scripts/restore-db.sh`
+
+```bash
+./scripts/backup-db.sh                                  # zrzut do backups/, retencja 30 dni
+./scripts/restore-db.sh backups/tracker-….sql.gz        # odtworzenie NA PRODUKCJI (pyta o potwierdzenie)
+./scripts/restore-db.sh backups/tracker-….sql.gz --into tracker_test   # do osobnej bazy, na próbę
+```
+
+`pg_dump` leci **w kontenerze**: host nie ma klienta Postgresa, a kontener ma
+zawsze wersję zgodną z serwerem. Zrzut powstaje jako `.part`, jest sprawdzany
+`gzip -t` i dopiero wtedy dostaje właściwą nazwę — niedokończona kopia nie ma
+udawać dobrej. Retencja liczy się wiekiem pliku, nie ich liczbą, więc dzienny
+cron daje dokładnie tyle kopii, ile dni wstecz chcemy móc odtworzyć.
+
+Cron użytkownika (`crontab -l`):
+
+```cron
+17 3 * * * /home/rocky/tracker/scripts/backup-db.sh >> /home/rocky/tracker/backups/backup.log 2>&1
+```
+
+Żeby to działało bez zalogowanej sesji, konto ma włączony **linger**
+(`loginctl enable-linger`) — bez niego znika `/run/user/1000`, a wraz z nim
+gniazdo rootless Podmana. Ta sama zmiana sprawia, że `--restart=always` ma sens
+po restarcie maszyny; dopełnia ją `systemctl --user enable podman-restart`.
+
+Kopie leżą w `backups/` w katalogu projektu i są w `.gitignore` — tak samo jak
+certyfikaty. **Kopia, której nigdy nie odtworzono, nie jest kopią**: dlatego
+`restore-db.sh` ma tryb `--into`, który wgrywa zrzut do osobnej bazy i wypisuje
+liczby wierszy, nie dotykając produkcyjnej.
 
 ### `scripts/deploy.sh`
 ```bash

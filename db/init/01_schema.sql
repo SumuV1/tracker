@@ -21,6 +21,15 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS sessions_user_idx    ON sessions (user_id);
 CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions (expires_at);
 
+-- Nieudane próby logowania. Licznik musi przeżyć restart kontenera, inaczej
+-- każde wdrożenie zeruje limit i zgadywanie hasła może lecieć od nowa.
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id     bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  ip     text NOT NULL,
+  at     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS login_attempts_ip_at_idx ON login_attempts (ip, at);
+
 -- ── Nawyki ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS habits (
   id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -67,6 +76,23 @@ CREATE TABLE IF NOT EXISTS profiles (
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS neck_cm  numeric(5,2) CHECK (neck_cm  BETWEEN 20 AND 70);
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS waist_cm numeric(5,2) CHECK (waist_cm BETWEEN 40 AND 200);
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS hips_cm  numeric(5,2) CHECK (hips_cm  BETWEEN 50 AND 200);
+
+-- Historia pomiarów ciała. Profil trzyma stan bieżący, ta tabela przebieg
+-- w czasie — bez niej tkanka tłuszczowa liczona metodą US Navy nie ma jak
+-- pokazać trendu, a przy błędzie ±3–4 p.p. tylko trend cokolwiek znaczy.
+-- Jeden wiersz na dzień: kilka ważeń tego samego dnia to szum, nie dane.
+CREATE TABLE IF NOT EXISTS body_measurements (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  day        date NOT NULL,
+  weight_kg  numeric(5,2) CHECK (weight_kg > 0),
+  neck_cm    numeric(5,2) CHECK (neck_cm  BETWEEN 20 AND 70),
+  waist_cm   numeric(5,2) CHECK (waist_cm BETWEEN 40 AND 200),
+  hips_cm    numeric(5,2) CHECK (hips_cm  BETWEEN 50 AND 200),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, day)
+);
+CREATE INDEX IF NOT EXISTS body_measurements_user_day_idx ON body_measurements (user_id, day);
 
 -- ── Produkty ──────────────────────────────────────────────────────────────
 -- source: 'builtin' — baza wbudowana, wspólna dla wszystkich

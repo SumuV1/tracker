@@ -60,6 +60,10 @@ export const api = {
   updateMeal: (id, body) => request(`/meals/${id}`, { method: "PATCH", body }),
   deleteMeal: id => request(`/meals/${id}`, { method: "DELETE" }),
 
+  measurements: () => request("/measurements"),
+  addMeasurement: body => request("/measurements", { method: "POST", body }),
+  deleteMeasurement: id => request(`/measurements/${id}`, { method: "DELETE" }),
+
   avoid: () => request("/avoid"),
   addAvoid: body => request("/avoid", { method: "POST", body }),
   patchAvoid: (id, body) => request(`/avoid/${id}`, { method: "PATCH", body }),

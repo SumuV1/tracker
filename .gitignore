@@ -2,3 +2,6 @@
 certs/
 node_modules/
 dist/
+
+# Zrzuty bazy — zostają na hoście, do repo nie trafiają
+backups/

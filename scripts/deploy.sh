@@ -30,9 +30,25 @@ podman build -t tracker-app -f Containerfile .
 
 echo "▶ app-pod (React + API, alias: app)"
 podman pod exists app-pod || podman pod create --name app-pod --network "${NET}:alias=app"
-podman container exists tracker-app || podman run -d --pod app-pod --name tracker-app --restart=always \
-  -e DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}" \
-  tracker-app
+
+# Kontener trzeba wymienić, gdy build dał nowy obraz — inaczej `deploy.sh`
+# kończy się słowem „Gotowe", a w sieci dalej stoi poprzednia wersja. Porównanie
+# identyfikatorów obrazu zamiast bezwarunkowego `rm -f` sprawia, że wdrożenie bez
+# zmian w kodzie nie zrywa działającej aplikacji.
+NEW_IMAGE=$(podman image inspect -f '{{.Id}}' tracker-app)
+CUR_IMAGE=$(podman container inspect -f '{{.Image}}' tracker-app 2>/dev/null || true)
+if [[ -n "$CUR_IMAGE" && "$CUR_IMAGE" != "$NEW_IMAGE" ]]; then
+  echo "  nowy obraz — wymieniam kontener"
+  podman rm -f tracker-app >/dev/null
+  CUR_IMAGE=""
+fi
+if [[ -z "$CUR_IMAGE" ]]; then
+  podman run -d --pod app-pod --name tracker-app --restart=always \
+    -e DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}" \
+    tracker-app >/dev/null
+else
+  echo "  obraz bez zmian — kontener zostaje"
+fi
 
 echo "▶ Certyfikat TLS (self-signed, bez domeny publicznej)"
 if [[ ! -f certs/fullchain.pem || ! -f certs/privkey.pem ]]; then

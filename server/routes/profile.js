@@ -1,6 +1,7 @@
 import express from "express";
 import { query } from "../db.js";
 import { wrap, optNumber, BadRequest } from "../http.js";
+import { deriveBodyFat } from "../bodyfat.js";
 
 export const profileRoutes = express.Router();
 
@@ -9,59 +10,6 @@ const ACTIVITY_FACTORS = [1.2, 1.375, 1.55, 1.725, 1.9];
 
 // Wzory trzymamy po stronie serwera, żeby liczby na wykresach, w kaflach
 // i w panelu „Jak to policzono" pochodziły z jednego miejsca.
-// Metoda US Navy (Hodgdon–Beckett), wariant metryczny. Zwraca null zawsze, gdy
-// wynik nie ma prawa być traktowany serio: brakuje wymiaru, argument logarytmu
-// wychodzi niedodatni albo pomiary leżą poza zakresem, na którym model był
-// kalibrowany. Cicho zwrócona liczba byłaby tu gorsza niż jej brak.
-const LOG10 = Math.log10;
-const inRange = (v, lo, hi) => typeof v === "number" && v >= lo && v <= hi;
-
-function bodyFatPercent({ sex, heightCm: h, neckCm: neck, waistCm: waist, hipsCm: hips }) {
-  if (!inRange(h, 120, 250) || !inRange(neck, 20, 70) || !inRange(waist, 40, 200)) return null;
-  let pct;
-  if (sex === "F") {
-    if (!inRange(hips, 50, 200)) return null;
-    const arg = waist + hips - neck;
-    if (arg <= 0) return null;
-    pct = 495 / (1.29579 - 0.35004 * LOG10(arg) + 0.221 * LOG10(h)) - 450;
-  } else {
-    const arg = waist - neck;
-    if (arg <= 0) return null;
-    pct = 495 / (1.0324 - 0.19077 * LOG10(arg) + 0.15456 * LOG10(h)) - 450;
-  }
-  // Wynik poza 0–70 % oznacza błąd pomiaru albo cale wpisane jako centymetry.
-  return Number.isFinite(pct) && pct > 0 && pct <= 70 ? pct : null;
-}
-
-// Progi ACE. Orientacyjne, nie diagnostyczne — stąd sama etykieta bez oceny.
-const BF_CATEGORIES = {
-  M: [[6, "Tłuszcz niezbędny"], [14, "Sportowcy"], [18, "Fitness"], [25, "Akceptowalny"], [Infinity, "Otyłość"]],
-  F: [[14, "Tłuszcz niezbędny"], [21, "Sportowcy"], [25, "Fitness"], [32, "Akceptowalny"], [Infinity, "Otyłość"]],
-};
-// Masa ciała po dojściu do zadanego procentu przy niezmienionej masie
-// beztłuszczowej. Założenie zawodzi przy dużym deficycie bez treningu oporowego.
-const BF_MILESTONES = { M: [24, 17, 13], F: [31, 24, 20] };
-const round1 = v => Math.round(v * 10) / 10;
-
-function deriveBodyFat(p) {
-  const pct = bodyFatPercent(p);
-  if (pct === null) return null;
-  const w = p.weightKg;
-  const category = (BF_CATEGORIES[p.sex] || BF_CATEGORIES.M).find(([max]) => pct < max)[1];
-  const fatMassKg = w ? round1((w * pct) / 100) : null;
-  const leanMassKg = w ? round1(w - (w * pct) / 100) : null;
-  return {
-    pct: round1(pct),
-    category,
-    fatMassKg,
-    leanMassKg,
-    // Zaokrąglamy dopiero tutaj — rachunek idzie na pełnej precyzji.
-    milestones: leanMassKg === null ? [] : (BF_MILESTONES[p.sex] || BF_MILESTONES.M)
-      .filter(t => t < pct)
-      .map(t => ({ pct: t, weightKg: round1((w - (w * pct) / 100) / (1 - t / 100)) })),
-  };
-}
-
 function derive(p) {
   const { weightKg: w, heightCm: h, ageYears: age, sex, activity } = p;
   const bodyFat = deriveBodyFat(p);
@@ -147,5 +95,18 @@ profileRoutes.put("/", wrap(async (req, res) => {
                neck_cm AS "neckCm", waist_cm AS "waistCm", hips_cm AS "hipsCm"`,
     [req.user.id, weightKg, heightCm, ageYears, sex, activity, neckCm, waistCm, hipsCm]
   );
+  // Zapis profilu to zarazem pomiar z dzisiaj — inaczej historia byłaby pusta
+  // dopóki użytkownik sam by o niej nie pomyślał, a to jedyny moment, w którym
+  // i tak wpisuje świeże liczby.
+  if (weightKg !== null || neckCm !== null || waistCm !== null || hipsCm !== null) {
+    await query(
+      `INSERT INTO body_measurements (user_id, day, weight_kg, neck_cm, waist_cm, hips_cm)
+       VALUES ($1, current_date, $2, $3, $4, $5)
+       ON CONFLICT (user_id, day) DO UPDATE SET
+         weight_kg = EXCLUDED.weight_kg, neck_cm = EXCLUDED.neck_cm,
+         waist_cm  = EXCLUDED.waist_cm,  hips_cm = EXCLUDED.hips_cm`,
+      [req.user.id, weightKg, neckCm, waistCm, hipsCm]
+    );
+  }
   res.json({ ...rows[0], ...derive(rows[0]) });
 }));
