@@ -6,6 +6,11 @@ set -a; source .env; set +a
 # Rootless Podman nie zbinduje portów <1024 — stąd domyślne 8080/8443.
 HTTP_PORT="${HTTP_PORT:-8080}"
 HTTPS_PORT="${HTTPS_PORT:-8443}"
+# Adres, na którym publikowane są porty. Domyślnie pętla zwrotna: aplikacja jest
+# wtedy nieosiągalna z sieci NIEZALEŻNIE od reguł zapory, a wystawia ją Tailscale
+# (`tailscale serve`), który łączy się po localhost. Ustaw 0.0.0.0, żeby wrócić
+# do dostępu wprost z sieci.
+BIND_ADDR="${BIND_ADDR:-127.0.0.1}"
 
 NET=app-net
 
@@ -58,8 +63,14 @@ else
 fi
 
 echo "▶ nginx-pod (HTTPS, alias: web)"
+# Przy pętli zwrotnej publikujemy też ::1 — `localhost` bywa rozwiązywane
+# najpierw na adres IPv6 i cel `tailscale serve` trafiłby w próżnię.
+PUBLISH=(-p "${BIND_ADDR}:${HTTP_PORT}:80" -p "${BIND_ADDR}:${HTTPS_PORT}:443")
+if [[ "$BIND_ADDR" == "127.0.0.1" ]]; then
+  PUBLISH+=(-p "[::1]:${HTTP_PORT}:80" -p "[::1]:${HTTPS_PORT}:443")
+fi
 podman pod exists nginx-pod || podman pod create --name nginx-pod \
-  --network "${NET}:alias=web" -p "${HTTP_PORT}:80" -p "${HTTPS_PORT}:443"
+  --network "${NET}:alias=web" "${PUBLISH[@]}"
 podman container exists nginx || podman run -d --pod nginx-pod --name nginx --restart=always \
   -e HOST="$HOST" \
   -e HTTPS_PORT="$HTTPS_PORT" \
@@ -67,6 +78,12 @@ podman container exists nginx || podman run -d --pod nginx-pod --name nginx --re
   -v "$PWD/certs:/etc/nginx/certs:ro,Z" \
   docker.io/library/nginx:alpine
 
-echo "✅ Gotowe: https://$HOST:$HTTPS_PORT"
+if [[ "$BIND_ADDR" == "0.0.0.0" ]]; then
+  echo "✅ Gotowe: https://$HOST:$HTTPS_PORT"
+else
+  echo "✅ Gotowe. Porty słuchają tylko na $BIND_ADDR — wejście przez Tailscale:"
+  command -v tailscale >/dev/null && tailscale serve status 2>/dev/null | head -2 \
+    || echo "   (skonfiguruj: tailscale serve --bg https+insecure://localhost:${HTTPS_PORT})"
+fi
 echo "   Certyfikat jest self-signed — przeglądarka pokaże ostrzeżenie,"
 echo "   patrz tracker.md, sekcja o zaufaniu certyfikatowi."

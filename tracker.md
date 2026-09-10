@@ -473,6 +473,20 @@ CMD ["node", "server.js"]
 
 ## 5. nginx (`nginx-pod`)
 
+Poza proxy i TLS robi dwie rzeczy, które widać dopiero na telefonie:
+
+- **gzip** — zbudowany bundel to ~300 kB, po kompresji ~91 kB. Na danych
+  komórkowych to jedyna zmiana w konfiguracji, którą naprawdę czuć.
+- **nagłówki bezpieczeństwa** — `Content-Security-Policy` domknięty do `'self'`
+  (aplikacja nie ładuje z zewnątrz ani skryptu, ani czcionki, ani obrazka; wyjątkiem
+  są style inline, bo interfejs stoi na atrybutach `style`), `X-Content-Type-Options`
+  i `Referrer-Policy`.
+
+**HSTS świadomie nie jest ustawiane.** Ten sam nginx obsługuje wejście przez Tailscale
+(certyfikat Let's Encrypt) i awaryjne wejście wprost pod nazwą hosta (certyfikat
+self-signed). HSTS na tej drugiej ścieżce odbiera przeglądarce możliwość przeklikania
+ostrzeżenia — zamiast zabezpieczenia dostalibyśmy zatrzaśnięte drzwi.
+
 Wykorzystujemy szablony oficjalnego obrazu nginx: pliki w `/etc/nginx/templates/*.template`
 są przetwarzane przez `envsubst` przy starcie (podmienia tylko zmienne z ENV, np. `${HOST}`).
 Certyfikat TLS jest generowany lokalnie (self-signed) — patrz sekcja 7 — więc nie ma
@@ -529,11 +543,50 @@ DB_NAME=tracker
   / `/etc/hosts`), albo
 - po prostu adres IP hosta, jeśli DNS nie jest dostępny.
 
+### Dostęp z zewnątrz: Tailscale
+
+Aplikacja nie jest wystawiona do internetu. Wchodzi się do niej przez tailnet:
+
+```bash
+sudo tailscale serve --bg https+insecure://localhost:8443
+tailscale serve status      # → https://<host>.<tailnet>.ts.net (tailnet only)
+```
+
+`https+insecure` znaczy tyle, że tailscaled ma nie weryfikować naszego self-signed
+certyfikatu na drugim końcu pętli zwrotnej. Na zewnątrz wystawia **własny certyfikat
+z Let's Encrypt**, odnawiany automatycznie — `ts.net` jest na Public Suffix List, więc
+ma własny koszyk limitów i wystawianie działa bez zgrzytów. W panelu tailnetu muszą
+być włączone **MagicDNS** i **HTTPS Certificates**, inaczej `serve` wystartuje, ale
+certyfikatu nie będzie.
+
+Co to zmienia poza wygodą:
+
+- **Strona logowania znika z internetu.** Wcześniej stała na publicznym adresie OVH
+  i była widoczna dla każdego skanera; zostaje jedno konto w tailnecie.
+- **Certyfikat jest zaufany**, więc telefon nie pokazuje ostrzeżenia, a przeglądarka
+  odblokowuje rzeczy wymagające bezpiecznego kontekstu: instalację jako PWA i dostęp
+  do kamery (czyli przyszły skaner kodów kreskowych).
+- **Limit prób logowania widzi teraz zawsze `127.0.0.1`**, bo łączy się z nim
+  tailscaled po pętli zwrotnej. Przestaje to mieć znaczenie: do strony logowania nie
+  dociera już nikt z sieci publicznej.
+
+Dlaczego nie Let's Encrypt wprost na nazwie OVH: `vps.ovh.net` **nie** jest na Public
+Suffix List (są tam tylko `*.hosting.ovh.net` i `*.webpaas.ovh.net`), więc dla LE
+`vps-xxxxx.vps.ovh.net` liczy się jako poddomena `ovh.net` i dzieli tygodniowy limit
+z wszystkimi klientami OVH. Ten koszyk jest w praktyce stale pusty.
+
 ### Porty a rootless Podman
 
 Podman uruchomiony jako zwykły użytkownik **nie może bindować portów poniżej 1024** —
 pod z `-p 80:80` nie wystartuje (zostaje w stanie `Created` z `internal libpod error`).
-Dlatego domyślnie używamy 8080/8443, a aplikacja jest pod `https://$HOST:$HTTPS_PORT`.
+Dlatego używamy 8080/8443.
+
+**Domyślnie porty są publikowane wyłącznie na pętli zwrotnej** (`BIND_ADDR=127.0.0.1`,
+dodatkowo `[::1]`, bo `localhost` bywa rozwiązywane najpierw na IPv6). Aplikacja jest
+wtedy nieosiągalna z sieci **niezależnie od reguł zapory** — gniazdo w ogóle nie
+istnieje na adresie publicznym, więc nie ma czego przepuszczać ani blokować. Na
+zewnątrz wystawia ją Tailscale (patrz niżej). `BIND_ADDR=0.0.0.0` przywraca dostęp
+wprost z sieci pod `https://$HOST:$HTTPS_PORT`.
 
 Jeśli chcesz adres bez numeru portu, masz dwie drogi:
 ```bash
@@ -712,11 +765,22 @@ cp .env.example .env      # uzupełnij HOST (nazwa DNS lub IP hosta) i hasło DB
 
 Sprawdzenie:
 ```bash
-podman pod ps                                  # wszystkie trzy pody: Running
-podman logs tracker-app                        # → "DB gotowa" i "API na :3000"
-curl -k https://$HOST:$HTTPS_PORT/api/health   # -k: pomija weryfikację self-signed, → {"ok":true}
-curl -sI http://$HOST:$HTTP_PORT/              # → 301 na https://$HOST:$HTTPS_PORT/
+podman pod ps                                     # wszystkie trzy pody: Running
+podman logs tracker-app                           # → "DB gotowa" i "API na :3000"
+curl -k https://localhost:$HTTPS_PORT/api/health  # -k: pomija weryfikację self-signed, → {"ok":true}
+tailscale serve status                            # → adres w ts.net
+curl https://<host>.<tailnet>.ts.net/api/health   # bez -k: certyfikat jest prawdziwy
 ```
+
+Że aplikacja **nie** wychodzi na zewnątrz, sprawdza się tak (oba mają nie odpowiedzieć):
+```bash
+ss -tln | grep 8443                       # tylko 127.0.0.1 i [::1]
+curl -k --max-time 5 https://<adres_publiczny>:8443/api/health
+```
+Uwaga: `curl` z hosta na jego **własny** adres publiczny idzie przez pętlę zwrotną
+i przy `BIND_ADDR=0.0.0.0` odpowie nawet wtedy, gdy zapora blokuje wszystkich z
+zewnątrz — taki test nie dowodzi niczego o dostępności z sieci. Dowodzi jej dopiero
+brak gniazda na adresie publicznym, czyli właśnie `BIND_ADDR=127.0.0.1`.
 
 Usunięcie wdrożenia: `./scripts/teardown.sh` (patrz sekcja 7).
 
@@ -727,6 +791,12 @@ Usunięcie wdrożenia: `./scripts/teardown.sh` (patrz sekcja 7).
 ---
 
 ## 9. Zaufanie certyfikatowi i jego wymiana
+
+> Przy dostępie przez Tailscale ten certyfikat **nie dociera już do przeglądarki**.
+> Obsługuje wyłącznie odcinek między tailscaled a nginxem po pętli zwrotnej, a
+> `tailscale serve https+insecure://…` z założenia go nie weryfikuje. Przeglądarka
+> widzi certyfikat Let's Encrypt wystawiony przez Tailscale. Poniższe dotyczy więc
+> tylko wejścia wprost pod nazwą hosta, przy `BIND_ADDR=0.0.0.0`.
 
 Certyfikat jest self-signed, więc przeglądarka przy pierwszym wejściu pokaże
 ostrzeżenie „Połączenie nie jest prywatne" / `NET::ERR_CERT_AUTHORITY_INVALID`.

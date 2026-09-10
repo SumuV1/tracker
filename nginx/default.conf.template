@@ -13,6 +13,27 @@ server {
     ssl_certificate     /etc/nginx/certs/fullchain.pem;
     ssl_certificate_key /etc/nginx/certs/privkey.pem;
 
+    # Kompresja: zbudowany bundel to ~300 kB, po gzipie ~91 kB. Przez telefon
+    # na danych komórkowych to jedyna zmiana w nginksie, którą naprawdę widać.
+    gzip              on;
+    gzip_min_length   1024;
+    gzip_proxied      any;
+    gzip_vary         on;
+    gzip_types        text/plain text/css application/javascript application/json
+                      image/svg+xml application/manifest+json;
+
+    # Aplikacja nie ładuje niczego z zewnątrz — ani skryptu, ani czcionki, ani
+    # obrazka — więc polityka może być domknięta do 'self'. Wyjątkiem są style
+    # inline: interfejs jest zbudowany na atrybutach `style`, a nie arkuszu.
+    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+    # HSTS świadomie NIE jest ustawiane. Ten sam nginx obsługuje wejście przez
+    # Tailscale (certyfikat Let's Encrypt) i awaryjne wejście wprost pod nazwą
+    # hosta (certyfikat self-signed). HSTS na tej drugiej ścieżce odbiera
+    # przeglądarce możliwość przeklikania ostrzeżenia — zamiast zabezpieczenia
+    # dostalibyśmy zatrzaśnięte drzwi.
+
     location / {
         proxy_pass http://app:3000;      # alias podu app w sieci app-net
         proxy_http_version 1.1;
