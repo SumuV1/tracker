@@ -158,10 +158,47 @@ CREATE TABLE IF NOT EXISTS avoid_items (
 );
 CREATE INDEX IF NOT EXISTS avoid_items_user_idx ON avoid_items (user_id);
 
--- ── Z dołka ───────────────────────────────────────────────────────────────
--- Na razie wyłącznie kotwice. Tabeli na odhaczone techniki świadomie tu nie
--- ma: struktura poziomów i technik zmieni się przy przebudowie zakładki,
--- a klucz oparty o pozycję w tablicy technik i tak trzeba by wyrzucić.
+-- ── Stabilizacja emocjonalna ──────────────────────────────────────────────
+-- Zakładka nie jest „o dołku": problemem jest amplituda emocji, nie kierunek.
+-- Trzy tabele: zasady (własne słowa użytkownika, z opcjonalnym źródłem),
+-- check-iny (stan + natężenie z godziną — bez pomiaru nie ma czego regulować)
+-- i użycia technik (stały identyfikator techniki, nie pozycja w tablicy —
+-- to dlatego ta tabela mogła powstać dopiero po przebudowie zakładki).
+
+CREATE TABLE IF NOT EXISTS principles (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text       text NOT NULL CHECK (length(btrim(text)) > 0),
+  source     text,                       -- autor / dzieło / „ja do siebie"
+  states     text[] NOT NULL DEFAULT '{}', -- do jakich stanów pasuje; pusto = do każdego
+  note       text,                       -- dlaczego to u mnie działa
+  position   int NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS principles_user_idx ON principles (user_id);
+
+-- Lista stanów jest zamknięta i pilnowana tu, nie tylko w kodzie. Rozszerzenie:
+--   ALTER TABLE mood_checkins DROP CONSTRAINT IF EXISTS mood_checkins_state_check;
+--   ALTER TABLE mood_checkins ADD CONSTRAINT mood_checkins_state_check CHECK (state IN (...));
+CREATE TABLE IF NOT EXISTS mood_checkins (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  at         timestamptz NOT NULL DEFAULT now(),
+  state      text NOT NULL CHECK (state IN ('spokoj','napiecie','zlosc','lek','dolek','nakrecenie')),
+  intensity  smallint NOT NULL CHECK (intensity BETWEEN 1 AND 5),
+  note       text
+);
+CREATE INDEX IF NOT EXISTS mood_checkins_user_at_idx ON mood_checkins (user_id, at);
+
+CREATE TABLE IF NOT EXISTS technique_uses (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  technique  text NOT NULL,              -- klucz z frontend/src/stability.js
+  at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS technique_uses_user_at_idx ON technique_uses (user_id, at);
+
+-- Kotwice: rzeczy, które historycznie pomagały. Trafiają do sekcji „rozruch".
 CREATE TABLE IF NOT EXISTS anchors (
   id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,

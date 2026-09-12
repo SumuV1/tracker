@@ -63,6 +63,7 @@ tracker/
 │   ├── public/              # ikony i manifest, kopiowane do dist bez zmian
 │       ├── api.js            # klient API (zastąpił shim window.storage)
 │       ├── plans.js          # dane planów treningowych
+│       ├── stability.js      # stany, techniki i grupy zakładki Stabilizacja
 │       └── App.jsx
 └── scripts/
     ├── deploy.sh
@@ -164,6 +165,10 @@ Cały interfejs w jednym komponencie. Warstwa danych trzyma się kilku zasad:
 
 - **Logowanie jest bramką** — bez ważnej sesji renderuje się `LoginScreen`,
   reszta aplikacji w ogóle się nie montuje.
+- **Aplikacja startuje na zakładce Stabilizacja** — pyta „jak jest", zanim
+  pokaże listy. Błąd w renderze łapie `ErrorBoundary` w `main.jsx`: zamiast
+  białej strony jest komunikat z treścią wyjątku i przyciskiem odświeżenia,
+  bo na telefonie nie ma konsoli.
 - **Odhaczenie nawyku jest optymistyczne**: stan zmienia się natychmiast,
   a błąd zapytania cofa go, dociągając odhaczenia z serwera.
 - **Dziennik posiłków nie jest trzymany w całości** — wybrany dzień pobierany
@@ -195,6 +200,39 @@ z makroskładnikiem. Podpisów dat jest najwyżej pięć (trzy na telefonie)
 i odpadają te, które nachodziłyby na siebie przy pomiarach zbitych w czasie.
 Każda liczba z wykresu jest też do odczytania tekstem w tabeli pod nim —
 dymek niczego nie zamyka na wyłączność.
+
+#### Stabilizacja emocjonalna — `frontend/src/stability.js`
+
+Zakładka startowa. Wyrosła z „Z dołka", ale nazwa zmieniła sens: problemem
+nie jest kierunek emocji, tylko jej **amplituda** — złość, lęk, nakręcenie
+i dołek to ta sama nieumiejętność w różnych strojach. Treść już wcześniej
+pasowała do nowej nazwy: oddech, zimna woda, uziemienie i defuzja to techniki
+regulacji pobudzenia, nie techniki „na smutek".
+
+Cztery sekcje, od góry:
+
+1. **Zasada dnia** — jedna, nie wszystkie. Losowana deterministycznie z daty
+   (`dailyPick`), więc odświeżenie nie zmienia bodźca; przycisk „inna" tak.
+   Najpierw z zasad przypisanych do ostatniego stanu, w braku — ze wszystkich.
+   Treść jest użytkownika: pola *zasada*, *skąd*, *na jaki stan*, *dlaczego to
+   u mnie działa*. Zestaw startowy (sześć maksym stoików z uczciwą atrybucją)
+   wgrywa się wyłącznie na puste konto i jest oznaczony jako przykład — strona
+   ma działać od pierwszego wejścia, ale wartość jest w słowach użytkownika.
+2. **Check-in** — sześć stanów (spokój, napięcie, złość, lęk, dołek, nakręcenie),
+   natężenie 1–5, opcjonalne zdanie. To jest właściwa część: nie da się
+   regulować czegoś, czego się nie mierzy. Pod spodem lista i wykres z 14 dni —
+   ta sama `MeasurementChart` co przy wadze, z osią przypiętą do 1–5
+   (`domain`) i stanem w dymku (`labelOf`).
+3. **Techniki** — podpięte pod **stan**, nie pod „poziom dołka", pogrupowane
+   według mechanizmu: *wyciszenie* (ciało: nerw błędny, odruch nurkowy),
+   *rozplątanie* (wyjście z pętli myślowej), *rozruch* (niskie pobudzenie).
+   Po check-inie zostają te pasujące; „Zrobiłem" zapisuje użycie po stałym
+   `key`, a przy technice widać „użyta N× w 30 dni, ostatnio…".
+4. **Kotwice** — bez zmian, trafiły do sekcji rozruchu, gdzie mają zastosowanie.
+
+Lista stanów jest zamknięta i pilnowana także `CHECK`-iem w bazie; jej
+rozszerzenie to zmiana w `stability.js`, w `STATE_KEYS` trasy i w ograniczeniu
+tabeli (instrukcja w komentarzu przy `mood_checkins`).
 
 #### Zakładka nawyków
 
@@ -324,6 +362,9 @@ w ogóle istnieje.
 | GET/POST/DELETE | `/api/anchors` | kotwice |
 | GET/POST/PATCH/DELETE | `/api/avoid`, `/api/avoid/:id` | lista niewolnika |
 | GET/POST/DELETE | `/api/measurements`, `/api/measurements/:id` | historia pomiarów ciała |
+| GET/POST/PATCH/DELETE | `/api/stability/principles[/:id]`, `POST …/seed` | zasady użytkownika |
+| GET/POST/DELETE | `/api/stability/checkins[/:id]?days=` | check-iny stanu |
+| GET/POST | `/api/stability/uses?days=` | użycia technik (liczniki per klucz) |
 | GET | `/api/off/search?q=` | wyszukiwanie w Open Food Facts |
 | POST | `/api/off/import` | pobranie produktu po kodzie i zapis do katalogu |
 
@@ -410,7 +451,10 @@ Na bazie, która już istnieje, ten sam schemat zakłada `./scripts/db-init.sh`
 | `profiles` | waga, wzrost, wiek, płeć, poziom aktywności, obwody szyi / talii / bioder — jeden wiersz na konto |
 | `foods` | katalog produktów: `builtin` (wspólne), `custom` (prywatne), `off` (cache OpenFoodFacts) |
 | `meal_entries` | dziennik posiłków — wartości odżywcze zapisane w chwili dodania |
-| `anchors` | kotwice z zakładki „Z dołka" |
+| `anchors` | kotwice — rzeczy, które historycznie pomagały (zakładka Stabilizacja) |
+| `principles` | zasady użytkownika: tekst, źródło, do jakich stanów pasują |
+| `mood_checkins` | check-iny: stan + natężenie 1–5 z godziną |
+| `technique_uses` | użycia technik, po stałym kluczu z `stability.js` |
 | `avoid_items` | lista niewolnika — rzeczy, od których użytkownik trzyma się z daleka |
 | `body_measurements` | historia pomiarów: waga i obwody, jeden wiersz na dzień |
 | `login_attempts` | nieudane logowania, do limitu prób |
@@ -441,9 +485,11 @@ Decyzje projektowe, które nie są oczywiste z samego DDL:
   pamięciowa kasowała się przy każdym restarcie kontenera, więc przy wdrożeniu
   co kilkanaście minut limitu w praktyce nie było.
 
-Brak tabeli na odhaczone techniki w „Z dołka" jest zamierzony — struktura
-poziomów zmieni się przy przebudowie zakładki, a klucz oparty o pozycję
-w tablicy technik i tak trafiłby do kosza.
+Odhaczenia technik mają własną tabelę dopiero od przebudowy zakładki na
+„Stabilizację": wcześniej klucz oparty o pozycję w tablicy technik trafiłby do
+kosza przy pierwszej zmianie struktury, więc `markDone` świadomie niczego nie
+zapisywał — co było gorsze niż brak funkcji, bo interfejs pokazywał ptaszek,
+który znikał po odświeżeniu. Teraz każda technika ma stały `key`.
 
 ### Konta i przeniesienie danych
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "./api.js";
 import { TRAINING_PLANS, WEEKDAYS, todayKey, maxHeartRate } from "./plans.js";
+import { STATES, STATE_MAP, GROUPS, TECHNIQUES, dailyPick } from "./stability.js";
 
 // ── RESPONSYWNOŚĆ ─────────────────────────────────────────────────────────
 // Layout jest budowany na stylach inline, więc breakpointy bierzemy z JS
@@ -443,21 +444,32 @@ const SERIES = "#8d4fbc";
 const AXIS_INK = "#8a8a8a";   // 5,3:1 na tle karty — czytelne, nie krzyczy
 const GRID = "#242424";       // jeden odcień od powierzchni, linia ciągła
 
+// Przyjmuje datę „RRRR-MM-DD" i pełny znacznik czasu — check-iny mają godzinę.
+// Sama data NIE przechodzi przez `new Date`: parsowałaby się jako północ UTC
+// i na zachód od Greenwich cofała o dzień. Znacznik czasu przeciwnie — ma
+// pokazać dzień lokalny, więc musi.
 const plDate = iso => {
-  const [y, m, d] = iso.split("-");
-  return `${d}.${m}.${y}`;
+  const str = String(iso);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) { const [y, m, d] = str.split("-"); return `${d}.${m}.${y}`; }
+  const d = new Date(str);
+  return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`;
 };
+const plTime = iso => { const d = new Date(iso); return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; };
 
 const METRICS = {
   weightKg:   { label: "Waga",              unit: "kg", digits: 1 },
   bodyFatPct: { label: "Tkanka tłuszczowa", unit: "%",  digits: 1 },
   waistCm:    { label: "Talia",             unit: "cm", digits: 1 },
+  intensity:  { label: "Natężenie",         unit: "/5", digits: 0 },
 };
 
-function MeasurementChart({ rows, metric, isMobile }) {
+// `domain` przypina oś Y do stałego zakresu (skala 1–5 nie ma się „dopasowywać"
+// do danych); `labelOf` dokłada do dymka opis punktu; `showDelta` wyłącza
+// nagłówek „+0,4 od 14.06", który dla check-inów nic nie znaczy.
+function MeasurementChart({ rows, metric, isMobile, color = SERIES, domain = null, labelOf = null, showDelta = true }) {
   const [hover, setHover] = useState(null);
   const m = METRICS[metric];
-  const pts = rows.filter(r => r[metric] != null).map(r => ({ day: r.day, v: r[metric] }));
+  const pts = rows.filter(r => r[metric] != null).map(r => ({ day: r.day, v: r[metric], row: r }));
 
   if (pts.length < 2) {
     return (
@@ -476,11 +488,16 @@ function MeasurementChart({ rows, metric, isMobile }) {
   // Oś Y nie zaczyna się od zera: przy wadze zero jest poza sensem pomiaru,
   // a zakres 0–90 kg schowałby całą zmianę w grubości linii.
   const vs = pts.map(p => p.v);
-  let lo = Math.min(...vs), hi = Math.max(...vs);
-  const span = hi - lo || Math.max(1, hi * 0.02);
-  lo -= span * 0.15; hi += span * 0.15;
-  const step = niceStep((hi - lo) / 4);
-  lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  let lo, hi, step;
+  if (domain) {
+    [lo, hi] = domain; step = niceStep((hi - lo) / 4);
+  } else {
+    lo = Math.min(...vs); hi = Math.max(...vs);
+    const span = hi - lo || Math.max(1, hi * 0.02);
+    lo -= span * 0.15; hi += span * 0.15;
+    step = niceStep((hi - lo) / 4);
+    lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  }
   const ticks = [];
   for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(6));
 
@@ -523,18 +540,20 @@ function MeasurementChart({ rows, metric, isMobile }) {
 
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 2 }}>
-        <span style={{ fontSize: 22, fontWeight: 800, color: "#f1f1f1" }}>{fmt(last.v)} <span style={{ fontSize: 13, color: AXIS_INK, fontWeight: 600 }}>{m.unit}</span></span>
-        <span style={{ fontSize: 12, color: delta === 0 ? AXIS_INK : delta < 0 ? "#4ade80" : "#e8a54b" }}>
-          {delta > 0 ? "+" : ""}{fmt(delta)} {m.unit} od {plDate(first.day)}
-        </span>
-      </div>
+      {showDelta && (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 2 }}>
+          <span style={{ fontSize: 22, fontWeight: 800, color: "#f1f1f1" }}>{fmt(last.v)} <span style={{ fontSize: 13, color: AXIS_INK, fontWeight: 600 }}>{m.unit}</span></span>
+          <span style={{ fontSize: 12, color: delta === 0 ? AXIS_INK : delta < 0 ? "#4ade80" : "#e8a54b" }}>
+            {delta > 0 ? "+" : ""}{fmt(delta)} {m.unit} od {plDate(first.day)}
+          </span>
+        </div>
+      )}
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", overflow: "visible" }}
         onMouseMove={pick} onMouseLeave={() => setHover(null)} onTouchStart={pick} onTouchMove={pick}>
         <defs>
-          <linearGradient id="mchart-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={SERIES} stopOpacity="0.28" />
-            <stop offset="100%" stopColor={SERIES} stopOpacity="0" />
+          <linearGradient id={`mchart-fill-${color.slice(1)}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
 
@@ -546,16 +565,16 @@ function MeasurementChart({ rows, metric, isMobile }) {
           </g>
         ))}
 
-        <path d={area} fill="url(#mchart-fill)" />
-        <path d={line} fill="none" stroke={SERIES} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={area} fill={`url(#mchart-fill-${color.slice(1)})`} />
+        <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
 
         {pts.map((p, i) => (
           <circle key={p.day} cx={x(p)} cy={y(p.v)} r={hover === i ? 5 : 4}
-            fill={SERIES} stroke="#161616" strokeWidth="2" />
+            fill={color} stroke="#161616" strokeWidth="2" />
         ))}
 
         {hp && (
-          <line x1={x(hp)} x2={x(hp)} y1={PAD.t} y2={PAD.t + ih} stroke={SERIES} strokeWidth="1" strokeOpacity="0.5" />
+          <line x1={x(hp)} x2={x(hp)} y1={PAD.t} y2={PAD.t + ih} stroke={color} strokeWidth="1" strokeOpacity="0.5" />
         )}
 
         {labelIdx.map(i => (
@@ -570,11 +589,12 @@ function MeasurementChart({ rows, metric, isMobile }) {
         <div style={{
           position: "absolute", top: 30, left: `${(x(hp) / W) * 100}%`,
           transform: `translateX(${x(hp) > W * 0.6 ? "-100%" : "0"})`, pointerEvents: "none",
-          background: "#0a0a0a", border: `1px solid ${SERIES}66`, borderRadius: 8, padding: "6px 10px",
+          background: "#0a0a0a", border: `1px solid ${color}66`, borderRadius: 8, padding: "6px 10px",
           fontSize: 11.5, color: "#e8e8e8", whiteSpace: "nowrap", zIndex: 3,
         }}>
           <div style={{ color: AXIS_INK, fontVariantNumeric: "tabular-nums" }}>{plDate(hp.day)}</div>
           <div style={{ fontWeight: 700 }}>{fmt(hp.v)} {m.unit}</div>
+          {labelOf && <div style={{ color: AXIS_INK, marginTop: 2 }}>{labelOf(hp.row)}</div>}
         </div>
       )}
     </div>
@@ -1167,94 +1187,81 @@ export default function App() {
   const [measForm,setMeasForm]=useState({day:"",weight:"",neck:"",waist:"",hips:""});
   const [customForm,setCustomForm]=useState({name:"",cal:"",p:"",c:"",f:"",fb:"",s:""});
 
-  const [mainTab,setMainTab]=useState("nawyki");
+  // Aplikacja otwiera się na stabilizacji: pyta „jak jest", zanim pokaże listy.
+  const [mainTab,setMainTab]=useState("stabilizacja");
 
-  // ── DOŁEK STATE ──
-  const [dolekLevel,setDolekLevel]=useState(null);
-  const [dolekCompleted,setDolekCompleted]=useState({l1:[],l2:[],l3:[]});
-  const [dolekExpanded,setDolekExpanded]=useState({});
+  // ── STABILIZACJA ──
+  const [principles,setPrinciples]=useState([]);
+  const [principleOffset,setPrincipleOffset]=useState(0);
+  const [showPrinciples,setShowPrinciples]=useState(false);
+  const [principleForm,setPrincipleForm]=useState(null);   // null = zamknięty; {id?,text,source,states,note}
+  const [checkins,setCheckins]=useState([]);
+  const [ciState,setCiState]=useState(null);
+  const [ciIntensity,setCiIntensity]=useState(3);
+  const [ciNote,setCiNote]=useState("");
+  const [techUses,setTechUses]=useState({});                // key → {count,lastAt}
+  const [techExpanded,setTechExpanded]=useState({});
+  const [showAllTech,setShowAllTech]=useState(false);
   const [kotwice,setKotwice]=useState([]);
   const [kotwicaInput,setKotwicaInput]=useState("");
   const [kotwicaEmoji,setKotwicaEmoji]=useState("🎵");
-
-  const TECHNIQUES={
-    l1:[
-      {icon:"💨",name:"Oddech fizjologiczny",time:"2 min",desc:"Najszybszy sposób na obniżenie kortyzolu. Podwójny wdech aktywuje nerw błędny i dosłownie zmienia stan układu nerwowego w ciągu sekund.",steps:["Wciągnij powietrze nosem przez 4 sekundy","Zrób krótki dodatkowy wdech nosem (doładowanie płuc)","Wydychaj powoli ustami przez 6–8 sekund","Powtórz 3–5 razy — poczujesz jak ciało zwalnia"]},
-      {icon:"🌊",name:"Zimna woda na twarz",time:"1 min",desc:"Reset fizjologiczny. Zimna woda aktywuje odruch nurkowy — gwałtownie spowalnia tętno i uspokaja układ nerwowy.",steps:["Idź do łazienki","Nabierz zimnej wody w dłonie","Przemyj twarz, czoło, skronie i szyję","Powtórz 2–3 razy"]},
-      {icon:"👁️",name:"Technika 5-4-3-2-1",time:"3 min",desc:"Uziemienie sensoryczne — wyciąga umysł z pętli myślowej i przenosi uwagę do tu i teraz.",steps:["5 rzeczy które WIDZISZ — nazwij je w myślach","4 rzeczy których możesz DOTKNĄĆ — dotknij każdej","3 rzeczy które SŁYSZYSZ — wsłuchaj się aktywnie","2 rzeczy które CZUJESZ zapachem","1 rzecz którą SMAKUJESZ"]},
-      {icon:"🏃",name:"Mini ruch fizyczny",time:"2 min",desc:"Ruch spala kortyzol i adrenalinę nagromadzone w ciele. Cokolwiek wystarczy żeby zmienić stan.",steps:["Wstań od komputera — to najważniejszy krok","10 przysiadów lub 20 podskoków w miejscu","Albo szybki marsz po mieszkaniu przez 2 minuty","Powtórz jeśli poczułeś że pomaga"]},
-    ],
-    l2:[
-      {icon:"📝",name:"Brain dump",time:"10 min",desc:"Wypisanie myśli na zewnątrz zmniejsza ich intensywność w środku. Pisz bez cenzury — nikt tego nie zobaczy.",steps:["Weź kartkę lub otwórz pusty plik","Pisz przez 10 minut co czujesz i myślisz — bez zatrzymywania","Nie redaguj, nie oceniaj, nie poprawiaj","Po skończeniu przeczytaj raz i zaznacz co jest faktem, a co interpretacją"]},
-      {icon:"🔍",name:"Co dokładnie boli?",time:"5 min",desc:"Każdy rodzaj bólu wymaga innej odpowiedzi. Zmęczenie to nie to samo co poczucie porażki. Precyzja ma znaczenie.",steps:["Zapytaj siebie: czy to zmęczenie fizyczne lub psychiczne?","Czy to poczucie porażki, wstydu lub rozczarowania sobą?","Czy to samotność — brak kontaktu z ludźmi?","Czy to stagnacja — poczucie że nic się nie zmienia?","Zapisz odpowiedź — wskazuje co naprawdę potrzebujesz"]},
-      {icon:"🧠",name:"Defuzja poznawcza",time:"3 min",desc:"Technika z ACT. Zamiast być myślą — obserwujesz ją z dystansu. Małe słowa, duża różnica w intensywności.",steps:["Zauważ negatywną myśl, np. 'jestem beznadziejny'","Zamień ją na: 'mam myśl, że jestem beznadziejny'","Albo: 'mój umysł mówi mi teraz, że jestem beznadziejny'","Powtórz kilka razy — poczujesz jak myśl traci swoją moc"]},
-      {icon:"✅",name:"Mini-lista 3 rzeczy",time:"5 min",desc:"Działanie poprzedza motywację, nie odwrotnie. Małe zadanie → mały sukces → lekkie odblokowanie energii.",steps:["Napisz 3 konkretne rzeczy do zrobienia dziś","Żadna nie może zająć więcej niż 20 minut","Żadna nie może być 'wielkim projektem'","Zrób pierwszą z listy teraz"]},
-    ],
-    l3:[
-      {icon:"💬",name:"Kontakt z kimś bliskim",time:"dowolnie",desc:"Nie musisz rozmawiać o problemie. Sam głos kogoś bliskiego zmienia stan. Kontakt społeczny to biologiczna potrzeba.",steps:["Napisz lub zadzwoń do kogoś — bez planu rozmowy","Nie musisz tłumaczyć co czujesz ani 'mieć powodu'","Nawet krótkie 'hej, co u ciebie?' wystarczy","Jeśli nie masz teraz komu — idź gdzieś gdzie są ludzie"]},
-      {icon:"⚡",name:"Twoja kotwica",time:"30–60 min",desc:"Każdy ma coś co historycznie pomagało — nawet trochę. Ochota pojawia się w trakcie, nie przed. Nie czekaj na nią.",steps:["Wejdź w sekcję 'Moje kotwice' poniżej","Wybierz jedną rzecz która historycznie działała","Zacznij — nawet bez energii i entuzjazmu","Daj sobie 10 minut zanim ocenisz czy pomaga"]},
-      {icon:"🔧",name:"Małe zamknięte osiągnięcie",time:"20 min",desc:"Poczucie sprawczości to bezpośrednia kontra-narracja dla bezsilności. Zamknij coś małego.",steps:["Znajdź coś co wisi od jakiegoś czasu","Ticket w Jira, skrypt, porządek w plikach — cokolwiek","Coś co możesz zamknąć w 20 minut","Odznacz jako done — to ważna część, nie pomijaj jej"]},
-      {icon:"🗺️",name:"Ocena źródła dołka",time:"10 min",desc:"Kiedy jesteś już stabilniejszy — warto zrozumieć co wywołało dołek. Nie po to żeby się obwiniać.",steps:["Czy to był jednorazowy czynnik — niewyspanie, stres, przeciążenie?","Czy to powtarzający się pattern który widzisz regularnie?","Co pojawiło się jako pierwsze — sygnał ostrzegawczy?","Zapisz odpowiedź — to materiał na Twój system na przyszłość"]},
-    ],
-  };
 
   const addKotwica=async()=>{
     if(!kotwicaInput.trim())return;
     const a=await api.addAnchor({emoji:kotwicaEmoji,label:kotwicaInput.trim()});
     setKotwice(k=>[...k,a]);setKotwicaInput("");
   };
-  const delKotwica=async id=>{
+  const delKotwica=id=>run(async()=>{
     await api.deleteAnchor(id);
     setKotwice(k=>k.filter(x=>x.id!==id));
-  };
-  // ── Historia pomiarów ──
-  const addMeasurement=()=>run(async()=>{
-    const {day,weight,neck,waist,hips}=measForm;
-    if(!day)return;
-    await api.addMeasurement({day,weightKg:weight,neckCm:neck,waistCm:waist,hipsCm:hips});
-    setMeasurements(await api.measurements());
-    // Pomiar z dzisiaj serwer przepisuje też do profilu — dociągamy go, żeby
-    // formularz obok nie pokazywał starych liczb.
-    if(day===today())setServerProfile(await api.profile());
-    setMeasForm({day:"",weight:"",neck:"",waist:"",hips:""});setShowMeasForm(false);
-  });
-  const deleteMeasurement=id=>run(async()=>{
-    await api.deleteMeasurement(id);
-    setMeasurements(m=>m.filter(x=>x.id!==id));
   });
 
-  // ── Lista niewolnika ──
-  const addAvoid=()=>run(async()=>{
-    if(!avoidName.trim())return;
-    const it=await api.addAvoid({name:avoidName.trim(),note:avoidNote.trim()});
-    setAvoidItems(l=>[...l,it]);
-    setAvoidName("");setAvoidNote("");setShowAvoidForm(false);
+  // Zasady
+  const savePrinciple=()=>run(async()=>{
+    const f=principleForm;
+    if(!f||!f.text.trim())return;
+    const body={text:f.text.trim(),source:f.source.trim(),states:f.states,note:f.note.trim()};
+    if(f.id){const p=await api.patchPrinciple(f.id,body);setPrinciples(l=>l.map(x=>x.id===f.id?p:x));}
+    else{const p=await api.addPrinciple(body);setPrinciples(l=>[...l,p]);}
+    setPrincipleForm(null);
   });
-  const saveAvoid=id=>run(async()=>{
-    if(!editAvoidVal.trim()){setEditAvoidId(null);return;}
-    // Notatkę wysyłamy zawsze — wyczyszczone pole ma ją skasować, a nie zostawić.
-    const it=await api.patchAvoid(id,{name:editAvoidVal.trim(),note:editAvoidNote.trim()});
-    setAvoidItems(l=>l.map(x=>x.id===id?it:x));
-    setEditAvoidId(null);
+  const deletePrinciple=id=>run(async()=>{
+    await api.deletePrinciple(id);
+    setPrinciples(l=>l.filter(x=>x.id!==id));
+    if(principleForm?.id===id)setPrincipleForm(null);
   });
-  const startEditAvoid=it=>{
-    setEditAvoidId(it.id);setEditAvoidVal(it.name);setEditAvoidNote(it.note||"");
+  const seedPrinciples=()=>run(async()=>setPrinciples(await api.seedPrinciples()));
+  const editPrinciple=p=>setPrincipleForm(p
+    ?{id:p.id,text:p.text,source:p.source||"",states:p.states||[],note:p.note||""}
+    :{text:"",source:"",states:[],note:""});
+
+  // Check-iny
+  const reloadCheckins=async()=>setCheckins(await api.checkins(14));
+  const addCheckin=()=>run(async()=>{
+    if(!ciState)return;
+    await api.addCheckin({state:ciState,intensity:ciIntensity,note:ciNote.trim()});
+    setCiNote("");setShowAllTech(false);
+    await reloadCheckins();
+  });
+  const deleteCheckin=id=>run(async()=>{
+    await api.deleteCheckin(id);
+    setCheckins(l=>l.filter(x=>x.id!==id));
+  });
+  // Ostatni check-in steruje resztą strony: technikami i wyborem zasady.
+  const lastCheckin=checkins.length?checkins[checkins.length-1]:null;
+  const todayCheckins=checkins.filter(c=>plDate(c.at)===plDate(today()));
+  const currentState=ciState||lastCheckin?.state||null;
+
+  // Użycia technik
+  const reloadUses=async()=>{
+    const rows=await api.techniqueUses(30);
+    setTechUses(Object.fromEntries(rows.map(r=>[r.technique,r])));
   };
-  const deleteAvoid=id=>run(async()=>{
-    await api.deleteAvoid(id);
-    setAvoidItems(l=>l.filter(x=>x.id!==id));
+  const useTechnique=key=>run(async()=>{
+    await api.addTechniqueUse(key);
+    await reloadUses();
   });
 
-  const toggleTechnique=key=>setDolekExpanded(p=>({...p,[key]:!p[key]}));
-  const markDone=(lvl,idx)=>{
-    if(dolekCompleted[lvl].includes(idx))return;
-    setDolekCompleted(p=>({...p,[lvl]:[...p[lvl],idx]}));
-  };
-  const getLevelColors=lvl=>({
-    l1:{bg:"#2a1e00",border:"#e8b84b",text:"#e8b84b",tag:"#7a5a10",tagBg:"#2a1e00"},
-    l2:{bg:"#2a1000",border:"#d97340",text:"#d97340",tag:"#7a3a10",tagBg:"#2a1000"},
-    l3:{bg:"#2a0000",border:"#c94040",text:"#c94040",tag:"#7a1010",tagBg:"#2a0000"},
-  }[lvl]);
   const [expandedHabit,setExpandedHabit]=useState({});
   const [avoidItems,setAvoidItems]=useState([]);
   const [avoidName,setAvoidName]=useState("");
@@ -1314,12 +1321,13 @@ export default function App() {
     if(!user)return;
     (async()=>{
       try{
-        const [h,p,f,c,a,av,ms]=await Promise.all([
+        const [h,p,f,c,a,av,ms,pr,ci,tu]=await Promise.all([
           api.habits(),api.profile(),api.foods({}),api.foodCategories(),api.anchors(),api.avoid(),
-          api.measurements(),
+          api.measurements(),api.principles(),api.checkins(14),api.techniqueUses(30),
         ]);
         setHabits(h);setServerProfile(p);setFoods(f);setFoodCats(c);setKotwice(a);setAvoidItems(av);
-        setMeasurements(ms);
+        setMeasurements(ms);setPrinciples(pr);setCheckins(ci);
+        setTechUses(Object.fromEntries(tu.map(r=>[r.technique,r])));
         setProfile({
           weight:p.weightKg??"",height:p.heightCm??"",age:p.ageYears??"",
           sex:p.sex||"M",activity:p.activity??1,
@@ -1692,7 +1700,7 @@ export default function App() {
 
         {/* Main tabs */}
         <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:isMobile?16:20}}>
-          {[["nawyki","Nawyki","Nawyki"],["kalorie","Kalorie & BMI","Kalorie"],["miesnie","Mięśnie","Mięśnie"],["dolек","Z dołka","Dołek"]].map(([k,long,short])=>(
+          {[["stabilizacja","Stabilizacja","Stabil."],["nawyki","Nawyki","Nawyki"],["kalorie","Kalorie & BMI","Kalorie"],["miesnie","Mięśnie","Mięśnie"]].map(([k,long,short])=>(
             <button key={k} onClick={()=>{
               setMainTab(k);
               // BMI wystarczy policzyć raz, więc przy kolejnych wejściach
@@ -2167,131 +2175,245 @@ export default function App() {
         {/* ═══ MIĘŚNIE ═══ */}
         {mainTab==="miesnie"&&<MuscleMap profile={serverProfile}/>}
 
-        {/* ═══ DOŁEK ═══ */}
-        {mainTab==="dolек"&&(
-          <div>
-            {/* SOS Banner */}
-            <div style={{background:"#2a1e00",border:"1px solid #e8b84b",borderRadius:14,padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"center",gap:14}}>
-              <div style={{fontSize:24,flexShrink:0}}>⚡</div>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:700,fontSize:14,color:"#e8b84b",marginBottom:2}}>Jestem teraz w dołku</div>
-                <div style={{fontSize:12,color:"#a07830"}}>Zacznij od poziomu 1 — zejdź niżej gdy poczujesz się lepiej</div>
-              </div>
-              <button onClick={()=>setDolekLevel("l1")} style={{background:"#e8b84b",color:"#000",border:"none",borderRadius:8,padding:"8px 16px",fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0}}>Zacznij</button>
-            </div>
-
-            {/* Level selector */}
-            <div style={{fontSize:13,fontWeight:700,color:"#ccc",marginBottom:12}}>Gdzie teraz jesteś?</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,marginBottom:24}}>
-              {[
-                {k:"l1",n:"Poziom 1",name:"Stabilizacja",time:"0–10 min",desc:"Przytłoczony, chaotyczny. Ciało napięte, serce przyspieszone. Jesteś w spirali.",border:"#e8b84b",bg:"#2a1e00",text:"#e8b84b"},
-                {k:"l2",n:"Poziom 2",name:"Przetwarzanie",time:"10–30 min",desc:"Trochę spokojniejszy, ale ciężki. Negatywne myśli, brak perspektywy.",border:"#d97340",bg:"#2a1000",text:"#d97340"},
-                {k:"l3",n:"Poziom 3",name:"Odbudowa",time:"kilka godzin",desc:"Poza ostrą fazą, ale płaski. Brakuje energii. Możesz funkcjonować.",border:"#c94040",bg:"#2a0000",text:"#c94040"},
-              ].map(l=>(
-                <div key={l.k} onClick={()=>setDolekLevel(l.k)} style={{background:l.bg,border:`1.5px solid ${dolekLevel===l.k?l.border:l.border+"55"}`,borderRadius:12,padding:12,cursor:"pointer",boxShadow:dolekLevel===l.k?`0 0 0 3px ${l.border}33`:"none",transition:"all 0.2s"}}>
-                  <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",color:l.text,marginBottom:4}}>{l.n}</div>
-                  <div style={{fontSize:14,fontWeight:700,color:l.text,marginBottom:2}}>{l.name}</div>
-                  <div style={{fontSize:11,color:l.text,opacity:0.7,marginBottom:8}}>{l.time}</div>
-                  <div style={{fontSize:11,color:l.text,opacity:0.8,lineHeight:1.5,borderTop:`1px solid ${l.border}33`,paddingTop:8}}>{l.desc}</div>
+        {/* ═══ STABILIZACJA ═══ */}
+        {mainTab==="stabilizacja"&&(()=>{
+          const ACC="#e8b84b";                       // akcent zakładki (nie seria danych)
+          const st=currentState?STATE_MAP[currentState]:null;
+          // Zasada dnia: najpierw te przypisane do bieżącego stanu, w braku — wszystkie.
+          const pool=st?principles.filter(p=>(p.states||[]).includes(st.key)):[];
+          const fromPool=pool.length>0;
+          const principle=dailyPick(fromPool?pool:principles,today(),principleOffset);
+          const techs=TECHNIQUES.filter(t=>showAllTech||!st||t.states.includes(st.key));
+          const card={background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?14:18,marginBottom:14};
+          const chip=(on,color)=>({background:on?color+"22":"#0f0f0f",border:`1px solid ${on?color:"#2a2a2a"}`,borderRadius:20,
+            padding:"4px 11px",color:on?"#f0f0f0":"#8a8a8a",fontSize:12,fontWeight:on?600:500,cursor:"pointer"});
+          const usesOf=key=>techUses[key];
+          return(
+            <div>
+              <div style={{textAlign:"center",marginBottom:16}}>
+                <div style={{fontSize:11,letterSpacing:"0.2em",color:ACC,fontWeight:600,fontFamily:"monospace",marginBottom:6}}>STABILIZACJA EMOCJONALNA</div>
+                <div style={{fontSize:12,color:"#666",lineHeight:1.6,maxWidth:520,margin:"0 auto"}}>
+                  Nie chodzi o kierunek emocji, tylko o jej amplitudę. Nie da się regulować czegoś, czego się nie mierzy.
                 </div>
-              ))}
-            </div>
+              </div>
 
-            {/* Phase panel */}
-            {dolekLevel&&(()=>{
-              const c=getLevelColors(dolekLevel);
-              const techs=TECHNIQUES[dolekLevel];
-              const done=dolekCompleted[dolekLevel];
-              const pct=Math.round((done.length/techs.length)*100);
-              const labels={l1:{tag:"0–10 minut",title:"Szybka stabilizacja",sub:"Najpierw wróć do ciała. Nie myśl — działaj. Wybierz jedną technikę."},l2:{tag:"10–30 minut",title:"Przetwarzanie",sub:"Kiedy jesteś trochę spokojniejszy — czas zrozumieć co się dzieje."},l3:{tag:"kilka godzin",title:"Odbudowa",sub:"Wróć do siebie. Nie tylko przetrwaj — zbuduj coś małego."}};
-              const lbl=labels[dolekLevel];
-              return(
-                <div>
-                  <div style={{marginBottom:16}}>
-                    <div style={{display:"inline-block",fontSize:11,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",padding:"3px 10px",borderRadius:999,background:c.bg,color:c.text,border:`1px solid ${c.border}`,marginBottom:8}}>{lbl.tag}</div>
-                    <div style={{fontSize:20,fontWeight:700,color:"#f1f1f1",marginBottom:4}}>{lbl.title}</div>
-                    <div style={{fontSize:13,color:"#888"}}>{lbl.sub}</div>
+              {/* ── 1. Zasada dnia ── */}
+              <div style={{...card,border:`1px solid ${ACC}33`}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10}}>
+                  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.12em",color:ACC,fontFamily:"monospace"}}>
+                    ZASADA NA DZIŚ{fromPool&&st?` · ${st.label.toUpperCase()}`:""}
                   </div>
-                  {/* Progress */}
-                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
-                    <div style={{flex:1,height:3,background:"#2a2a2a",borderRadius:99,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:`${pct}%`,background:"#22c55e",borderRadius:99,transition:"width 0.4s"}}/>
+                  {principles.length>0&&(
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>setPrincipleOffset(o=>o+1)} style={{background:"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>↻ Inna</button>
+                      <button onClick={()=>setShowPrinciples(v=>!v)} style={{background:showPrinciples?"#2a2a2a":"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>
+                        {showPrinciples?"Zwiń":`Wszystkie (${principles.length})`}
+                      </button>
                     </div>
-                    <div style={{fontSize:12,color:"#666",whiteSpace:"nowrap"}}>{done.length} / {techs.length}</div>
+                  )}
+                </div>
+                {principle?(
+                  <div>
+                    <div style={{fontSize:isMobile?17:19,fontWeight:600,color:"#f1f1f1",lineHeight:1.5,fontStyle:"italic"}}>„{principle.text}”</div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginTop:10,flexWrap:"wrap"}}>
+                      <div style={{fontSize:12,color:"#8a8a8a"}}>— {principle.source||"ja do siebie"}</div>
+                      <button onClick={()=>editPrinciple(principle)} style={{background:"none",border:"none",color:"#666",fontSize:11,cursor:"pointer",textDecoration:"underline"}}>edytuj</button>
+                    </div>
+                    {principle.note&&<div style={{fontSize:11.5,color:"#6a6a6a",marginTop:8,lineHeight:1.5,borderTop:"1px solid #1e1e1e",paddingTop:8}}>{principle.note}</div>}
                   </div>
-                  {/* Techniques */}
-                  <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:28}}>
-                    {techs.map((t,i)=>{
-                      const key=`${dolekLevel}-${i}`;
-                      const isOpen=dolekExpanded[key];
-                      const isDone=done.includes(i);
-                      return(
-                        <div key={key} style={{background:"#161616",border:`1px solid ${isOpen?"#2a2a2a":"#1e1e1e"}`,borderRadius:12,overflow:"hidden",transition:"border-color 0.15s"}}>
-                          <div onClick={()=>toggleTechnique(key)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",cursor:"pointer"}}>
-                            <div style={{width:36,height:36,borderRadius:10,background:c.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{t.icon}</div>
-                            <div style={{flex:1}}>
-                              <div style={{fontSize:14,fontWeight:600,color:isDone?"#666":"#f1f1f1",textDecoration:isDone?"line-through":"none"}}>{t.name}</div>
-                              <div style={{fontSize:11,color:"#555"}}>{t.time}</div>
-                            </div>
-                            {isDone&&<span style={{fontSize:12,color:"#22c55e",fontWeight:700}}>✓</span>}
-                            <span style={{color:"#555",fontSize:12,transform:isOpen?"rotate(180deg)":"none",transition:"transform 0.2s",display:"inline-block"}}>▼</span>
-                          </div>
-                          {isOpen&&(
-                            <div style={{padding:"0 14px 14px",borderTop:"1px solid #1e1e1e"}}>
-                              <p style={{fontSize:13,color:"#888",lineHeight:1.65,margin:"12px 0 10px"}}>{t.desc}</p>
-                              <ol style={{listStyle:"none",display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
-                                {t.steps.map((s,si)=>(
-                                  <li key={si} style={{display:"flex",gap:10,fontSize:13,color:"#888",lineHeight:1.5}}>
-                                    <span style={{width:20,height:20,borderRadius:"50%",background:"#2a2a2a",border:"1px solid #333",fontSize:11,fontWeight:500,color:"#555",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{si+1}</span>
-                                    {s}
-                                  </li>
-                                ))}
-                              </ol>
-                              {!isDone
-                                ?<button onClick={()=>markDone(dolekLevel,i)} style={{background:"#0a0a0a",border:"1px solid #333",borderRadius:999,padding:"5px 14px",color:"#888",fontSize:12,cursor:"pointer"}}>Zrobiłem</button>
-                                :<span style={{fontSize:12,color:"#22c55e",fontWeight:600}}>✓ Gotowe</span>
-                              }
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                ):(
+                  <div style={{textAlign:"center",padding:"14px 0 6px"}}>
+                    <div style={{fontSize:13,color:"#8a8a8a",lineHeight:1.6,marginBottom:12}}>
+                      Tu będzie jedna zasada dziennie — Twoimi słowami, z tego, co u Ciebie działa.
+                    </div>
+                    <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+                      <button onClick={()=>editPrinciple(null)} style={{background:ACC,color:"#000",border:"none",borderRadius:8,padding:"8px 16px",fontWeight:700,fontSize:13,cursor:"pointer"}}>Dodaj pierwszą zasadę</button>
+                      <button onClick={seedPrinciples} style={{background:"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"8px 16px",fontSize:13,cursor:"pointer"}}>Wstaw 6 maksym stoików na start</button>
+                    </div>
                   </div>
+                )}
 
-                  {/* Kotwice */}
-                  <div style={{borderTop:"1px solid #1e1e1e",paddingTop:24}}>
-                    <div style={{fontSize:16,fontWeight:700,color:"#f1f1f1",marginBottom:6}}>Moje kotwice</div>
-                    <div style={{fontSize:13,color:"#888",lineHeight:1.6,marginBottom:14}}>Rzeczy które historycznie ci pomagają — nawet trochę. Muzyka, projekt techniczny, spacer, gotowanie. Ochota pojawia się w trakcie, nie przed.</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
-                      {kotwice.length===0&&<div style={{fontSize:13,color:"#555",fontStyle:"italic"}}>Nie masz jeszcze żadnych kotwic — dodaj pierwszą poniżej.</div>}
-                      {kotwice.map((k,i)=>(
-                        <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:"#161616",border:"1px solid #1e1e1e",borderRadius:10,padding:"10px 14px"}}>
-                          <span style={{fontSize:18,flexShrink:0}}>{k.emoji}</span>
-                          <span style={{flex:1,fontSize:14,color:"#f1f1f1"}}>{k.text}</span>
-                          <button onClick={()=>delKotwica(i)} style={{background:"none",border:"none",cursor:"pointer",color:"#555",fontSize:18,padding:"2px 4px",borderRadius:4}}>×</button>
+                {showPrinciples&&(
+                  <div style={{marginTop:14,borderTop:"1px solid #1e1e1e",paddingTop:12}}>
+                    {principles.map(p=>(
+                      <div key={p.id} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"8px 0",borderBottom:"1px solid #151515"}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12.5,color:"#ddd",lineHeight:1.45}}>{p.text}</div>
+                          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:5,alignItems:"center"}}>
+                            <span style={{fontSize:10.5,color:"#666"}}>{p.source||"ja do siebie"}</span>
+                            {(p.states||[]).map(k=><span key={k} style={{fontSize:10,color:"#8a8a8a",background:"#0f0f0f",border:"1px solid #2a2a2a",borderRadius:10,padding:"1px 7px"}}>{STATE_MAP[k]?.icon} {STATE_MAP[k]?.label}</span>)}
+                          </div>
+                        </div>
+                        <button onClick={()=>editPrinciple(p)} title="Edytuj" style={{background:"#1c2030",border:"1px solid #2f3550",borderRadius:6,color:"#8fa6e8",cursor:"pointer",fontSize:11,width:24,height:24,flexShrink:0}}>✎</button>
+                        <button onClick={()=>deletePrinciple(p.id)} title="Usuń" style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:6,color:"#f87171",cursor:"pointer",fontSize:11,width:24,height:24,flexShrink:0}}>✕</button>
+                      </div>
+                    ))}
+                    <button onClick={()=>editPrinciple(null)} style={{width:"100%",marginTop:10,padding:"9px",borderRadius:10,border:"2px dashed #333",background:"transparent",color:"#888",fontWeight:600,fontSize:13,cursor:"pointer"}}>+ Dodaj zasadę</button>
+                  </div>
+                )}
+
+                {principleForm&&(
+                  <div style={{marginTop:14,background:"#0f0f0f",border:"1px solid #2a2a2a",borderRadius:10,padding:12}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"#aaa",marginBottom:8}}>{principleForm.id?"Edycja zasady":"Nowa zasada"}</div>
+                    <textarea value={principleForm.text} onChange={e=>setPrincipleForm(f=>({...f,text:e.target.value}))} placeholder="Zasada — Twoimi słowami" rows={3} autoFocus
+                      style={{width:"100%",boxSizing:"border-box",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 11px",color:"#fff",fontSize:13.5,lineHeight:1.5,outline:"none",resize:"vertical",fontFamily:"inherit",marginBottom:8}}/>
+                    <input value={principleForm.source} onChange={e=>setPrincipleForm(f=>({...f,source:e.target.value}))} placeholder="Skąd — Epiktet, Aureliusz, „ja do siebie” (opcjonalnie)"
+                      style={{width:"100%",boxSizing:"border-box",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"8px 11px",color:"#fff",fontSize:12.5,outline:"none",marginBottom:8}}/>
+                    <div style={{fontSize:11,color:"#666",marginBottom:6}}>Na jaki stan (pusto = na każdy):</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                      {STATES.map(s=>{const on=principleForm.states.includes(s.key);return(
+                        <button key={s.key} onClick={()=>setPrincipleForm(f=>({...f,states:on?f.states.filter(k=>k!==s.key):[...f.states,s.key]}))} style={chip(on,ACC)}>{s.icon} {s.label}</button>
+                      );})}
+                    </div>
+                    <input value={principleForm.note} onChange={e=>setPrincipleForm(f=>({...f,note:e.target.value}))} placeholder="Dlaczego to u mnie działa (opcjonalnie)"
+                      style={{width:"100%",boxSizing:"border-box",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"8px 11px",color:"#fff",fontSize:12.5,outline:"none",marginBottom:10}}/>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={savePrinciple} disabled={!principleForm.text.trim()} style={{flex:1,background:principleForm.text.trim()?ACC:"#222",color:principleForm.text.trim()?"#000":"#555",border:"none",borderRadius:8,padding:"9px",fontWeight:700,fontSize:13,cursor:"pointer"}}>Zapisz</button>
+                      <button onClick={()=>setPrincipleForm(null)} style={{background:"#222",border:"1px solid #444",borderRadius:8,color:"#aaa",padding:"9px 16px",fontSize:13,cursor:"pointer"}}>Anuluj</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── 2. Check-in ── */}
+              <div style={card}>
+                <div style={{fontSize:15,fontWeight:700,color:"#f1f1f1",marginBottom:3}}>Jak jest teraz?</div>
+                <div style={{fontSize:11.5,color:"#666",marginBottom:12,minHeight:17}}>
+                  {ciState?STATE_MAP[ciState].hint:todayCheckins.length?`Dziś już ${todayCheckins.length}× — możesz dopisać kolejny.`:"Jedno tapnięcie. Po miesiącu zobaczysz wzorzec, którego dziś nie widać."}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(3,1fr)":"repeat(6,1fr)",gap:6,marginBottom:12}}>
+                  {STATES.map(s=>{const on=ciState===s.key;return(
+                    <button key={s.key} onClick={()=>setCiState(on?null:s.key)}
+                      style={{background:on?ACC+"22":"#0f0f0f",border:`1px solid ${on?ACC:"#2a2a2a"}`,borderRadius:10,padding:"9px 4px",cursor:"pointer",
+                        display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                      <span style={{fontSize:18}}>{s.icon}</span>
+                      <span style={{fontSize:11,fontWeight:600,color:on?"#f0f0f0":"#8a8a8a"}}>{s.label}</span>
+                    </button>
+                  );})}
+                </div>
+                {ciState&&(
+                  <div>
+                    <div style={{fontSize:11,color:"#666",marginBottom:6}}>Jak mocno?</div>
+                    <div style={{display:"flex",gap:6,marginBottom:10}}>
+                      {[1,2,3,4,5].map(n=>(
+                        <button key={n} onClick={()=>setCiIntensity(n)}
+                          style={{flex:1,background:ciIntensity===n?ACC:"#0f0f0f",border:`1px solid ${ciIntensity>=n?ACC:"#2a2a2a"}`,borderRadius:8,padding:"8px 0",
+                            color:ciIntensity===n?"#000":ciIntensity>=n?ACC:"#666",fontWeight:700,fontSize:13,cursor:"pointer"}}>{n}</button>
+                      ))}
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#555",marginTop:-6,marginBottom:10,padding:"0 4px"}}><span>ledwo</span><span>nie do zniesienia</span></div>
+                    <div style={{display:"flex",gap:8}}>
+                      <input value={ciNote} onChange={e=>setCiNote(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCheckin()} placeholder="Jedno zdanie, jeśli chcesz (opcjonalnie)"
+                        style={{flex:1,minWidth:0,background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 11px",color:"#fff",fontSize:13,outline:"none"}}/>
+                      <button onClick={addCheckin} style={{background:ACC,color:"#000",border:"none",borderRadius:8,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0}}>Zapisz</button>
+                    </div>
+                  </div>
+                )}
+
+                {checkins.length>0&&(
+                  <div style={{marginTop:16,borderTop:"1px solid #1e1e1e",paddingTop:12}}>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"#666",fontFamily:"monospace",marginBottom:6}}>OSTATNIE 14 DNI</div>
+                    <MeasurementChart rows={checkins.map(c=>({day:c.at,intensity:c.intensity,state:c.state}))} metric="intensity"
+                      isMobile={isMobile} color="#3aa88c" domain={[1,5]} showDelta={false}
+                      labelOf={r=>`${STATE_MAP[r.state]?.icon||""} ${STATE_MAP[r.state]?.label||r.state} · ${plTime(r.day)}`}/>
+                    <div style={{marginTop:8,maxHeight:180,overflowY:"auto"}}>
+                      {[...checkins].reverse().slice(0,20).map(c=>(
+                        <div key={c.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 2px",borderTop:"1px solid #151515",fontSize:12}}>
+                          <span style={{color:"#8a8a8a",fontVariantNumeric:"tabular-nums",flexShrink:0}}>{plDate(c.at)} {plTime(c.at)}</span>
+                          <span style={{color:"#ddd",flexShrink:0}}>{STATE_MAP[c.state]?.icon} {STATE_MAP[c.state]?.label}</span>
+                          <span style={{color:"#3aa88c",fontWeight:700,flexShrink:0}}>{c.intensity}/5</span>
+                          <span style={{color:"#666",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.note||""}</span>
+                          <button onClick={()=>deleteCheckin(c.id)} title="Usuń" style={{background:"none",border:"none",color:"#5a4040",cursor:"pointer",fontSize:12,padding:0,flexShrink:0}}>✕</button>
                         </div>
                       ))}
                     </div>
-                    <div style={{display:"flex",gap:8}}>
-                      <select value={kotwicaEmoji} onChange={e=>setKotwicaEmoji(e.target.value)} style={{background:"#161616",border:"1px solid #333",borderRadius:10,padding:"9px 10px",color:"#fff",fontSize:16,cursor:"pointer",outline:"none"}}>
-                        {["🎵","🏃","💻","🍳","📚","🎮","🌿","🎨","🧘","🚴","✍️","🎸","☕","🌊","🤝","⚡"].map(e=><option key={e}>{e}</option>)}
-                      </select>
-                      <input value={kotwicaInput} onChange={e=>setKotwicaInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addKotwica()} placeholder="Dodaj kotwicę..."
-                        style={{flex:1,background:"#161616",border:"1px solid #333",borderRadius:10,padding:"9px 14px",color:"#fff",fontSize:14,outline:"none"}}/>
-                      <button onClick={addKotwica} style={{background:"#30888a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>Dodaj</button>
-                    </div>
                   </div>
-                </div>
-              );
-            })()}
-            {!dolekLevel&&(
-              <div style={{textAlign:"center",padding:"40px 0",color:"#555"}}>
-                <div style={{fontSize:36,marginBottom:12}}>🧭</div>
-                <p>Wybierz poziom lub kliknij „Zacznij" powyżej</p>
+                )}
               </div>
-            )}
-          </div>
-        )}
+
+              {/* ── 3. Techniki ── */}
+              <div style={card}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:4}}>
+                  <div style={{fontSize:15,fontWeight:700,color:"#f1f1f1"}}>
+                    {st&&!showAllTech?<>Co pomaga przy: <span style={{color:ACC}}>{st.icon} {st.label.toLowerCase()}</span></>:"Techniki"}
+                  </div>
+                  {st&&(
+                    <button onClick={()=>setShowAllTech(v=>!v)} style={{background:"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>
+                      {showAllTech?"Tylko pasujące":"Pokaż wszystkie"}
+                    </button>
+                  )}
+                </div>
+                <div style={{fontSize:11.5,color:"#666",marginBottom:12,lineHeight:1.5}}>
+                  {!st?"Zaznacz stan wyżej, a zostaną te, które przy nim mają sens.":
+                   st.key==="spokoj"&&!showAllTech?"Spokój — nic nie trzeba naprawiać. Dobry moment, żeby zapisać zasadę albo zobaczyć, co ostatnio pomagało.":
+                   st.arousal==="high"?"Wysokie pobudzenie schodzi przez ciało, nie przez perswazję. Zacznij od wyciszenia.":
+                   "Niskie pobudzenie: działanie poprzedza motywację. Małe, zamknięte, teraz."}
+                </div>
+                {GROUPS.map(g=>{
+                  const list=techs.filter(t=>t.group===g.key);
+                  if(!list.length)return null;
+                  return(
+                    <div key={g.key} style={{marginBottom:14}}>
+                      <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:8}}>
+                        <span style={{fontSize:12,fontWeight:700,color:g.color}}>{g.icon} {g.label}</span>
+                        <span style={{fontSize:11,color:"#5a5a5a"}}>{g.desc}</span>
+                      </div>
+                      {list.map(t=>{
+                        const open=!!techExpanded[t.key];
+                        const u=usesOf(t.key);
+                        return(
+                          <div key={t.key} style={{background:"#0f0f0f",border:`1px solid ${open?g.color+"55":"#1e1e1e"}`,boxShadow:`inset 3px 0 0 ${g.color}`,borderRadius:10,padding:"10px 14px",marginBottom:8}}>
+                            <div onClick={()=>setTechExpanded(p=>({...p,[t.key]:!p[t.key]}))} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+                              <span style={{fontSize:20,flexShrink:0}}>{t.icon}</span>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0"}}>{t.name} <span style={{fontSize:11,color:"#666",fontWeight:400}}>· {t.time}</span></div>
+                                <div style={{fontSize:11,color:"#6a6a6a",marginTop:2}}>
+                                  {u?`użyta ${u.count}× w 30 dni · ostatnio ${plDate(u.lastAt)}`:"jeszcze nieużyta"}
+                                </div>
+                              </div>
+                              <span style={{color:"#555",fontSize:12,flexShrink:0}}>{open?"▲":"▼"}</span>
+                            </div>
+                            {open&&(
+                              <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e1e1e"}}>
+                                <div style={{fontSize:12.5,color:"#aaa",lineHeight:1.6,marginBottom:10}}>{t.desc}</div>
+                                <ol style={{margin:"0 0 12px",paddingLeft:20,fontSize:12.5,color:"#ddd",lineHeight:1.7}}>
+                                  {t.steps.map((s,i)=><li key={i}>{s}</li>)}
+                                </ol>
+                                <button onClick={()=>useTechnique(t.key)} style={{background:g.color+"22",border:`1px solid ${g.color}`,borderRadius:999,padding:"6px 16px",color:g.color,fontSize:12,fontWeight:700,cursor:"pointer"}}>✓ Zrobiłem</button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── 4. Kotwice ── */}
+              <div style={{...card,border:"1px solid #30888a44"}}>
+                <div style={{fontSize:15,fontWeight:700,color:"#f1f1f1",marginBottom:3}}>⚓ Kotwice</div>
+                <div style={{fontSize:11.5,color:"#666",marginBottom:12,lineHeight:1.5}}>Rzeczy, które historycznie pomagały — nawet trochę. Ochota pojawia się w trakcie, nie przed.</div>
+                {kotwice.length===0&&<div style={{fontSize:12.5,color:"#555",fontStyle:"italic",marginBottom:10}}>Nie masz jeszcze żadnych kotwic — dodaj pierwszą poniżej.</div>}
+                {kotwice.map(k=>(
+                  <div key={k.id} style={{display:"flex",alignItems:"center",gap:10,background:"#0f0f0f",border:"1px solid #1e1e1e",borderRadius:10,padding:"8px 12px",marginBottom:6}}>
+                    <span style={{fontSize:18}}>{k.emoji}</span>
+                    <span style={{flex:1,fontSize:13,color:"#ddd"}}>{k.label}</span>
+                    <button onClick={()=>delKotwica(k.id)} title="Usuń" style={{background:"none",border:"none",cursor:"pointer",color:"#5a4040",fontSize:14,padding:"2px 4px"}}>✕</button>
+                  </div>
+                ))}
+                <div style={{display:"flex",gap:8,marginTop:8}}>
+                  <select value={kotwicaEmoji} onChange={e=>setKotwicaEmoji(e.target.value)} style={{background:"#0f0f0f",border:"1px solid #333",borderRadius:10,padding:"9px 10px",color:"#fff",fontSize:16,cursor:"pointer",outline:"none"}}>
+                    {["🎵","🎸","📚","🎮","🚶","🏋️","🎨","🍳","🌳","☕","🎬","🧩","🐟"].map(e=><option key={e} value={e}>{e}</option>)}
+                  </select>
+                  <input value={kotwicaInput} onChange={e=>setKotwicaInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addKotwica()} placeholder="Dodaj kotwicę…"
+                    style={{flex:1,minWidth:0,background:"#0f0f0f",border:"1px solid #333",borderRadius:10,padding:"9px 12px",color:"#fff",fontSize:13,outline:"none"}}/>
+                  <button onClick={addKotwica} style={{background:"#30888a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>Dodaj</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {modal&&(

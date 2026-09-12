@@ -64,6 +64,17 @@ export const api = {
   addMeasurement: body => request("/measurements", { method: "POST", body }),
   deleteMeasurement: id => request(`/measurements/${id}`, { method: "DELETE" }),
 
+  principles: () => request("/stability/principles"),
+  addPrinciple: body => request("/stability/principles", { method: "POST", body }),
+  patchPrinciple: (id, body) => request(`/stability/principles/${id}`, { method: "PATCH", body }),
+  deletePrinciple: id => request(`/stability/principles/${id}`, { method: "DELETE" }),
+  seedPrinciples: () => request("/stability/principles/seed", { method: "POST" }),
+  checkins: days => request(`/stability/checkins?${qs({ days })}`),
+  addCheckin: body => request("/stability/checkins", { method: "POST", body }),
+  deleteCheckin: id => request(`/stability/checkins/${id}`, { method: "DELETE" }),
+  techniqueUses: days => request(`/stability/uses?${qs({ days })}`),
+  addTechniqueUse: technique => request("/stability/uses", { method: "POST", body: { technique } }),
+
   avoid: () => request("/avoid"),
   addAvoid: body => request("/avoid", { method: "POST", body }),
   patchAvoid: (id, body) => request(`/avoid/${id}`, { method: "PATCH", body }),
