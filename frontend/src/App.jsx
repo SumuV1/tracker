@@ -33,7 +33,6 @@ const CATEGORIES = [
   { label: "Mindfulness", color: "#c084fc", bg: "#1a0a2e" },
   { label: "Osobiste", color: "#fb923c", bg: "#2e1200" },
 ];
-const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.label, c]));
 const DAY_LABELS = ["N","P","W","Ś","C","P","S"];
 const MONTHS_PL = ["Sty","Lut","Mar","Kwi","Maj","Cze","Lip","Sie","Wrz","Paź","Lis","Gru"];
 // Paleta składników odżywczych. Kolejność slotów jest zwalidowana skryptem
@@ -1216,6 +1215,44 @@ export default function App() {
     setKotwice(k=>k.filter(x=>x.id!==id));
   });
 
+  // ── Historia pomiarów ──
+  const addMeasurement=()=>run(async()=>{
+    const {day,weight,neck,waist,hips}=measForm;
+    if(!day)return;
+    await api.addMeasurement({day,weightKg:weight,neckCm:neck,waistCm:waist,hipsCm:hips});
+    setMeasurements(await api.measurements());
+    // Pomiar z dzisiaj serwer przepisuje też do profilu — dociągamy go, żeby
+    // formularz obok nie pokazywał starych liczb.
+    if(day===today())setServerProfile(await api.profile());
+    setMeasForm({day:"",weight:"",neck:"",waist:"",hips:""});setShowMeasForm(false);
+  });
+  const deleteMeasurement=id=>run(async()=>{
+    await api.deleteMeasurement(id);
+    setMeasurements(m=>m.filter(x=>x.id!==id));
+  });
+
+  // ── Lista niewolnika ──
+  const addAvoid=()=>run(async()=>{
+    if(!avoidName.trim())return;
+    const it=await api.addAvoid({name:avoidName.trim(),note:avoidNote.trim()});
+    setAvoidItems(l=>[...l,it]);
+    setAvoidName("");setAvoidNote("");setShowAvoidForm(false);
+  });
+  const startEditAvoid=it=>{
+    setEditAvoidId(it.id);setEditAvoidVal(it.name);setEditAvoidNote(it.note||"");
+  };
+  const saveAvoid=id=>run(async()=>{
+    if(!editAvoidVal.trim()){setEditAvoidId(null);return;}
+    // Notatkę wysyłamy zawsze — wyczyszczone pole ma ją skasować, a nie zostawić.
+    const it=await api.patchAvoid(id,{name:editAvoidVal.trim(),note:editAvoidNote.trim()});
+    setAvoidItems(l=>l.map(x=>x.id===id?it:x));
+    setEditAvoidId(null);
+  });
+  const deleteAvoid=id=>run(async()=>{
+    await api.deleteAvoid(id);
+    setAvoidItems(l=>l.filter(x=>x.id!==id));
+  });
+
   // Zasady
   const savePrinciple=()=>run(async()=>{
     const f=principleForm;
@@ -1392,8 +1429,8 @@ export default function App() {
   const getWeeklyRate=id=>{const d=getLast7();return Math.round((d.filter(x=>habitLogs[`${id}_${x}`]).length/7)*100);};
   const getView=id=>progressView[id]||"7dni";
   const setView=(id,v)=>setProgressView(p=>({...p,[id]:v}));
-  // Nawyk z nieznaną kategorią trafia do pierwszego kafla — tak samo, jak
-  // CAT_MAP domyśla się dla niego koloru.
+  // Nawyk z nieznaną kategorią trafia do pierwszego kafla — nie ma własnego
+  // koloru, więc dostaje kolor tego kafla.
   const habitsByCat=Object.fromEntries(CATEGORIES.map(c=>[c.label,[]]));
   const sortedHabits=[...habits].sort((a,b)=>{
     const at=a.reminderTime,bt=b.reminderTime;
