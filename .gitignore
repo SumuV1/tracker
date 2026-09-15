@@ -5,3 +5,6 @@ dist/
 
 # Zrzuty bazy — zostają na hoście, do repo nie trafiają
 backups/
+
+# Lokalne uprawnienia Claude Code — nie do repo
+.claude/settings.local.json
