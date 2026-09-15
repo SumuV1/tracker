@@ -52,7 +52,11 @@ const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES = ["00","15","30","45"];
 const TILE = 36;
 
-const toISO = d => d.toISOString().slice(0, 10);
+// Data LOKALNA, nie UTC. `toISOString()` cofa dzień o jeden na wschód od
+// Greenwich przy każdej dacie z północy lokalnej — w Polsce wrzesień zaczynał
+// się od 31 sierpnia, a strzałka „następny dzień" stała w miejscu. Na serwerze
+// (UTC) tego nie widać, dlatego przeszło przez wszystkie testy.
+const toISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const today = () => toISO(new Date());
 const getLast7 = () => { const a=[]; for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);a.push(toISO(d));} return a; };
 const getDaysInMonth = (y,m) => { const a=[],d=new Date(y,m,1); while(d.getMonth()===m){a.push(toISO(d));d.setDate(d.getDate()+1);} return a; };
@@ -87,6 +91,44 @@ const ACTIVITY = [
   {factor:1.9,   label:"ekstremalnie aktywny", option:"🏋️ Ekstremalnie aktywny"},
 ];
 
+
+// ── Przyciski dotykowe ────────────────────────────────────────────────────
+// Ikona ma 24–28 px, ale cel dotyku 44 px na telefonie (32 na desktopie):
+// przycisk jest przezroczysty i większy niż to, co widać. Wcześniej kciuk
+// trafiający obok 24-pikselowego ✕ wchodził w edycję nazwy, a trafiający w ✕
+// kasował bez pytania. Skill mobile-web-design, Krok 3.
+function IconBtn({onClick,title,children,size=26,bg="#222",border="#333",color="#aaa",disabled=false,style}){
+  const hit=useMedia(MOBILE)?44:32;
+  return(
+    <button type="button" onClick={e=>{e.stopPropagation();if(!disabled)onClick?.(e);}} title={title} aria-label={title} disabled={disabled}
+      style={{width:hit,height:hit,minWidth:hit,background:"none",border:"none",padding:0,margin:0,display:"flex",
+        alignItems:"center",justifyContent:"center",cursor:disabled?"not-allowed":"pointer",flexShrink:0,...style}}>
+      <span style={{width:size,height:size,borderRadius:7,background:bg,border:`1px solid ${border}`,color,fontSize:size<24?11:12,
+        display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>{children}</span>
+    </button>
+  );
+}
+
+// Kasowanie w dwóch krokach: pierwsze tapnięcie zamienia ✕ w „Na pewno?",
+// drugie kasuje, cztery sekundy bez decyzji cofają do ✕. Żadnego okna dialogowego
+// — potwierdzenie jest w tym samym miejscu, w które kciuk już celuje.
+function DeleteBtn({onDelete,title="Usuń",size=26}){
+  const [armed,setArmed]=useState(false);
+  const hit=useMedia(MOBILE)?44:32;
+  useEffect(()=>{
+    if(!armed)return;
+    const t=setTimeout(()=>setArmed(false),4000);
+    return()=>clearTimeout(t);
+  },[armed]);
+  if(armed)return(
+    <button type="button" onClick={e=>{e.stopPropagation();setArmed(false);onDelete();}}
+      style={{height:hit,minWidth:hit,padding:"0 12px",background:"#6b2020",border:"1px solid #f87171",borderRadius:8,
+        color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+      Na pewno?
+    </button>
+  );
+  return <IconBtn onClick={()=>setArmed(true)} title={title} size={size} bg="#3a1a1a" border="#6b2020" color="#f87171">✕</IconBtn>;
+}
 
 // Wzory pod wynikami. Wszystkie liczby — łącznie z PPM i współczynnikiem —
 // pochodzą z odpowiedzi serwera, więc działanie nie może rozminąć się z wynikiem.
@@ -754,7 +796,10 @@ function BodySVG({selected,hovered,onHover,onClick,layer,viewBox=BODY_VIEW.both,
   );
 }
 
-function ExercisePanel({muscleId,onClose}){
+// `sheet`: na telefonie panel nie siedzi w kolumnie obok sylwetki (której tam
+// nie ma — sylwetka ma ~1100 px wysokości i panel lądował poza ekranem), tylko
+// wjeżdża od dołu nad wszystkim, jak okno dodawania produktu.
+function ExercisePanel({muscleId,onClose,sheet=false}){
   const m=MUSCLES[muscleId];
   if(!m)return null;
   const machine=m.exercises.filter(e=>e.icon==="⚙️");
@@ -777,7 +822,10 @@ function ExercisePanel({muscleId,onClose}){
     </div>
   );
   return(
-    <div style={{position:"absolute",inset:0,background:"#0f1117",borderRadius:14,display:"flex",flexDirection:"column",zIndex:10,overflow:"hidden"}}>
+    <div style={sheet
+      ?{background:"#0f1117",borderRadius:"20px 20px 0 0",display:"flex",flexDirection:"column",maxHeight:"85vh",overflow:"hidden",
+        paddingBottom:"env(safe-area-inset-bottom)"}
+      :{position:"absolute",inset:0,background:"#0f1117",borderRadius:14,display:"flex",flexDirection:"column",zIndex:10,overflow:"hidden"}}>
       <div style={{background:m.color+"22",borderBottom:`1px solid ${m.color}44`,padding:"16px 20px 14px",flexShrink:0}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
           <div>
@@ -785,11 +833,11 @@ function ExercisePanel({muscleId,onClose}){
             <div style={{fontSize:17,fontWeight:700,color:"#f0f0f0",lineHeight:1.25}}>{m.name}</div>
             <div style={{fontSize:11,color:"#888",fontStyle:"italic",marginTop:2}}>{m.latin}</div>
           </div>
-          <button onClick={onClose} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:8,color:"#aaa",cursor:"pointer",fontSize:18,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginLeft:12}}>×</button>
+          <button onClick={onClose} aria-label="Zamknij" style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,color:"#aaa",cursor:"pointer",fontSize:20,width:sheet?44:32,height:sheet?44:32,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginLeft:12}}>×</button>
         </div>
         <div style={{marginTop:10,fontSize:11.5,color:"#bbb",lineHeight:1.55}}><span style={{color:"#777",fontSize:10,fontWeight:600,letterSpacing:"0.08em"}}>FUNKCJA — </span>{m.function}</div>
       </div>
-      <div style={{overflowY:"auto",flex:1,padding:"14px 16px 20px"}}>
+      <div style={{overflowY:"auto",flex:1,minHeight:0,padding:"14px 16px 20px"}}>
         {machine.length>0&&renderGroup(machine,"NA MASZYNACH","⚙️")}
         {free.length>0&&renderGroup(free,"BEZ MASZYN","🤸")}
       </div>
@@ -853,7 +901,7 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
         {day.support.length>0&&<div style={{fontSize:10.5,color:"#666",marginTop:8}}>Wypełnione — partia dnia. Obrysowane — mięśnie wspomagające.</div>}
       </div>
       <div style={{padding:"6px 16px",borderBottom:"1px solid #1e2130",fontSize:11,color:hm?hm.color:"#444",flexShrink:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-        {hm?<>● {hm.name} — kliknij, aby zobaczyć ćwiczenia</>:<>Kliknij mięsień na sylwetce lub etykietę powyżej</>}
+        {hm?<>● {hm.name} — {isMobile?"dotknij":"kliknij"}, aby zobaczyć ćwiczenia</>:<>{isMobile?"Dotknij":"Kliknij"} mięsień na sylwetce lub etykietę powyżej</>}
       </div>
       <div style={{overflowY:isMobile?"visible":"auto",flex:1,padding:"12px 16px 18px"}}>
         {day.intro&&noteBox(day.intro)}
@@ -923,6 +971,13 @@ function MuscleMap({profile}){
     setDayKey(todayKey());setShowRules(false);
     setSelected(null);setHovered(null);
   };
+  // Otwarty arkusz nie może przepuszczać przewijania do strony pod spodem.
+  useEffect(()=>{
+    if(!(isMobile&&selected))return;
+    const prev=document.body.style.overflow;
+    document.body.style.overflow="hidden";
+    return()=>{document.body.style.overflow=prev;};
+  },[isMobile,selected]);
   const pickMuscle=id=>{
     setLayer(MUSCLE_LAYER[id]);
     setSelected(id);setHovered(null);
@@ -1042,7 +1097,7 @@ function MuscleMap({profile}){
             <BodySVG viewBox={viewBox} layer={layer} plan={planHl} selected={selected} hovered={hovered} onHover={setHovered} onClick={id=>setSelected(p=>p===id?null:id)}/>
           </div>
         </div>
-        <div style={{flex:"1 1 260px",minWidth:0,minHeight:selected?460:isMobile?0:460,background:"#13161f",border:`1px solid ${selected?MUSCLES[selected]?.color+"55":day?(MUSCLES[day.primary[0]]?.color||"#5DCAA5")+"44":"#1e2130"}`,borderRadius:14,position:"relative",overflow:"hidden"}}>
+        <div style={{flex:"1 1 260px",minWidth:0,minHeight:isMobile?0:460,background:"#13161f",border:`1px solid ${selected?MUSCLES[selected]?.color+"55":day?(MUSCLES[day.primary[0]]?.color||"#5DCAA5")+"44":"#1e2130"}`,borderRadius:14,position:"relative",overflow:"hidden"}}>
           {!selected&&day&&(
             <PlanDayPanel plan={plan} dayKey={dayKey} day={day} age={profile?.ageYears??null}
               hovered={hovered} onPickMuscle={pickMuscle} isMobile={isMobile}/>
@@ -1071,9 +1126,17 @@ function MuscleMap({profile}){
               )}
             </div>
           )}
-          {selected&&<ExercisePanel muscleId={selected} onClose={()=>setSelected(null)}/>}
+          {selected&&!isMobile&&<ExercisePanel muscleId={selected} onClose={()=>setSelected(null)}/>}
         </div>
       </div>
+      {isMobile&&selected&&(
+        <div onClick={e=>{if(e.target===e.currentTarget)setSelected(null);}}
+          style={{position:"fixed",inset:0,zIndex:998,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"flex-end"}}>
+          <div style={{width:"100%"}}>
+            <ExercisePanel sheet muscleId={selected} onClose={()=>setSelected(null)}/>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1530,17 +1593,19 @@ export default function App() {
     const open=!!expandedHabit[habit.id];
     const view=getView(habit.id);
     const isEditingTime=editTimeId===habit.id;
-    const smallBtn={borderRadius:6,cursor:"pointer",fontSize:11,width:24,height:24,
-      display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0};
     return(
       <div key={habit.id} style={{background:"#161616",border:`1px solid ${checked?cat.color+"44":"#1e1e1e"}`,
         borderRadius:12,padding:"10px 11px",marginBottom:8,transition:"border-color 0.2s"}}>
         <div style={{display:"flex",alignItems:"flex-start",gap:9}}>
-          <button onClick={()=>toggleHabit(habit.id,todayStr)}
-            style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${cat.color}`,padding:0,
-              background:checked?cat.color:"transparent",cursor:"pointer",flexShrink:0,marginTop:1,
+          {/* Główna akcja aplikacji. Kółko zostaje 24 px, ale przycisk pod nim
+              ma pełny cel dotyku — kciuk obok kółka nie może wchodzić w edycję nazwy. */}
+          <button type="button" onClick={()=>toggleHabit(habit.id,todayStr)} aria-label={checked?"Odznacz":"Odhacz"} aria-pressed={checked}
+            style={{width:isMobile?44:32,height:isMobile?44:32,margin:isMobile?"-10px -6px -10px -10px":"-4px -2px -4px -4px",background:"none",border:"none",padding:0,
+              cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${cat.color}`,background:checked?cat.color:"transparent",
               display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.2s"}}>
-            {checked&&<span style={{color:"#000",fontSize:12,fontWeight:700}}>✓</span>}
+              {checked&&<span style={{color:"#000",fontSize:12,fontWeight:700}}>✓</span>}
+            </span>
           </button>
           <div style={{flex:1,minWidth:0}}>
             {editNameId===habit.id?(
@@ -1549,8 +1614,8 @@ export default function App() {
                   onChange={e=>setEditNameVal(e.target.value)}
                   onKeyDown={e=>{if(e.key==="Enter")updateName(habit.id,editNameVal);if(e.key==="Escape")setEditNameId(null);}}
                   style={{flex:1,minWidth:0,background:"#0a0a0a",border:`1px solid ${cat.color}`,borderRadius:6,padding:"4px 8px",color:"#fff",fontSize:13,fontWeight:600,outline:"none"}}/>
-                <button onClick={()=>updateName(habit.id,editNameVal)} style={{...smallBtn,background:"#1a3a1a",border:"1px solid #2d6b20",color:"#86efac"}}>✓</button>
-                <button onClick={()=>setEditNameId(null)} style={{...smallBtn,background:"#222",border:"1px solid #444",color:"#aaa"}}>✕</button>
+                <IconBtn onClick={()=>updateName(habit.id,editNameVal)} title="Zapisz nazwę" size={24} bg="#1a3a1a" border="#2d6b20" color="#86efac">✓</IconBtn>
+                <IconBtn onClick={()=>setEditNameId(null)} title="Anuluj" size={24} bg="#222" border="#444" color="#aaa">✕</IconBtn>
               </div>
             ):(
               <div onClick={()=>{setEditNameId(habit.id);setEditNameVal(habit.name);}} title="Kliknij, aby zmienić nazwę"
@@ -1566,8 +1631,7 @@ export default function App() {
               </button>
             </div>
           </div>
-          <button onClick={()=>deleteHabit(habit.id)} title="Usuń nawyk"
-            style={{...smallBtn,background:"#3a1a1a",border:"1px solid #6b2020",color:"#f87171"}}>✕</button>
+          <DeleteBtn onDelete={()=>deleteHabit(habit.id)} title="Usuń nawyk" size={24}/>
         </div>
         {isEditingTime&&(
           <div style={{marginTop:9}}>
@@ -1625,26 +1689,21 @@ export default function App() {
   // Przyciski wpisu — albo edycja gramatury w miejscu, albo ołówek i kosz.
   // Ta sama funkcja obsługuje wiersz pojedynczego produktu i wpis rozwinięty
   // z grupy, żeby oba zachowywały się identycznie.
-  const iconBtn={borderRadius:7,cursor:"pointer",fontSize:13,width:28,height:28,
-    display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0};
   const entryActions=e=>editGramsId===e.id?(
-    <div style={{display:"flex",alignItems:"center",gap:6}}>
+    <div style={{display:"flex",alignItems:"center",gap:4}}>
       <input autoFocus type="number" step="any" min={0} inputMode="decimal" value={editGramsVal}
         onChange={ev=>setEditGramsVal(ev.target.value)}
         onKeyDown={ev=>{if(ev.key==="Enter")saveGrams(e.id);if(ev.key==="Escape")setEditGramsId(null);}}
         style={{width:72,padding:"5px 8px",borderRadius:7,border:"1px solid #444",background:"#0a0a0a",color:"#fff",fontSize:13,outline:"none"}}/>
-      <span style={{fontSize:11,color:"#666"}}>g</span>
-      <button onClick={()=>saveGrams(e.id)} disabled={!(Number(editGramsVal)>0)}
-        style={{...iconBtn,background:Number(editGramsVal)>0?"#14351f":"#222",border:`1px solid ${Number(editGramsVal)>0?"#2f6b40":"#333"}`,
-          color:Number(editGramsVal)>0?"#4ade80":"#555",cursor:Number(editGramsVal)>0?"pointer":"not-allowed"}}>✓</button>
-      <button onClick={()=>setEditGramsId(null)} style={{...iconBtn,background:"#222",border:"1px solid #333",color:"#999"}}>✕</button>
+      <span style={{fontSize:11,color:"#8a8a8a"}}>g</span>
+      <IconBtn onClick={()=>saveGrams(e.id)} title="Zapisz gramaturę" disabled={!(Number(editGramsVal)>0)}
+        bg={Number(editGramsVal)>0?"#14351f":"#222"} border={Number(editGramsVal)>0?"#2f6b40":"#333"} color={Number(editGramsVal)>0?"#4ade80":"#555"}>✓</IconBtn>
+      <IconBtn onClick={()=>setEditGramsId(null)} title="Anuluj" bg="#222" border="#333" color="#999">✕</IconBtn>
     </div>
   ):(
     <>
-      <button onClick={()=>{setEditGramsId(e.id);setEditGramsVal(String(e.grams));}} title="Zmień gramaturę"
-        style={{...iconBtn,background:"#1c2030",border:"1px solid #2f3550",color:"#8fa6e8"}}>✎</button>
-      <button onClick={()=>removeEntry(e.id)} title="Usuń wpis"
-        style={{...iconBtn,background:"#3a1a1a",border:"1px solid #6b2020",color:"#f87171"}}>✕</button>
+      <IconBtn onClick={()=>{setEditGramsId(e.id);setEditGramsVal(String(e.grams));}} title="Zmień gramaturę" bg="#1c2030" border="#2f3550" color="#8fa6e8">✎</IconBtn>
+      <DeleteBtn onDelete={()=>removeEntry(e.id)} title="Usuń wpis"/>
     </>
   );
 
@@ -1850,8 +1909,8 @@ export default function App() {
                             onChange={e=>setEditAvoidVal(e.target.value)}
                             onKeyDown={e=>{if(e.key==="Enter")saveAvoid(it.id);if(e.key==="Escape")setEditAvoidId(null);}}
                             style={{flex:1,minWidth:0,background:"#0a0a0a",border:"1px solid #b03b3b",borderRadius:6,padding:"4px 8px",color:"#fff",fontSize:13,fontWeight:600,outline:"none"}}/>
-                          <button onClick={()=>saveAvoid(it.id)} style={{background:"#1a3a1a",border:"1px solid #2d6b20",borderRadius:6,color:"#86efac",cursor:"pointer",fontSize:11,width:24,height:24,flexShrink:0}}>✓</button>
-                          <button onClick={()=>setEditAvoidId(null)} style={{background:"#222",border:"1px solid #444",borderRadius:6,color:"#aaa",cursor:"pointer",fontSize:11,width:24,height:24,flexShrink:0}}>✕</button>
+                          <IconBtn onClick={()=>saveAvoid(it.id)} title="Zapisz" size={24} bg="#1a3a1a" border="#2d6b20" color="#86efac">✓</IconBtn>
+                          <IconBtn onClick={()=>setEditAvoidId(null)} title="Anuluj" size={24} bg="#222" border="#444" color="#aaa">✕</IconBtn>
                         </div>
                         <input value={editAvoidNote} placeholder="Dlaczego (opcjonalnie)"
                           onChange={e=>setEditAvoidNote(e.target.value)}
@@ -1868,9 +1927,7 @@ export default function App() {
                       </>
                     )}
                   </div>
-                  <button onClick={()=>deleteAvoid(it.id)} title="Usuń z listy"
-                    style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:6,color:"#f87171",cursor:"pointer",
-                      fontSize:11,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+                  <DeleteBtn onDelete={()=>deleteAvoid(it.id)} title="Usuń z listy" size={24}/>
                 </div>
               ))}
 
@@ -2058,21 +2115,20 @@ export default function App() {
                   {measurements.length>0&&(
                     <div style={{marginTop:16,borderTop:"1px solid #1e1e1e",paddingTop:12}}>
                       {/* Widok tabelaryczny — każda liczba z wykresu jest też do odczytania tekstem. */}
-                      <div style={{display:"grid",gridTemplateColumns:"minmax(88px,1fr) repeat(3,minmax(52px,1fr)) 28px",
+                      <div style={{display:"grid",gridTemplateColumns:"minmax(88px,1fr) repeat(3,minmax(52px,1fr)) auto",
                         gap:8,fontSize:10,color:"#666",fontWeight:700,letterSpacing:"0.06em",padding:"0 2px 6px"}}>
                         <span>DATA</span><span style={{textAlign:"right"}}>WAGA</span>
                         <span style={{textAlign:"right"}}>TALIA</span><span style={{textAlign:"right"}}>TK. TŁ.</span><span/>
                       </div>
                       <div style={{maxHeight:200,overflowY:"auto"}}>
                         {[...measurements].reverse().map(r=>(
-                          <div key={r.id} style={{display:"grid",gridTemplateColumns:"minmax(88px,1fr) repeat(3,minmax(52px,1fr)) 28px",
+                          <div key={r.id} style={{display:"grid",gridTemplateColumns:"minmax(88px,1fr) repeat(3,minmax(52px,1fr)) auto",
                             gap:8,alignItems:"center",padding:"5px 2px",borderTop:"1px solid #151515",fontSize:12,fontVariantNumeric:"tabular-nums"}}>
                             <span style={{color:"#bbb"}}>{plDate(r.day)}</span>
                             <span style={{textAlign:"right",color:"#e8e8e8"}}>{r.weightKg!=null?`${r.weightKg} kg`:"—"}</span>
                             <span style={{textAlign:"right",color:"#8a8a8a"}}>{r.waistCm!=null?`${r.waistCm} cm`:"—"}</span>
                             <span style={{textAlign:"right",color:"#8a8a8a"}}>{r.bodyFatPct!=null?`${String(r.bodyFatPct).replace(".",",")} %`:"—"}</span>
-                            <button onClick={()=>deleteMeasurement(r.id)} title="Usuń pomiar"
-                              style={{background:"none",border:"none",color:"#5a4040",cursor:"pointer",fontSize:12,padding:0}}>✕</button>
+                            <DeleteBtn onDelete={()=>deleteMeasurement(r.id)} title="Usuń pomiar" size={22}/>
                           </div>
                         ))}
                       </div>
@@ -2281,8 +2337,8 @@ export default function App() {
                             {(p.states||[]).map(k=><span key={k} style={{fontSize:10,color:"#8a8a8a",background:"#0f0f0f",border:"1px solid #2a2a2a",borderRadius:10,padding:"1px 7px"}}>{STATE_MAP[k]?.icon} {STATE_MAP[k]?.label}</span>)}
                           </div>
                         </div>
-                        <button onClick={()=>editPrinciple(p)} title="Edytuj" style={{background:"#1c2030",border:"1px solid #2f3550",borderRadius:6,color:"#8fa6e8",cursor:"pointer",fontSize:11,width:24,height:24,flexShrink:0}}>✎</button>
-                        <button onClick={()=>deletePrinciple(p.id)} title="Usuń" style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:6,color:"#f87171",cursor:"pointer",fontSize:11,width:24,height:24,flexShrink:0}}>✕</button>
+                        <IconBtn onClick={()=>editPrinciple(p)} title="Edytuj" size={24} bg="#1c2030" border="#2f3550" color="#8fa6e8">✎</IconBtn>
+                        <DeleteBtn onDelete={()=>deletePrinciple(p.id)} title="Usuń zasadę" size={24}/>
                       </div>
                     ))}
                     <button onClick={()=>editPrinciple(null)} style={{width:"100%",marginTop:10,padding:"9px",borderRadius:10,border:"2px dashed #333",background:"transparent",color:"#888",fontWeight:600,fontSize:13,cursor:"pointer"}}>+ Dodaj zasadę</button>
@@ -2360,7 +2416,7 @@ export default function App() {
                           <span style={{color:"#ddd",flexShrink:0}}>{STATE_MAP[c.state]?.icon} {STATE_MAP[c.state]?.label}</span>
                           <span style={{color:"#3aa88c",fontWeight:700,flexShrink:0}}>{c.intensity}/5</span>
                           <span style={{color:"#666",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.note||""}</span>
-                          <button onClick={()=>deleteCheckin(c.id)} title="Usuń" style={{background:"none",border:"none",color:"#5a4040",cursor:"pointer",fontSize:12,padding:0,flexShrink:0}}>✕</button>
+                          <DeleteBtn onDelete={()=>deleteCheckin(c.id)} title="Usuń wpis" size={22}/>
                         </div>
                       ))}
                     </div>
@@ -2436,7 +2492,7 @@ export default function App() {
                   <div key={k.id} style={{display:"flex",alignItems:"center",gap:10,background:"#0f0f0f",border:"1px solid #1e1e1e",borderRadius:10,padding:"8px 12px",marginBottom:6}}>
                     <span style={{fontSize:18}}>{k.emoji}</span>
                     <span style={{flex:1,fontSize:13,color:"#ddd"}}>{k.label}</span>
-                    <button onClick={()=>delKotwica(k.id)} title="Usuń" style={{background:"none",border:"none",cursor:"pointer",color:"#5a4040",fontSize:14,padding:"2px 4px"}}>✕</button>
+                    <DeleteBtn onDelete={()=>delKotwica(k.id)} title="Usuń kotwicę" size={24}/>
                   </div>
                 ))}
                 <div style={{display:"flex",gap:8,marginTop:8}}>
@@ -2554,13 +2610,8 @@ export default function App() {
                   </div>
                   <div style={{textAlign:"right",fontSize:11,display:"flex",alignItems:"center",gap:8}}>
                     <div><div style={{fontWeight:700,color:NUTRIENT.kcal}}>{f.kcal} kcal</div><div style={{color:"#555"}}>B:{f.proteinG}g W:{f.carbsG}g T:{f.fatG}g</div></div>
-                    {f.source==="custom"&&(
-                      <button onClick={e=>{e.stopPropagation();startEditFood(f);}} title="Edytuj produkt"
-                        style={{background:editFoodId===f.id?"#2a1a3a":"#1c2030",border:`1px solid ${editFoodId===f.id?"#c084fc":"#2f3550"}`,borderRadius:6,
-                          color:editFoodId===f.id?"#c084fc":"#8fa6e8",cursor:"pointer",fontSize:12,width:26,height:26,
-                          display:"flex",alignItems:"center",justifyContent:"center"}}>✎</button>
-                    )}
-                    {f.source==="custom"&&<button onClick={e=>{e.stopPropagation();deleteCustomFood(f.id);}} title="Usuń produkt" style={{background:"#3a1a1a",border:"1px solid #6b2020",borderRadius:6,color:"#f87171",cursor:"pointer",fontSize:12,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
+                    {f.source==="custom"&&<IconBtn onClick={()=>startEditFood(f)} title="Edytuj produkt" bg={editFoodId===f.id?"#2a1a3a":"#1c2030"} border={editFoodId===f.id?"#c084fc":"#2f3550"} color={editFoodId===f.id?"#c084fc":"#8fa6e8"}>✎</IconBtn>}
+                    {f.source==="custom"&&<DeleteBtn onDelete={()=>deleteCustomFood(f.id)} title="Usuń produkt"/>}
                   </div>
                 </div>
               ))}

@@ -180,6 +180,19 @@ Cały interfejs w jednym komponencie. Warstwa danych trzyma się kilku zasad:
   (`foodId` = `null`) sama nazwa.
 - **Wzorów nie ma po stronie przeglądarki.** BMI, PPM i CPM przychodzą razem
   z profilem; komponent je wyłącznie wyświetla.
+- **Daty są lokalne, nigdy z `toISOString()`.** Ta metoda oddaje dzień w UTC,
+  więc każda data z lokalnej północy cofa się o jeden na wschód od Greenwich —
+  w Polsce wrzesień zaczynał się od 31 sierpnia, a strzałka „następny dzień"
+  w liczniku stała w miejscu. Na serwerze (UTC) tego nie widać, dlatego przeszło
+  przez wszystkie testy; `toISO` składa datę z `getFullYear/getMonth/getDate`.
+- **Kasowanie jest dwustopniowe, a ikony mają cel dotyku 44 px.** `DeleteBtn`
+  zamienia ✕ w „Na pewno?" na cztery sekundy; `IconBtn` rysuje ikonę 24–28 px na
+  przezroczystym przycisku 44 px (32 na desktopie). Jeden nietrafiony tap nie
+  może już skasować nawyku z wielomiesięczną serią.
+- **Na telefonie panel ćwiczeń wjeżdża od dołu.** Sylwetka ma tam ~1100 px
+  wysokości; panel w kolumnie obok lądował poza ekranem i tapnięcie mięśnia
+  wyglądało na zignorowane. Sylwetki celowo nie zmniejszono: przy 70 vh biceps
+  miałby ~20 px szerokości.
 
 #### Wykres pomiarów
 
