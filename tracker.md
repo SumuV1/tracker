@@ -189,6 +189,15 @@ Cały interfejs w jednym komponencie. Warstwa danych trzyma się kilku zasad:
   zamienia ✕ w „Na pewno?" na cztery sekundy; `IconBtn` rysuje ikonę 24–28 px na
   przezroczystym przycisku 44 px (32 na desktopie). Jeden nietrafiony tap nie
   może już skasować nawyku z wielomiesięczną serią.
+- **Tekst wtórny ma trzy tokeny (`INK.faint/muted/soft`) i żadnych innych
+  szarości.** Policzone WCAG na najjaśniejszym tle karty: 5,2 / 6,4 / 7,8:1.
+  Wcześniej `#555` dawało 2,4:1, a `#444` 1,9:1 — w słońcu nieczytelne, mimo że
+  palety wykresów były walidowane. Ramki i tła mogą być ciemniejsze; tekst nie.
+- **Wygasła sesja wraca do ekranu logowania z wyjaśnieniem**, a nie do banera
+  „unauthorized"; `run` blokuje podwójny zapis przez `useRef`, bo stan `saving`
+  aktualizuje się dopiero po renderze i dwa szybkie tapnięcia robiły duplikat.
+  Baner błędu jest też wewnątrz okna produktu — strona pod przyciemnionym tłem
+  go nie pokazywała. Seria 🔥 liczy się od wczoraj, gdy dziś nie odhaczone.
 - **Na telefonie panel ćwiczeń wjeżdża od dołu.** Sylwetka ma tam ~1100 px
   wysokości; panel w kolumnie obok lądował poza ekranem i tapnięcie mięśnia
   wyglądało na zignorowane. Sylwetki celowo nie zmniejszono: przy 70 vh biceps
