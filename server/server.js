@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { waitForDb } from "./db.js";
+import { waitForDb, pool } from "./db.js";
 import { authRoutes, requireAuth } from "./auth.js";
 import { habitRoutes } from "./routes/habits.js";
 import { profileRoutes } from "./routes/profile.js";
@@ -72,4 +72,14 @@ app.use((err, _req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-waitForDb().then(() => app.listen(PORT, () => console.log("API na :" + PORT)));
+waitForDb().then(() => {
+  const server = app.listen(PORT, () => console.log("API na :" + PORT));
+  // W kontenerze node jest PID 1 i bez własnej obsługi ignoruje SIGTERM —
+  // `podman stop` czekał 10 s i zabijał go SIGKILL-em.
+  for (const sig of ["SIGTERM", "SIGINT"]) {
+    process.on(sig, () => {
+      server.close(() => pool.end().finally(() => process.exit(0)));
+      setTimeout(() => process.exit(0), 3000).unref();
+    });
+  }
+});
