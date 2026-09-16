@@ -78,6 +78,22 @@ podman container exists nginx || podman run -d --pod nginx-pod --name nginx --re
   -v "$PWD/certs:/etc/nginx/certs:ro,Z" \
   docker.io/library/nginx:alpine
 
+echo "▶ Uruchomienie zatrzymanych kontenerów"
+# Po restarcie serwera kontenery istnieją, ale mogą leżeć (np. gdy
+# `podman-restart` przerwał start na pierwszym błędzie). Wszystkie kroki wyżej
+# pomijają istniejące kontenery, więc bez tego „Gotowe" mówiłoby nieprawdę.
+# `podman start` na działającym kontenerze nic nie robi.
+podman start postgres tracker-app nginx >/dev/null
+
+echo "▶ Sprawdzenie"
+for _ in $(seq 1 30); do
+  if curl -sk -o /dev/null -w '%{http_code}' "https://localhost:${HTTPS_PORT}/api/nope" 2>/dev/null | grep -q 404; then
+    echo "  API odpowiada"; break
+  fi
+  sleep 1
+done
+podman ps -a --filter name='^(postgres|tracker-app|nginx)$' --format '  {{.Names}}\t{{.Status}}'
+
 if [[ "$BIND_ADDR" == "0.0.0.0" ]]; then
   echo "✅ Gotowe: https://$HOST:$HTTPS_PORT"
 else

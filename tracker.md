@@ -792,6 +792,16 @@ Cron użytkownika (`crontab -l`):
 gniazdo rootless Podmana. Ta sama zmiana sprawia, że `--restart=always` ma sens
 po restarcie maszyny; dopełnia ją `systemctl --user enable podman-restart`.
 
+`podman-restart` to jedno `podman start --all`, które **przerywa się na pierwszym
+błędzie** — 16.09.2026 po aktualizacji jądra nie wstało nic, bo kontener bazy
+miał jeszcze bind-mount nieistniejącego `db/init.sql` sprzed przejścia na
+katalog `db/init/`. Lekcja: kontener zapamiętuje mounty z chwili utworzenia,
+więc zmiana ścieżek w `deploy.sh` nie dotyka istniejącego kontenera. Gdy po
+restarcie maszyny aplikacja milczy: `journalctl --user -u podman-restart -b`,
+usunąć wskazany kontener (dane bazy są w wolumenie `pgdata`, nie w kontenerze)
+i uruchomić `deploy.sh`, który od tej pory sam startuje leżące kontenery
+i sprawdza, czy API odpowiada.
+
 Kopie leżą w `backups/` w katalogu projektu i są w `.gitignore` — tak samo jak
 certyfikaty. **Kopia, której nigdy nie odtworzono, nie jest kopią**: dlatego
 `restore-db.sh` ma tryb `--into`, który wgrywa zrzut do osobnej bazy i wypisuje
