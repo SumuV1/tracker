@@ -122,6 +122,9 @@ Dwa szczegóły, które łatwo przeoczyć:
 
 - **Ikona iOS jest bez zaokrąglonych rogów.** System przycina ją własną maską,
   a nasze `rx` dawałoby ciemne obwódki po jego zaokrągleniu.
+- **Android dostaje osobny wariant `maskable`** (`icon-512-maskable.png`): pełne
+  tło i ryba w strefie bezpiecznej 80 %, bo Chrome maskuje ikonę własnym
+  kształtem — przezroczyste rogi zwykłej ikony dałyby rybę na białym talerzu.
 - **`manifest.webmanifest`** sprawia, że „dodaj do ekranu głównego" bierze nazwę
   i ikonę stamtąd, a aplikacja otwiera się bez paska przeglądarki. Ma to sens
   dopiero od kiedy wejście idzie przez Tailscale: instalacja jako PWA wymaga
@@ -198,6 +201,20 @@ Cały interfejs w jednym komponencie. Warstwa danych trzyma się kilku zasad:
   aktualizuje się dopiero po renderze i dwa szybkie tapnięcia robiły duplikat.
   Baner błędu jest też wewnątrz okna produktu — strona pod przyciemnionym tłem
   go nie pokazywała. Seria 🔥 liczy się od wczoraj, gdy dziś nie odhaczone.
+- **Odhaczenia i sumy trzymane są dla bieżącego i poprzedniego roku**, kolejne
+  lata dociąga nawigacja ‹ w widoku roku (`ensureYear`). Bez poprzedniego roku
+  1–6 stycznia seria i „% w tygodniu" sięgały w grudzień, którego nie było w
+  pamięci, i spadały do zera. Procent miesiąca i roku liczy się z dni, które już
+  były, a dni przyszłe w siatce miesiąca nie dają się odhaczyć.
+- **Wykres mierzy szerokość kontenera (`ResizeObserver`)** zamiast zakładać
+  380 px — na karcie mającej 306 px w środku podpisy osi schodziły do 8 px.
+- **Klikane `div`-y dostają `kb()`**: rolę `button`, fokus i Enter/Spację; okna
+  mają `role="dialog"`, zamykają się Escape i blokują przewijanie tła; fokus
+  z klawiatury rysuje `index.html` przez `:focus-visible` (inline `outline:none`
+  nie ustawia `box-shadow`, więc arkusz wygrywa).
+- **`/assets/*` ma `Cache-Control: immutable` na rok** — hash w nazwie pliku
+  zmienia się z każdą wersją, więc rewalidacja przy każdym starcie przez sieć
+  komórkową była czystym kosztem; `index.html` i manifest zostają `no-cache`.
 - **Na telefonie panel ćwiczeń wjeżdża od dołu.** Sylwetka ma tam ~1100 px
   wysokości; panel w kolumnie obok lądował poza ekranem i tapnięcie mięśnia
   wyglądało na zignorowane. Sylwetki celowo nie zmniejszono: przy 70 vh biceps

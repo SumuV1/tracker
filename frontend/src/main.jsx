@@ -11,7 +11,7 @@ class ErrorBoundary extends React.Component {
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#f1f1f1", fontFamily: "'Inter',sans-serif",
+      <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#f1f1f1", fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
         display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
         <div style={{ maxWidth: 480, background: "#161616", border: "1px solid #6b2020", borderRadius: 14, padding: 20 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#f87171", marginBottom: 8 }}>Coś się wysypało w interfejsie</div>

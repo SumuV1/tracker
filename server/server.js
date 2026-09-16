@@ -44,7 +44,18 @@ app.use("/api/off", requireAuth, offRoutes);
 app.use("/api", (_req, res) => res.status(404).json({ error: "Nie ma takiej trasy API." }));
 
 // ── Frontend ──────────────────────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, "public")));
+// Pliki w /assets mają hash w nazwie — każda zmiana to nowa nazwa, więc mogą
+// leżeć w cache rok bez rewalidacji. index.html i manifest nie: to one wskazują
+// na aktualny hash i po wdrożeniu muszą być pobrane na świeżo.
+app.use(express.static(path.join(__dirname, "public"), {
+  setHeaders(res, filePath) {
+    if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    } else {
+      res.setHeader("Cache-Control", "no-cache");
+    }
+  },
+}));
 app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 
 // ── Błędy ─────────────────────────────────────────────────────────────────

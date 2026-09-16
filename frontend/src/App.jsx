@@ -40,6 +40,10 @@ const MONTHS_PL = ["Sty","Lut","Mar","Kwi","Maj","Cze","Lip","Sie","Wrz","Paź",
 // muted 6,4:1, soft 7,8:1; na #2a2a2a (kratki miesiąca) wciąż ≥ 4,2 / 5,1 / 6,2.
 // Wcześniej #555 dawało 2,4:1, a #444 1,9:1 — w słońcu nieczytelne.
 // Hierarchia zostaje: faint < muted < soft. Ramki i tła mogą być ciemniejsze.
+// Inter nigdy nie był ładowany (CSP nie dopuszcza zewnętrznych czcionek), więc
+// nazwa była fikcją; system-ui daje natywny krój bez żadnego żądania.
+const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+const MONO = "ui-monospace, Menlo, Consolas, monospace";
 const INK = { faint: "#8a8a8a", muted: "#9a9a9a", soft: "#aaaaaa" };
 
 // Paleta składników odżywczych. Kolejność slotów jest zwalidowana skryptem
@@ -99,6 +103,11 @@ const ACTIVITY = [
 ];
 
 
+// Klikany `div` dostępny z klawiatury: rola, fokus, Enter/Spacja. Bez tego
+// kratek miesiąca ani wiersza produktu nie dało się użyć bez myszy.
+const kb=onClick=>({role:"button",tabIndex:0,onClick,
+  onKeyDown:e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onClick(e);}}});
+
 // ── Przyciski dotykowe ────────────────────────────────────────────────────
 // Ikona ma 24–28 px, ale cel dotyku 44 px na telefonie (32 na desktopie):
 // przycisk jest przezroczysty i większy niż to, co widać. Wcześniej kciuk
@@ -144,9 +153,9 @@ function FormulaPanel({profile}){
          neckCm:neck, waistCm:waist, hipsCm:hips, bodyFat:bf}=profile;
   const act=ACTIVITY[profile.activity]||ACTIVITY[0];
   const n=v=>String(Math.round(v*100)/100).replace(".",",");
-  const mono={fontFamily:"monospace",fontSize:12.5,color:"#bbb",lineHeight:1.9,whiteSpace:"nowrap"};
+  const mono={fontFamily:MONO,fontSize:12.5,color:"#bbb",lineHeight:1.9,whiteSpace:"nowrap"};
   const res={color:"#fff",fontWeight:700};
-  const head={fontSize:11,fontWeight:700,letterSpacing:"0.08em",color:NUTRIENT.kcal,marginBottom:6,fontFamily:"monospace"};
+  const head={fontSize:11,fontWeight:700,letterSpacing:"0.08em",color:NUTRIENT.kcal,marginBottom:6,fontFamily:MONO};
   const note={fontSize:11,color:INK.soft,marginBottom:8,lineHeight:1.5};
   return(
     <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,marginTop:12}}>
@@ -367,18 +376,21 @@ function MonthView({habitId,logs,color,toggle,compact=false}){
   const days=getDaysInMonth(year,month);
   const firstDow=new Date(year,month,1).getDay();
   const done=days.filter(d=>logs[`${habitId}_${d}`]).length;
-  const rate=Math.round((done/days.length)*100);
+  // Mianownik to dni, które już były — inaczej 15 września pokazuje „7 %"
+  // przy dwóch odhaczeniach, bo liczy też dni z przyszłości.
+  const elapsed=days.filter(d=>d<=today()).length;
+  const rate=elapsed?Math.round((done/elapsed)*100):0;
   const prevM=()=>{if(month===0){setMonth(11);setYear(y=>y-1);}else setMonth(m=>m-1);};
   const nextM=()=>{if(month===11){setMonth(0);setYear(y=>y+1);}else setMonth(m=>m+1);};
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-        <button onClick={prevM} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:"0 6px"}}>‹</button>
+        <button onClick={prevM} aria-label="Poprzedni miesiąc" style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:18,padding:0,width:36,height:36,margin:"-6px 0"}}>‹</button>
         <span style={{fontSize:compact?11.5:13,fontWeight:600,color:"#ccc"}}>{MONTHS_PL[month]} {year} — {rate}%</span>
-        <button onClick={nextM} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:"0 6px"}}>›</button>
+        <button onClick={nextM} aria-label="Następny miesiąc" style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:18,padding:0,width:36,height:36,margin:"-6px 0"}}>›</button>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:compact?2:3,marginBottom:4}}>
-        {DAY_LABELS.map(l=><div key={l} style={{fontSize:compact?8.5:10,color:INK.muted,textAlign:"center"}}>{l}</div>)}
+        {DAY_LABELS.map((l,i)=><div key={i} style={{fontSize:compact?9.5:10,color:INK.muted,textAlign:"center"}}>{l}</div>)}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:compact?2:3}}>
         {Array(firstDow).fill(null).map((_,i)=><div key={`b${i}`}/>)}
@@ -386,25 +398,29 @@ function MonthView({habitId,logs,color,toggle,compact=false}){
           const checked=logs[`${habitId}_${d}`];
           const day=parseInt(d.slice(8));
           const isT=d===today();
-          return <div key={d} onClick={()=>toggle(habitId,d)} style={{aspectRatio:"1",borderRadius:compact?4:5,background:checked?color:"#2a2a2a",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:compact?8:10,color:checked?"#000":isT?"#fff":INK.muted,fontWeight:isT?700:400,outline:isT?`2px solid ${color}`:"none",outlineOffset:-1,transition:"background 0.15s"}}>{day}</div>;
+          const future=d>today();
+          return <div key={d} {...(future?{}:kb(()=>toggle(habitId,d)))} aria-pressed={!!checked} aria-label={d}
+            style={{aspectRatio:"1",borderRadius:compact?4:5,background:checked?color:"#2a2a2a",cursor:future?"default":"pointer",opacity:future?0.35:1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:compact?9.5:10,color:checked?"#000":isT?"#fff":INK.muted,fontWeight:isT?700:400,outline:isT?`2px solid ${color}`:"none",outlineOffset:-1,transition:"background 0.15s"}}>{day}</div>;
         })}
       </div>
     </div>
   );
 }
 
-function YearView({habitId,logs,color,compact=false}){
-  const [year,setYear]=useState(new Date().getFullYear());
+function YearView({habitId,logs,color,compact=false,onYear}){
+  const [year,setYearRaw]=useState(new Date().getFullYear());
+  const setYear=f=>setYearRaw(y=>{const n=f(y);onYear?.(n);return n;});
   const days=getDaysInYear(year);
   const done=days.filter(d=>logs[`${habitId}_${d}`]).length;
-  const rate=Math.round((done/days.length)*100);
+  const elapsed=days.filter(d=>d<=today()).length;
+  const rate=elapsed?Math.round((done/elapsed)*100):0;
   const byMonth=Array.from({length:12},(_,mi)=>getDaysInMonth(year,mi));
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-        <button onClick={()=>setYear(y=>y-1)} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:"0 6px"}}>‹</button>
-        <span style={{fontSize:compact?11.5:13,fontWeight:600,color:"#ccc"}}>{year} — {rate}% ({done}/{days.length})</span>
-        <button onClick={()=>setYear(y=>y+1)} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:"0 6px"}}>›</button>
+        <button onClick={()=>setYear(y=>y-1)} aria-label="Poprzedni rok" style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:18,padding:0,width:36,height:36,margin:"-6px 0"}}>‹</button>
+        <span style={{fontSize:compact?11.5:13,fontWeight:600,color:"#ccc"}}>{year} — {rate}% ({done}/{elapsed})</span>
+        <button onClick={()=>setYear(y=>y+1)} aria-label="Następny rok" style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:18,padding:0,width:36,height:36,margin:"-6px 0"}}>›</button>
       </div>
       <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${compact?52:100}px,1fr))`,gap:compact?4:6}}>
         {byMonth.map((mDays,mi)=>{
@@ -428,8 +444,9 @@ function YearView({habitId,logs,color,compact=false}){
   );
 }
 
-function CalYearView({calLogs,tdee}){
-  const [year,setYear]=useState(new Date().getFullYear());
+function CalYearView({calLogs,tdee,onYear,onPickDay}){
+  const [year,setYearRaw]=useState(new Date().getFullYear());
+  const setYear=f=>setYearRaw(y=>{const n=f(y);onYear?.(n);return n;});
   const byMonth=Array.from({length:12},(_,mi)=>getDaysInMonth(year,mi));
   const maxCal=Math.max(1,...Object.values(calLogs).map(v=>v||0));
   const getColor=cal=>{
@@ -448,9 +465,9 @@ function CalYearView({calLogs,tdee}){
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-        <button onClick={()=>setYear(y=>y-1)} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:"0 6px"}}>‹</button>
+        <button onClick={()=>setYear(y=>y-1)} aria-label="Poprzedni rok" style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:18,padding:0,width:36,height:36,margin:"-6px 0"}}>‹</button>
         <span style={{fontSize:13,fontWeight:600,color:"#ccc"}}>Kalorie {year}</span>
-        <button onClick={()=>setYear(y=>y+1)} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:16,padding:"0 6px"}}>›</button>
+        <button onClick={()=>setYear(y=>y+1)} aria-label="Następny rok" style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:18,padding:0,width:36,height:36,margin:"-6px 0"}}>›</button>
       </div>
       {tdee && (
         <div style={{display:"flex",gap:10,marginBottom:10,flexWrap:"wrap"}}>
@@ -469,7 +486,8 @@ function CalYearView({calLogs,tdee}){
               <div style={{fontSize:10,color:INK.muted,marginBottom:3,textAlign:"center"}}>{MONTHS_PL[mi]}</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
                 {Array(new Date(year,mi,1).getDay()).fill(null).map((_,i)=><div key={`b${i}`}/>)}
-                {mDays.map(d=><div key={d} title={`${d}: ${calLogs[d]||0} kcal`} style={{aspectRatio:"1",borderRadius:2,background:getColor(calLogs[d]||0)}}/>)}
+                {mDays.map(d=><div key={d} title={`${d}: ${calLogs[d]||0} kcal`} onClick={()=>onPickDay?.(d)}
+                  style={{aspectRatio:"1",borderRadius:2,background:getColor(calLogs[d]||0),cursor:onPickDay&&d<=today()?"pointer":"default"}}/>)}
               </div>
               <div style={{fontSize:9,color:INK.muted,marginTop:3,textAlign:"center"}}>{mCal>0?`${mCal} kcal`:""}</div>
             </div>
@@ -514,7 +532,7 @@ const METRICS = {
 // `domain` przypina oś Y do stałego zakresu (skala 1–5 nie ma się „dopasowywać"
 // do danych); `labelOf` dokłada do dymka opis punktu; `showDelta` wyłącza
 // nagłówek „+0,4 od 14.06", który dla check-inów nic nie znaczy.
-function MeasurementChart({ rows, metric, isMobile, color = SERIES, domain = null, labelOf = null, showDelta = true }) {
+function MeasurementChart({ rows, metric, isMobile, color = SERIES, domain = null, labelOf = null, showDelta = true, noun = "pomiar" }) {
   const [hover, setHover] = useState(null);
   const m = METRICS[metric];
   const pts = rows.filter(r => r[metric] != null).map(r => ({ day: r.day, v: r[metric], row: r }));
@@ -523,13 +541,25 @@ function MeasurementChart({ rows, metric, isMobile, color = SERIES, domain = nul
     return (
       <div style={{ padding: "34px 16px", textAlign: "center", color: INK.muted, fontSize: 12.5, lineHeight: 1.6 }}>
         {pts.length === 0
-          ? <>Brak pomiarów tej wielkości.</>
-          : <>Jeden pomiar to jeszcze nie trend.<br />Wykres pojawi się przy drugim.</>}
+          ? <>Brak danych tej wielkości.</>
+          : <>Jeden {noun} to jeszcze nie trend.<br />Wykres pojawi się przy drugim.</>}
       </div>
     );
   }
 
-  const W = isMobile ? 380 : 720, H = isMobile ? 240 : 300;
+  // Szerokość z pomiaru kontenera. Sztywne 380 na karcie mającej 306 px w środku
+  // skalowało podpisy osi do 8 px — czcionki w viewBoxie są w pikselach tylko
+  // wtedy, gdy viewBox ma tyle jednostek, ile kontener pikseli.
+  const boxRef = useRef(null);
+  const [measured, setMeasured] = useState(0);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(en => setMeasured(Math.round(en[0].contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const W = measured || (isMobile ? 306 : 720), H = isMobile ? 240 : 300;
   const PAD = { t: 18, r: 16, b: 34, l: isMobile ? 38 : 46 };
   const iw = W - PAD.l - PAD.r, ih = H - PAD.t - PAD.b;
 
@@ -587,7 +617,7 @@ function MeasurementChart({ rows, metric, isMobile, color = SERIES, domain = nul
   };
 
   return (
-    <div style={{ position: "relative" }}>
+    <div ref={boxRef} style={{ position: "relative" }}>
       {showDelta && (
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 2 }}>
           <span style={{ fontSize: 22, fontWeight: 800, color: "#f1f1f1" }}>{fmt(last.v)} <span style={{ fontSize: 13, color: AXIS_INK, fontWeight: 600 }}>{m.unit}</span></span>
@@ -813,7 +843,7 @@ function ExercisePanel({muscleId,onClose,sheet=false}){
   const free=m.exercises.filter(e=>e.icon!=="⚙️");
   const renderGroup=(list,title,badge)=>(
     <div style={{marginBottom:16}}>
-      <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:m.color,marginBottom:10,fontFamily:"monospace",display:"flex",alignItems:"center",gap:6}}><span>{badge}</span> {title}</div>
+      <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:m.color,marginBottom:10,fontFamily:MONO,display:"flex",alignItems:"center",gap:6}}><span>{badge}</span> {title}</div>
       {list.map((ex,i)=>(
         <div key={i} style={{background:"#0a0a0a",border:`1px solid ${m.color}28`,borderLeft:`3px solid ${m.color}`,borderRadius:10,padding:"12px 14px",marginBottom:10}}>
           <div style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:6}}>
@@ -836,7 +866,7 @@ function ExercisePanel({muscleId,onClose,sheet=false}){
       <div style={{background:m.color+"22",borderBottom:`1px solid ${m.color}44`,padding:"16px 20px 14px",flexShrink:0}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
           <div>
-            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:m.color,marginBottom:4,fontFamily:"monospace"}}>{m.side==="front"?"▶ WIDOK: PRZÓD":"◀ WIDOK: TYŁ"}</div>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:m.color,marginBottom:4,fontFamily:MONO}}>{m.side==="front"?"▶ WIDOK: PRZÓD":"◀ WIDOK: TYŁ"}</div>
             <div style={{fontSize:17,fontWeight:700,color:"#f0f0f0",lineHeight:1.25}}>{m.name}</div>
             <div style={{fontSize:11,color:"#888",fontStyle:"italic",marginTop:2}}>{m.latin}</div>
           </div>
@@ -859,7 +889,7 @@ function PlanExercise({ex,accent}){
     <div style={{background:"#0a0a0a",border:`1px solid ${accent}28`,borderLeft:`3px solid ${accent}`,borderRadius:10,padding:"11px 13px",marginBottom:9}}>
       <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0",lineHeight:1.35}}>
         {ex.name}
-        {ex.added&&<span style={{marginLeft:7,fontSize:9,fontWeight:700,letterSpacing:"0.08em",fontFamily:"monospace",color:"#5DCAA5",border:"1px solid #5DCAA555",borderRadius:5,padding:"1px 5px",verticalAlign:"middle"}}>DODANE</span>}
+        {ex.added&&<span style={{marginLeft:7,fontSize:9,fontWeight:700,letterSpacing:"0.08em",fontFamily:MONO,color:"#5DCAA5",border:"1px solid #5DCAA555",borderRadius:5,padding:"1px 5px",verticalAlign:"middle"}}>DODANE</span>}
       </div>
       <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:5}}>
         <span style={{fontSize:10,fontWeight:700,background:accent+"30",color:accent,padding:"1px 8px",borderRadius:20}}>{ex.sets}</span>
@@ -896,10 +926,10 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
   return(
     <div style={{display:"flex",flexDirection:"column",maxHeight:isMobile?"none":640}}>
       <div style={{background:accent+"1e",borderBottom:`1px solid ${accent}44`,padding:"14px 16px 12px",flexShrink:0}}>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:accent,fontFamily:"monospace",marginBottom:4}}>{plan.name.toUpperCase()} · {label.toUpperCase()}</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:accent,fontFamily:MONO,marginBottom:4}}>{plan.name.toUpperCase()} · {label.toUpperCase()}</div>
         <div style={{fontSize:17,fontWeight:700,color:"#f0f0f0",lineHeight:1.25}}>
           {day.title}
-          {day.added&&<span style={{marginLeft:8,fontSize:9,fontWeight:700,letterSpacing:"0.08em",fontFamily:"monospace",color:"#5DCAA5",border:"1px solid #5DCAA555",borderRadius:5,padding:"2px 6px",verticalAlign:"middle"}}>DZIEŃ DODANY</span>}
+          {day.added&&<span style={{marginLeft:8,fontSize:9,fontWeight:700,letterSpacing:"0.08em",fontFamily:MONO,color:"#5DCAA5",border:"1px solid #5DCAA555",borderRadius:5,padding:"2px 6px",verticalAlign:"middle"}}>DZIEŃ DODANY</span>}
         </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>
           {day.primary.map(id=>chip(id,true))}
@@ -915,7 +945,7 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
         {day.remark&&<div style={{fontSize:11.5,color:"#c8a24a",background:"#2a1e00",border:"1px solid #4a3a10",borderRadius:8,padding:"8px 11px",marginBottom:11,lineHeight:1.5}}>{day.remark}</div>}
         {day.warmup&&(
           <div style={{fontSize:11.5,color:"#9a9a9a",background:"#0d0f16",border:"1px solid #1e2130",borderRadius:8,padding:"9px 11px",marginBottom:11,lineHeight:1.6}}>
-            <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",color:accent}}>ROZGRZEWKA</span><br/>{day.warmup}
+            <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.1em",fontFamily:MONO,color:accent}}>ROZGRZEWKA</span><br/>{day.warmup}
           </div>
         )}
         {day.rest&&<div style={{fontSize:12.5,color:"#9a9a9a",lineHeight:1.65}}>{day.desc}</div>}
@@ -934,7 +964,7 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
               </div>
             ))}
             <div style={{marginTop:10,paddingTop:9,borderTop:"1px solid #1c1c1c",fontSize:11.5,color:"#9a9a9a",lineHeight:1.55}}>
-              Tętno maksymalne wg wzoru <span style={{color:"#c9c9c9",fontFamily:"monospace"}}>208 − 0,7 × wiek</span> — dokładniejszego niż popularne 220 − wiek.
+              Tętno maksymalne wg wzoru <span style={{color:"#c9c9c9",fontFamily:MONO}}>208 − 0,7 × wiek</span> — dokładniejszego niż popularne 220 − wiek.
               {hr
                 ?<> Dla Twoich <b>{age} lat</b>: HRmax ≈ <b style={{color:accent}}>{hr}</b> ud./min.</>
                 :<> Podaj wiek w zakładce „Kalorie &amp; BMI”, a policzę zakresy w uderzeniach na minutę.</>}
@@ -945,7 +975,7 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
         {day.loadNote&&noteBox(day.loadNote)}
         {day.changes&&(
           <div style={{marginTop:6,borderTop:"1px solid #1a1a1a",paddingTop:11}}>
-            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace",color:INK.muted,marginBottom:6}}>CO SIĘ ZMIENIŁO WOBEC ORYGINAŁU</div>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.1em",fontFamily:MONO,color:INK.muted,marginBottom:6}}>CO SIĘ ZMIENIŁO WOBEC ORYGINAŁU</div>
             <div style={{fontSize:11.5,color:"#8a8a8a",lineHeight:1.65}}>{day.changes}</div>
           </div>
         )}
@@ -980,10 +1010,12 @@ function MuscleMap({profile}){
   };
   // Otwarty arkusz nie może przepuszczać przewijania do strony pod spodem.
   useEffect(()=>{
-    if(!(isMobile&&selected))return;
+    if(!selected)return;
+    const onKey=e=>{if(e.key==="Escape")setSelected(null);};
+    document.addEventListener("keydown",onKey);
     const prev=document.body.style.overflow;
-    document.body.style.overflow="hidden";
-    return()=>{document.body.style.overflow=prev;};
+    if(isMobile)document.body.style.overflow="hidden";
+    return()=>{document.removeEventListener("keydown",onKey);document.body.style.overflow=prev;};
   },[isMobile,selected]);
   const pickMuscle=id=>{
     setLayer(MUSCLE_LAYER[id]);
@@ -1000,12 +1032,12 @@ function MuscleMap({profile}){
   return(
     <div>
       <div style={{textAlign:"center",marginBottom:16}}>
-        <div style={{fontSize:11,letterSpacing:"0.2em",color:"#5DCAA5",fontWeight:600,fontFamily:"monospace",marginBottom:6}}>ANATOMIA INTERAKTYWNA</div>
+        <div style={{fontSize:11,letterSpacing:"0.2em",color:"#5DCAA5",fontWeight:600,fontFamily:MONO,marginBottom:6}}>ANATOMIA INTERAKTYWNA</div>
         <div style={{fontSize:isMobile?18:22,fontWeight:700,color:"#f5f5f0"}}>Mapa Mięśni Człowieka</div>
         <div style={{marginTop:6,fontSize:12,color:INK.soft}}>{isMobile?"Dotknij mięśnia, aby zobaczyć ćwiczenia":"Najedź, aby podejrzeć · Kliknij, aby zobaczyć ćwiczenia"}</div>
       </div>
       <div style={{background:"#13161f",border:"1px solid #1e2130",borderRadius:14,padding:isMobile?"12px 12px 14px":"14px 16px 16px",marginBottom:16}}>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:"#5DCAA5",fontFamily:"monospace",marginBottom:9}}>PLAN TRENINGOWY</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:"#5DCAA5",fontFamily:MONO,marginBottom:9}}>PLAN TRENINGOWY</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
           {TRAINING_PLANS.map(p=>(
             <button key={p.id} onClick={()=>pickPlan(p.id)} style={{background:planId===p.id?"#5DCAA522":"#0d0f16",
@@ -1031,7 +1063,7 @@ function MuscleMap({profile}){
                   <button key={w.key} onClick={()=>{setDayKey(w.key);setSelected(null);}}
                     style={{background:on?c+"26":"#0d0f16",border:`1px solid ${on?c:"#262a38"}`,borderRadius:10,
                       padding:"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                    <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.08em",fontFamily:"monospace",color:on?c:INK.muted}}>
+                    <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.08em",fontFamily:MONO,color:on?c:INK.muted}}>
                       {w.short.toUpperCase()}{isToday?" •":""}
                     </span>
                     <span style={{fontSize:11,fontWeight:600,color:on?"#f0f0f0":d.rest?INK.faint:"#8a8a8a"}}>{d.short}</span>
@@ -1042,8 +1074,8 @@ function MuscleMap({profile}){
             <div style={{fontSize:10.5,color:INK.faint,marginTop:7}}>Kropka oznacza dzisiejszy dzień.</div>
             {plan.rules&&(
               <div style={{marginTop:10,borderTop:"1px solid #1e2130",paddingTop:10}}>
-                <button onClick={()=>setShowRules(v=>!v)} style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                  color:"#5DCAA5",fontSize:11,fontWeight:700,letterSpacing:"0.1em",fontFamily:"monospace"}}>
+                <button onClick={()=>setShowRules(v=>!v)} style={{background:"none",border:"none",padding:"8px 0",minHeight:36,cursor:"pointer",
+                  color:"#5DCAA5",fontSize:11,fontWeight:700,letterSpacing:"0.1em",fontFamily:MONO}}>
                   {showRules?"▾":"▸"} ZASADY WSPÓLNE
                 </button>
                 {showRules&&(
@@ -1079,7 +1111,7 @@ function MuscleMap({profile}){
           <div style={{marginTop:6,color:"#c8a24a"}}>
             {hiddenPrimary.length===1?"Jeden mięsień":`${hiddenPrimary.length} mięśnie`} z tego dnia leży w drugiej warstwie —{" "}
             <button onClick={()=>switchLayer(layer==="surface"?"deep":"surface")}
-              style={{background:"none",border:"none",padding:0,color:"#c8a24a",textDecoration:"underline",cursor:"pointer",font:"inherit"}}>
+              style={{background:"none",border:"none",padding:"6px 2px",color:"#c8a24a",textDecoration:"underline",cursor:"pointer",font:"inherit"}}>
               przełącz warstwę
             </button>.
           </div>
@@ -1091,13 +1123,13 @@ function MuscleMap({profile}){
           {isMobile?(
             <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:8}}>
               {[["front","PRZÓD"],["back","TYŁ"]].map(([k,l])=>(
-                <button key={k} onClick={()=>setSide(k)} style={{flex:1,background:side===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"8px",color:side===k?"#fff":INK.soft,fontWeight:700,fontSize:11,letterSpacing:"0.15em",fontFamily:"monospace",cursor:"pointer"}}>{l}</button>
+                <button key={k} onClick={()=>setSide(k)} style={{flex:1,background:side===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"8px",color:side===k?"#fff":INK.soft,fontWeight:700,fontSize:11,letterSpacing:"0.15em",fontFamily:MONO,cursor:"pointer"}}>{l}</button>
               ))}
             </div>
           ):(
             <div style={{display:"flex",justifyContent:"space-around",marginBottom:6}}>
-              <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:INK.faint,fontFamily:"monospace"}}>PRZÓD</span>
-              <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:INK.faint,fontFamily:"monospace"}}>TYŁ</span>
+              <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:INK.faint,fontFamily:MONO}}>PRZÓD</span>
+              <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:INK.faint,fontFamily:MONO}}>TYŁ</span>
             </div>
           )}
           <div style={{borderRadius:12,border:"1px solid #1e2130",overflow:"hidden"}}>
@@ -1113,7 +1145,7 @@ function MuscleMap({profile}){
             <div style={{padding:"20px 18px"}}>
               {hoveredMuscle?(
                 <div>
-                  <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:hoveredMuscle.color,marginBottom:6,fontFamily:"monospace"}}>{hoveredMuscle.side==="front"?"▶ PRZÓD":"◀ TYŁ"}</div>
+                  <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:hoveredMuscle.color,marginBottom:6,fontFamily:MONO}}>{hoveredMuscle.side==="front"?"▶ PRZÓD":"◀ TYŁ"}</div>
                   <div style={{fontSize:18,fontWeight:700,color:"#f0f0f0",marginBottom:4}}>{hoveredMuscle.name}</div>
                   <div style={{fontSize:11.5,color:INK.soft,fontStyle:"italic",marginBottom:14}}>{hoveredMuscle.latin}</div>
                   <div style={{width:40,height:2,background:hoveredMuscle.color,borderRadius:2,marginBottom:14}}/>
@@ -1175,7 +1207,7 @@ function LoginScreen({onLogged,notice=""}){
 
   return(
     <div style={{background:"#0a0a0a",minHeight:"100vh",display:"flex",alignItems:"center",
-      justifyContent:"center",padding:20,fontFamily:"'Inter',sans-serif",color:"#f1f1f1"}}>
+      justifyContent:"center",padding:20,fontFamily:FONT,color:"#f1f1f1"}}>
       <form onSubmit={submit} style={{width:"100%",maxWidth:360,background:"#161616",
         border:"1px solid #1e1e1e",borderRadius:16,padding:28}}>
         <h1 style={{margin:"0 0 4px",fontSize:24,fontWeight:700}}>🐟 Śledzik 🐠</h1>
@@ -1284,11 +1316,11 @@ export default function App() {
   const [kotwicaInput,setKotwicaInput]=useState("");
   const [kotwicaEmoji,setKotwicaEmoji]=useState("🎵");
 
-  const addKotwica=async()=>{
+  const addKotwica=()=>run(async()=>{
     if(!kotwicaInput.trim())return;
     const a=await api.addAnchor({emoji:kotwicaEmoji,label:kotwicaInput.trim()});
     setKotwice(k=>[...k,a]);setKotwicaInput("");
-  };
+  });
   const delKotwica=id=>run(async()=>{
     await api.deleteAnchor(id);
     setKotwice(k=>k.filter(x=>x.id!==id));
@@ -1353,10 +1385,16 @@ export default function App() {
 
   // Check-iny
   const reloadCheckins=async()=>setCheckins(await api.checkins(14));
+  const [ciSaved,setCiSaved]=useState("");
   const addCheckin=()=>run(async()=>{
     if(!ciState)return;
+    const st=STATE_MAP[ciState];
     await api.addCheckin({state:ciState,intensity:ciIntensity,note:ciNote.trim()});
-    setCiNote("");setShowAllTech(false);
+    // Domknięcie: formularz się zwija, a w miejscu podpowiedzi stoi potwierdzenie.
+    // Techniki i tak biorą stan z ostatniego check-inu, nie z zaznaczenia.
+    setCiNote("");setShowAllTech(false);setCiState(null);
+    setCiSaved(`Zapisano · ${st.icon} ${st.label.toLowerCase()} ${ciIntensity}/5`);
+    setTimeout(()=>setCiSaved(""),5000);
     await reloadCheckins();
   });
   const deleteCheckin=id=>run(async()=>{
@@ -1409,14 +1447,22 @@ export default function App() {
     await api.logout().catch(()=>{});
     setUser(null);setHabits([]);setHabitLogs({});setServerProfile(null);
     setFoods([]);setDayEntries([]);setDailyTotals({});setKotwice([]);setLoading(true);
+    loadedYears.current=new Set([year-1,year]);
   };
 
   // Odhaczenia trzymamy jako mapę "<idNawyku>_<data>" — taki kształt jest
   // wygodny dla widoków miesiąca i roku, które sięgają po konkretny dzień.
   const logsToMap=rows=>Object.fromEntries(rows.map(r=>[`${r.habitId}_${r.day}`,true]));
 
+  // Lata trzymane w pamięci. Od startu bieżący i poprzedni — bez poprzedniego
+  // 1–6 stycznia seria i „% w tygodniu" sięgały w grudzień, którego nie było,
+  // i spadały do zera. Kolejne lata dociąga nawigacja ‹ w widoku roku.
+  const loadedYears=useRef(new Set([year-1,year]));
+  const yearSpan=()=>{const ys=[...loadedYears.current];return [Math.min(...ys),Math.max(...ys)];};
+
   const reloadLogs=useCallback(async()=>{
-    const rows=await api.logs(`${year}-01-01`,`${year}-12-31`);
+    const [from,to]=yearSpan();
+    const rows=await api.logs(`${from}-01-01`,`${to}-12-31`);
     setHabitLogs(logsToMap(rows));
   },[year]);
 
@@ -1429,9 +1475,16 @@ export default function App() {
   },[]);
 
   const reloadTotals=useCallback(async()=>{
-    const rows=await api.dailyTotals(year);
-    setDailyTotals(Object.fromEntries(rows.map(r=>[r.day,Math.round(r.kcal)])));
+    const all=await Promise.all([...loadedYears.current].map(y=>api.dailyTotals(y)));
+    setDailyTotals(Object.fromEntries(all.flat().map(r=>[r.day,Math.round(r.kcal)])));
   },[year]);
+
+  // Widok roku poszedł w rok, którego jeszcze nie ma w pamięci.
+  const ensureYear=useCallback(async y=>{
+    if(loadedYears.current.has(y))return;
+    loadedYears.current.add(y);
+    await Promise.all([reloadLogs(),reloadTotals()]);
+  },[reloadLogs,reloadTotals]);
 
   useEffect(()=>{
     if(!user)return;
@@ -1455,8 +1508,12 @@ export default function App() {
 
   // Zmiana wybranego dnia dociąga tylko ten dzień, zamiast trzymać w pamięci
   // cały dziennik — sumy roczne przychodzą osobno, policzone w SQL.
+  const [dayLoading,setDayLoading]=useState(false);
   useEffect(()=>{
-    if(user&&!loading)reloadDay(calDate).catch(e=>setError(e.message));
+    if(user&&!loading){
+      setDayLoading(true);
+      reloadDay(calDate).catch(e=>setError(e.message)).finally(()=>setDayLoading(false));
+    }
     // Edycja dotyczy konkretnego wpisu — po zmianie dnia nie ma czego edytować.
     setEditGramsId(null);
   },[calDate,user]);
@@ -1647,9 +1704,9 @@ export default function App() {
                 <IconBtn onClick={()=>setEditNameId(null)} title="Anuluj" size={24} bg="#222" border="#444" color="#aaa">✕</IconBtn>
               </div>
             ):(
-              <div onClick={()=>{setEditNameId(habit.id);setEditNameVal(habit.name);}} title="Kliknij, aby zmienić nazwę"
+              <div {...kb(()=>{setEditNameId(habit.id);setEditNameVal(habit.name);})} title="Kliknij, aby zmienić nazwę" aria-label={`${habit.name} — zmień nazwę`}
                 style={{fontWeight:600,fontSize:13.5,lineHeight:1.3,wordBreak:"break-word",cursor:"pointer",
-                  opacity:checked?0.5:1,textDecoration:checked?"line-through":"none"}}>{habit.name}</div>
+                  opacity:checked?0.5:1,textDecoration:checked?"line-through":"none"}}>{habit.name} <span aria-hidden="true" style={{fontSize:10,color:INK.faint,opacity:0.8}}>✎</span></div>
             )}
             <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:3}}>
               {streak>0&&<span style={{fontSize:11,color:checked?"#888":INK.faint}} title={checked?`${streak} dni z rzędu`:`${streak} dni z rzędu — dziś jeszcze nie`}>🔥 {streak}{!checked&&<span style={{color:INK.faint}}> · dziś jeszcze nie</span>}</span>}
@@ -1671,7 +1728,7 @@ export default function App() {
         )}
         <button onClick={()=>setExpandedHabit(p=>({...p,[habit.id]:!p[habit.id]}))}
           style={{width:"100%",marginTop:8,background:open?"#1c1c1c":"transparent",border:"1px solid #232323",
-            borderRadius:8,color:open?"#999":INK.soft,cursor:"pointer",fontSize:10.5,fontWeight:600,padding:"3px 0",
+            borderRadius:8,color:open?"#999":INK.soft,cursor:"pointer",fontSize:11,fontWeight:600,padding:0,minHeight:isMobile?36:28,
             display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
           {open?"▲ Zwiń":"▼ Postęp"}
         </button>
@@ -1681,7 +1738,7 @@ export default function App() {
               {["7dni","miesiąc","rok"].map(v=>(
                 <button key={v} onClick={()=>setView(habit.id,v)}
                   style={{flex:1,background:view===v?cat.color:"#1f1f1f",color:view===v?"#000":INK.soft,border:"none",
-                    borderRadius:6,padding:"3px 0",fontSize:10.5,fontWeight:700,cursor:"pointer"}}>{v}</button>
+                    borderRadius:6,padding:0,minHeight:isMobile?36:28,fontSize:11,fontWeight:700,cursor:"pointer"}}>{v}</button>
               ))}
             </div>
             {view==="7dni"&&(
@@ -1692,7 +1749,7 @@ export default function App() {
                     const di=new Date(d+"T00:00:00").getDay();
                     return(
                       <div key={d} style={{flex:1,minWidth:0,textAlign:"center"}}>
-                        <div onClick={()=>toggleHabit(habit.id,d)} title={d}
+                        <div {...kb(()=>toggleHabit(habit.id,d))} title={d} aria-label={d} aria-pressed={done}
                           style={{height:24,borderRadius:5,background:done?cat.color:"#2a2a2a",cursor:"pointer",transition:"background 0.2s"}}/>
                         <div style={{fontSize:9,color:INK.muted,marginTop:3}}>{DAY_LABELS[di]}</div>
                       </div>
@@ -1705,7 +1762,7 @@ export default function App() {
               </div>
             )}
             {view==="miesiąc"&&<MonthView compact habitId={habit.id} logs={habitLogs} color={cat.color} toggle={toggleHabit}/>}
-            {view==="rok"&&<YearView compact habitId={habit.id} logs={habitLogs} color={cat.color}/>}
+            {view==="rok"&&<YearView compact habitId={habit.id} logs={habitLogs} color={cat.color} onYear={ensureYear}/>}
             <div style={{fontSize:10.5,color:INK.muted,marginTop:8,lineHeight:1.4}}>
               {streak>0?`🔥 ${streak} dni z rzędu`:"Zacznij serię już dziś!"}{view==="7dni"?` · ${rate7}% w tygodniu`:""}
             </div>
@@ -1736,6 +1793,15 @@ export default function App() {
     </>
   );
 
+  const closeModal=()=>{setModal(false);setSelFood(null);setSearch("");setGrams("100");setOffResults(null);setOffQuery("");closeCustomForm();};
+  // Escape zamyka okno produktu i arkusz ćwiczeń; otwarte okno blokuje przewijanie strony.
+  useEffect(()=>{
+    if(!modal)return;
+    const onKey=e=>{if(e.key==="Escape")closeModal();};
+    document.addEventListener("keydown",onKey);
+    const prev=document.body.style.overflow; document.body.style.overflow="hidden";
+    return()=>{document.removeEventListener("keydown",onKey);document.body.style.overflow=prev;};
+  },[modal]);
   const closeCustomForm=()=>{
     setCustomForm({name:"",cal:"",p:"",c:"",f:"",fb:"",s:""});
     setShowCustomForm(false);setEditFoodId(null);
@@ -1748,7 +1814,7 @@ export default function App() {
   };
   const saveCustomFood=()=>run(async()=>{
     const {name,cal,p,c,f,fb,s}=customForm;
-    if(!name||cal==="")return;
+    if(!name.trim()||cal==="")return;
     // Błonnik i sól mają własne pierścienie i dzienne cele, więc produkt bez
     // nich zaniżałby dzienną sumę zamiast po prostu jej nie ruszać.
     const body={name,kcal:+cal,proteinG:+p||0,carbsG:+c||0,fatG:+f||0,fiberG:+fb||0,saltG:+s||0};
@@ -1788,13 +1854,13 @@ export default function App() {
   const bfCol=bf?bfColor(serverProfile.sex,bf.category):null;
   const days7=getLast7();
 
-  const splash=txt=><div style={{background:"#0a0a0a",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:INK.soft,fontFamily:"'Inter',sans-serif"}}>{txt}</div>;
+  const splash=txt=><div style={{background:"#0a0a0a",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:INK.soft,fontFamily:FONT}}>{txt}</div>;
   if(!authChecked)return splash("");
   if(!user)return <LoginScreen notice={loginNotice} onLogged={u=>{setLoginNotice("");setUser(u);setLoading(true);}}/>;
   if(loading)return splash("Ładowanie…");
 
   return(
-    <div style={{background:"#0a0a0a",minHeight:"100vh",fontFamily:"'Inter',sans-serif",color:"#f1f1f1",padding:isMobile?"16px 12px 32px":"24px 16px"}}>
+    <div style={{background:"#0a0a0a",minHeight:"100vh",fontFamily:FONT,color:"#f1f1f1",padding:isMobile?"16px 12px 32px":"24px 16px"}}>
       {/* Nagłówek ma własny kontener o stałej szerokości: treść zakładek
           bywa szersza (mapa mięśni), a bez tego tytuł i przycisk wylogowania
           przeskakiwały przy każdej zmianie zakładki. */}
@@ -1892,7 +1958,7 @@ export default function App() {
                   <div style={{marginBottom:14}}>
                     <label style={{fontSize:12,color:"#888",display:"block",marginBottom:8}}>Godzina przypomnienia (opcjonalnie)</label>
                     <TimePickerForm value={newTime} onChange={setNewTime}/>
-                    {newTime&&<button onClick={()=>setNewTime("")} style={{marginTop:6,background:"none",border:"none",color:INK.muted,cursor:"pointer",fontSize:12}}>Usuń godzinę ×</button>}
+                    {newTime&&<button onClick={()=>setNewTime("")} style={{marginTop:6,background:"none",border:"none",color:INK.soft,cursor:"pointer",fontSize:12,padding:"8px 0",minHeight:36}}>Usuń godzinę ×</button>}
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     <button onClick={addHabit} style={{background:"#fff",color:"#000",border:"none",borderRadius:8,padding:"8px 20px",fontWeight:600,cursor:"pointer",flex:1}}>Dodaj</button>
@@ -1948,10 +2014,10 @@ export default function App() {
                       </div>
                     ):(
                       <>
-                        <div onClick={()=>startEditAvoid(it)} title="Kliknij, aby zmienić"
+                        <div {...kb(()=>startEditAvoid(it))} title="Kliknij, aby zmienić" aria-label={`${it.name} — zmień`}
                           style={{fontSize:13,fontWeight:600,color:"#e8e8e8",cursor:"pointer",wordBreak:"break-word",lineHeight:1.35}}>{it.name}</div>
                         {it.note&&(
-                          <div onClick={()=>startEditAvoid(it)} style={{fontSize:11,color:INK.soft,marginTop:4,lineHeight:1.5,cursor:"pointer"}}>{it.note}</div>
+                          <div onClick={()=>startEditAvoid(it)} aria-hidden="true" style={{fontSize:11,color:INK.soft,marginTop:4,lineHeight:1.5,cursor:"pointer"}}>{it.note}</div>
                         )}
                       </>
                     )}
@@ -1991,7 +2057,7 @@ export default function App() {
           <div>
             <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:20}}>
               {[["bmi","BMI & Profil"],["tracker","Licznik kalorii"]].map(([k,l])=>(
-                <button key={k} onClick={()=>setBmiTab(k)} style={{flex:1,background:bmiTab===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"8px",color:bmiTab===k?"#fff":INK.soft,fontWeight:600,cursor:"pointer",fontSize:14}}>{l}</button>
+                <button key={k} onClick={()=>setBmiTab(k)} style={{flex:1,background:bmiTab===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"9px 8px",color:bmiTab===k?"#fff":INK.soft,fontWeight:600,cursor:"pointer",fontSize:isMobile?13:14}}>{l}</button>
               ))}
             </div>
 
@@ -2004,8 +2070,8 @@ export default function App() {
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:12,marginBottom:12}}>
                     {[["Waga (kg)","weight"],["Wzrost (cm)","height"],["Wiek (lata)","age"]].map(([label,key])=>(
                       <div key={key} style={{display:"flex",flexDirection:"column",gap:6}}>
-                        <label style={{fontSize:12,color:"#888"}}>{label}</label>
-                        <input type="number" value={profile[key]} onChange={e=>setProfile(p=>({...p,[key]:e.target.value}))}
+                        <label htmlFor={`prof-${key}`} style={{fontSize:12,color:"#888"}}>{label}</label>
+                        <input id={`prof-${key}`} type="number" step="any" inputMode="decimal" value={profile[key]} onChange={e=>setProfile(p=>({...p,[key]:e.target.value}))}
                           style={{background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none"}} placeholder={label}/>
                       </div>
                     ))}
@@ -2205,8 +2271,9 @@ export default function App() {
               <div style={{display:"grid",gap:16,alignItems:"start",
                 gridTemplateColumns:isWide?"minmax(260px,320px) minmax(300px,1fr) minmax(290px,370px)":"1fr"}}>
 
-                {/* lewa kolumna — postęp dnia */}
-                <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16}}>
+                {/* lewa kolumna — postęp dnia. Na telefonie idzie za produktami:
+                    pierwszy ekran licznika ma pokazywać przycisk dodawania, nie 500 px pierścieni. */}
+                <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,order:isWide?0:2}}>
                   <div style={{fontWeight:700,fontSize:14,marginBottom:14,color:"#ccc"}}>Postęp dnia</div>
                   <NutrientRings totals={totToday} targets={serverProfile?.targets}/>
                 </div>
@@ -2230,7 +2297,10 @@ export default function App() {
                     {calDate!==today()&&<button onClick={()=>setCalDate(today())} style={{background:"#222",border:"1px solid #444",borderRadius:8,color:"#aaa",fontSize:12,padding:"6px 12px",cursor:"pointer"}}>↩ Wróć do dziś</button>}
                   </div>
                 </div>
-                  {todayEntries.length===0&&(
+                  {dayLoading&&todayEntries.length===0&&(
+                    <div style={{textAlign:"center",padding:"36px 0",color:INK.muted,fontSize:13}}>Ładowanie…</div>
+                  )}
+                  {!dayLoading&&todayEntries.length===0&&(
                     <div style={{textAlign:"center",padding:"36px 0",color:INK.muted}}>
                       <div style={{fontSize:30,marginBottom:10}}>🍽️</div>
                       <div style={{fontSize:13}}>Brak produktów tego dnia.</div>
@@ -2285,9 +2355,9 @@ export default function App() {
                   )}
                 </div>
                 {/* prawa kolumna — historia */}
-                <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16}}>
+                <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,order:isWide?0:3}}>
                   <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#ccc"}}>📅 Historia kalorii</div>
-                  <CalYearView calLogs={dailyTotals} tdee={tdee}/>
+                  <CalYearView calLogs={dailyTotals} tdee={tdee} onYear={ensureYear} onPickDay={d=>{if(d<=today())setCalDate(d);}}/>
                 </div>
               </div>
             )}
@@ -2313,7 +2383,7 @@ export default function App() {
           return(
             <div>
               <div style={{textAlign:"center",marginBottom:16}}>
-                <div style={{fontSize:11,letterSpacing:"0.2em",color:ACC,fontWeight:600,fontFamily:"monospace",marginBottom:6}}>STABILIZACJA EMOCJONALNA</div>
+                <div style={{fontSize:11,letterSpacing:"0.2em",color:ACC,fontWeight:600,fontFamily:MONO,marginBottom:6}}>STABILIZACJA EMOCJONALNA</div>
                 <div style={{fontSize:12,color:INK.soft,lineHeight:1.6,maxWidth:520,margin:"0 auto"}}>
                   Nie chodzi o kierunek emocji, tylko o jej amplitudę. Nie da się regulować czegoś, czego się nie mierzy.
                 </div>
@@ -2322,12 +2392,14 @@ export default function App() {
               {/* ── 1. Zasada dnia ── */}
               <div style={{...card,border:`1px solid ${ACC}33`}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10}}>
-                  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.12em",color:ACC,fontFamily:"monospace"}}>
+                  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.12em",color:ACC,fontFamily:MONO}}>
                     ZASADA NA DZIŚ{fromPool&&st?` · ${st.label.toUpperCase()}`:""}
                   </div>
                   {principles.length>0&&(
                     <div style={{display:"flex",gap:6}}>
-                      <button onClick={()=>setPrincipleOffset(o=>o+1)} style={{background:"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>↻ Inna</button>
+                      {(fromPool?pool:principles).length>1&&(
+                        <button onClick={()=>setPrincipleOffset(o=>o+1)} style={{background:"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 10px",fontSize:11,cursor:"pointer",minHeight:32}}>↻ Inna</button>
+                      )}
                       <button onClick={()=>setShowPrinciples(v=>!v)} style={{background:showPrinciples?"#2a2a2a":"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>
                         {showPrinciples?"Zwiń":`Wszystkie (${principles.length})`}
                       </button>
@@ -2339,7 +2411,7 @@ export default function App() {
                     <div style={{fontSize:isMobile?17:19,fontWeight:600,color:"#f1f1f1",lineHeight:1.5,fontStyle:"italic"}}>„{principle.text}”</div>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginTop:10,flexWrap:"wrap"}}>
                       <div style={{fontSize:12,color:"#8a8a8a"}}>— {principle.source||"ja do siebie"}</div>
-                      <button onClick={()=>editPrinciple(principle)} style={{background:"none",border:"none",color:INK.soft,fontSize:11,cursor:"pointer",textDecoration:"underline"}}>edytuj</button>
+                      <button onClick={()=>editPrinciple(principle)} style={{background:"none",border:"none",color:INK.soft,fontSize:12,cursor:"pointer",textDecoration:"underline",padding:"8px 6px",minHeight:36}}>✎ edytuj</button>
                     </div>
                     {principle.note&&<div style={{fontSize:11.5,color:INK.soft,marginTop:8,lineHeight:1.5,borderTop:"1px solid #1e1e1e",paddingTop:8}}>{principle.note}</div>}
                   </div>
@@ -2401,7 +2473,7 @@ export default function App() {
               <div style={card}>
                 <div style={{fontSize:15,fontWeight:700,color:"#f1f1f1",marginBottom:3}}>Jak jest teraz?</div>
                 <div style={{fontSize:11.5,color:INK.soft,marginBottom:12,minHeight:17}}>
-                  {ciState?STATE_MAP[ciState].hint:todayCheckins.length?`Dziś już ${todayCheckins.length}× — możesz dopisać kolejny.`:"Jedno tapnięcie. Po miesiącu zobaczysz wzorzec, którego dziś nie widać."}
+                  {ciSaved?<span style={{color:ACC}}>{ciSaved}</span>:ciState?STATE_MAP[ciState].hint:todayCheckins.length?`Dziś już ${todayCheckins.length}× — możesz dopisać kolejny.`:"Jedno tapnięcie. Po miesiącu zobaczysz wzorzec, którego dziś nie widać."}
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(3,1fr)":"repeat(6,1fr)",gap:6,marginBottom:12}}>
                   {STATES.map(s=>{const on=ciState===s.key;return(
@@ -2423,7 +2495,7 @@ export default function App() {
                             color:ciIntensity===n?"#000":ciIntensity>=n?ACC:INK.soft,fontWeight:700,fontSize:13,cursor:"pointer"}}>{n}</button>
                       ))}
                     </div>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:INK.muted,marginTop:-6,marginBottom:10,padding:"0 4px"}}><span>ledwo</span><span>nie do zniesienia</span></div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:INK.muted,marginTop:-6,marginBottom:10,padding:"0 4px"}}><span>ledwo</span><span>{ciState==="spokoj"?"całkowity":ciState==="nakrecenie"?"nie do opanowania":"nie do zniesienia"}</span></div>
                     <div style={{display:"flex",gap:8}}>
                       <input value={ciNote} onChange={e=>setCiNote(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCheckin()} placeholder="Jedno zdanie, jeśli chcesz (opcjonalnie)"
                         style={{flex:1,minWidth:0,background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 11px",color:"#fff",fontSize:13,outline:"none"}}/>
@@ -2434,9 +2506,9 @@ export default function App() {
 
                 {checkins.length>0&&(
                   <div style={{marginTop:16,borderTop:"1px solid #1e1e1e",paddingTop:12}}>
-                    <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:INK.soft,fontFamily:"monospace",marginBottom:6}}>OSTATNIE 14 DNI</div>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:INK.soft,fontFamily:MONO,marginBottom:6}}>OSTATNIE 14 DNI</div>
                     <MeasurementChart rows={checkins.map(c=>({day:c.at,intensity:c.intensity,state:c.state}))} metric="intensity"
-                      isMobile={isMobile} color="#3aa88c" domain={[1,5]} showDelta={false}
+                      isMobile={isMobile} color="#3aa88c" domain={[1,5]} showDelta={false} noun="check-in"
                       labelOf={r=>`${STATE_MAP[r.state]?.icon||""} ${STATE_MAP[r.state]?.label||r.state} · ${plTime(r.day)}`}/>
                     <div style={{marginTop:8,maxHeight:180,overflowY:"auto"}}>
                       {[...checkins].reverse().slice(0,20).map(c=>(
@@ -2485,7 +2557,7 @@ export default function App() {
                         const u=usesOf(t.key);
                         return(
                           <div key={t.key} style={{background:"#0f0f0f",border:`1px solid ${open?g.color+"55":"#1e1e1e"}`,boxShadow:`inset 3px 0 0 ${g.color}`,borderRadius:10,padding:"10px 14px",marginBottom:8}}>
-                            <div onClick={()=>setTechExpanded(p=>({...p,[t.key]:!p[t.key]}))} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+                            <div {...kb(()=>setTechExpanded(p=>({...p,[t.key]:!p[t.key]})))} aria-expanded={open} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",minHeight:36}}>
                               <span style={{fontSize:20,flexShrink:0}}>{t.icon}</span>
                               <div style={{flex:1,minWidth:0}}>
                                 <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0"}}>{t.name} <span style={{fontSize:11,color:INK.soft,fontWeight:400}}>· {t.time}</span></div>
@@ -2539,13 +2611,14 @@ export default function App() {
       </div>
 
       {modal&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:20}}
-          onClick={e=>{if(e.target===e.currentTarget){setModal(false);setSelFood(null);setSearch("");setGrams("100");closeCustomForm();}}}>
+        <div role="dialog" aria-modal="true" aria-label="Dodaj produkt" tabIndex={-1}
+          style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:20}}
+          onClick={e=>{if(e.target===e.currentTarget)closeModal();}}>
           {/* na telefonie panel dolny, na desktopie wyśrodkowane okno */}
           <div style={{background:"#161616",borderRadius:isMobile?"20px 20px 0 0":16,padding:isMobile?"20px 16px calc(20px + env(safe-area-inset-bottom))":24,width:"100%",maxWidth:600,maxHeight:isMobile?"88vh":"85vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.4)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <h3 style={{margin:0,fontSize:17,fontWeight:700}}>Dodaj produkt</h3>
-              <button onClick={()=>{setModal(false);setSelFood(null);setSearch("");setGrams("100");closeCustomForm();}} style={{background:"#222",border:"none",borderRadius:8,color:"#aaa",fontSize:18,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+              <button onClick={closeModal} aria-label="Zamknij" style={{background:"#222",border:"none",borderRadius:8,color:"#aaa",fontSize:18,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
             </div>
             {/* Baner błędu strony leży pod przyciemnionym tłem — tu musi być własny,
                 inaczej nieudany import z OFF czy zapis produktu wyglądają na „nic". */}
@@ -2617,7 +2690,7 @@ export default function App() {
                   ))}
                 </div>
                 <div style={{display:"flex",gap:8,marginTop:10}}>
-                  <button onClick={saveCustomFood} disabled={!customForm.name||customForm.cal===""}
+                  <button onClick={saveCustomFood} disabled={!customForm.name.trim()||customForm.cal===""}
                     style={{flex:1,padding:"9px",borderRadius:8,border:"none",
                       background:customForm.name&&customForm.cal!==""?"#c084fc":"#333",
                       color:customForm.name&&customForm.cal!==""?"#000":INK.soft,fontWeight:700,fontSize:13,
@@ -2638,7 +2711,7 @@ export default function App() {
                 </div>
               )}
               {filtered.map(f=>(
-                <div key={f.offCode||f.id} onClick={()=>setSelFood(f)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #1a1a1a",background:selFood?.name===f.name?"#1a1030":"transparent",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div key={f.offCode||f.id} {...kb(()=>setSelFood(f))} aria-pressed={!!selFood&&(selFood.offCode||selFood.id)===(f.offCode||f.id)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #1a1a1a",background:selFood&&(selFood.offCode||selFood.id)===(f.offCode||f.id)?"#1a1030":"transparent",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{flex:1}}>
                     <div style={{fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:6}}>
                       {f.name}

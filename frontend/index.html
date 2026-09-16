@@ -28,8 +28,14 @@
 
       button, input, select, textarea { font-family: inherit; }
 
-      /* Wygodniejsze cele dotykowe i brak niebieskiego błysku przy tapnięciu */
-      button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+      /* Wygodniejsze cele dotykowe i brak niebieskiego błysku przy tapnięciu.
+         [role="button"] to klikane div-y (kratki miesiąca, wiersze list). */
+      button, [role="button"] { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+      /* Fokus z klawiatury musi być widoczny. Pola mają inline `outline:none`,
+         a inline nie ustawia box-shadow — stąd obwódka tędy, i tylko dla
+         :focus-visible, żeby tapnięcie palcem jej nie zostawiało. */
+      :focus-visible { outline: none; box-shadow: 0 0 0 2px #0a0a0a, 0 0 0 4px #8fa6e8 !important; border-radius: 6px; }
 
       /* iOS Safari powiększa stronę przy focusie w pole o foncie <16px.
          Na wąskich ekranach wymuszamy 16px, żeby nie przeskakiwał widok. */
