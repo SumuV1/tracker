@@ -5,6 +5,11 @@ import { NutrientRings, MeasurementChart } from "../components/charts.jsx";
 import { CalYearView } from "../components/calendar.jsx";
 import { useApp } from "../lib/appContext.js";
 
+// Pole formularza: `width:100%` z box-sizing, bo input typu number bez tego ma
+// własną szerokość (~150 px) i siatka auto-fit nie potrafi go ścisnąć —
+// na telefonie karta „Twoje dane" wystawała 130 px poza ekran.
+const FIELD={width:"100%",boxSizing:"border-box",minWidth:0,background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none"};
+
 export default function CaloriesTab(){
   const { foodCats, addFood, addMeasurement, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, closeCustomForm, closeModal, customForm, dailyTotals, dayGroups, dayLoading, deleteCustomFood, deleteMeasurement, editFoodId, editGramsId, editGramsVal, ensureYear, error, filtered, grams, gramsNum, isMobile, isWide, measForm, measurements, modal, n1, offLoading, offQuery, offResults, openGroups, profile, removeEntry, saveCustomFood, saveGrams, search, searchOff, selCat, selFood, serverProfile, setBmiTab, setCalDate, setChartMetric, setCustomForm, setEditGramsId, setEditGramsVal, setError, setGrams, setMeasForm, setModal, setOffQuery, setOffResults, setOpenGroups, setProfile, setSearch, setSelCat, setSelFood, setShowCustomForm, setShowMeasForm, showCustomForm, showMeasForm, startEditFood, tdee, todayEntries, totToday }=useApp();
   const entryActions=e=>editGramsId===e.id?(
@@ -32,24 +37,27 @@ export default function CaloriesTab(){
         ))}
       </div>
 
-      {/* BMI */}
+      {/* BMI. minWidth:0 na dzieciach siatki: bez tego kolumna 1fr rośnie do
+          najszerszej niełamliwej linii (wzór tkanki tłuszczowej) i karta
+          wystawała 130 px poza ekran telefonu, choć wzory mają własne
+          przewijanie. */}
       {bmiTab==="bmi"&&(
         <div style={{display:"grid",gap:16,alignItems:"start",
           gridTemplateColumns:isWide?"minmax(300px,420px) minmax(320px,1fr)":"1fr"}}>
-          <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20}}>
+          <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,minWidth:0}}>
             <div style={{fontSize:14,fontWeight:700,color:"#ccc",marginBottom:16}}>Twoje dane</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:12,marginBottom:12}}>
               {[["Waga (kg)","weight"],["Wzrost (cm)","height"],["Wiek (lata)","age"]].map(([label,key])=>(
-                <div key={key} style={{display:"flex",flexDirection:"column",gap:6}}>
+                <div key={key} style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
                   <label htmlFor={`prof-${key}`} style={{fontSize:12,color:"#888"}}>{label}</label>
                   <input id={`prof-${key}`} type="number" step="any" inputMode="decimal" value={profile[key]} onChange={e=>setProfile(p=>({...p,[key]:e.target.value}))}
-                    style={{background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none"}} placeholder={label}/>
+                    style={FIELD} placeholder={label}/>
                 </div>
               ))}
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              <div style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
                 <label style={{fontSize:12,color:"#888"}}>Płeć</label>
                 <select value={profile.sex} onChange={e=>setProfile(p=>({...p,sex:e.target.value}))}
-                  style={{background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none"}}>
+                  style={FIELD}>
                   <option value="M">Mężczyzna</option><option value="F">Kobieta</option>
                 </select>
               </div>
@@ -65,11 +73,11 @@ export default function CaloriesTab(){
                   ["Talia (cm)","waist",profile.sex==="F"?"W najwęższym miejscu tułowia.":"Na wysokości pępka, taśma poziomo."],
                   ...(profile.sex==="F"?[["Biodra (cm)","hips","W najszerszym miejscu pośladków, stopy razem."]]:[])
                 ].map(([label,key,hint])=>(
-                  <div key={key} style={{display:"flex",flexDirection:"column",gap:6}}>
+                  <div key={key} style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
                     <label style={{fontSize:12,color:"#888"}}>{label}</label>
                     <input type="number" step="any" inputMode="decimal" value={profile[key]}
                       onChange={e=>setProfile(p=>({...p,[key]:e.target.value}))}
-                      style={{background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none"}} placeholder={label}/>
+                      style={FIELD} placeholder={label}/>
                     <div style={{fontSize:10.5,color:INK.muted,lineHeight:1.45}}>{hint}</div>
                   </div>
                 ))}
@@ -78,14 +86,14 @@ export default function CaloriesTab(){
             <div style={{marginBottom:16}}>
               <label style={{fontSize:12,color:"#888",display:"block",marginBottom:6}}>Poziom aktywności</label>
               <select value={profile.activity} onChange={e=>setProfile(p=>({...p,activity:+e.target.value}))}
-                style={{width:"100%",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:13,outline:"none"}}>
+                style={FIELD}>
                 {ACTIVITY.map((a,i)=><option key={i} value={i}>{a.option} — ×{String(a.factor).replace(".",",")}</option>)}
               </select>
             </div>
             <button onClick={calcAll} style={{width:"100%",padding:"12px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#667eea,#764ba2)",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer"}}>Oblicz BMI i zapotrzebowanie</button>
           </div>
           {bmiVal&&bmiInfo&&(
-            <div>
+            <div style={{minWidth:0}}>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>
               <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:20,textAlign:"center"}}>
                 <div style={{fontSize:12,color:"#888",marginBottom:6}}>Twoje BMI</div>
@@ -181,15 +189,15 @@ export default function CaloriesTab(){
             {measurements.length>0&&(
               <div style={{marginTop:16,borderTop:"1px solid #1e1e1e",paddingTop:12}}>
                 {/* Widok tabelaryczny — każda liczba z wykresu jest też do odczytania tekstem. */}
-                <div style={{display:"grid",gridTemplateColumns:"minmax(88px,1fr) repeat(3,minmax(52px,1fr)) auto",
-                  gap:8,fontSize:10,color:INK.soft,fontWeight:700,letterSpacing:"0.06em",padding:"0 2px 6px"}}>
+                <div style={{display:"grid",gridTemplateColumns:"minmax(72px,1fr) repeat(3,minmax(44px,1fr)) auto",
+                  gap:6,fontSize:10,color:INK.soft,fontWeight:700,letterSpacing:"0.06em",padding:"0 2px 6px"}}>
                   <span>DATA</span><span style={{textAlign:"right"}}>WAGA</span>
                   <span style={{textAlign:"right"}}>TALIA</span><span style={{textAlign:"right"}}>TK. TŁ.</span><span/>
                 </div>
                 <div style={{maxHeight:200,overflowY:"auto"}}>
                   {[...measurements].reverse().map(r=>(
-                    <div key={r.id} style={{display:"grid",gridTemplateColumns:"minmax(88px,1fr) repeat(3,minmax(52px,1fr)) auto",
-                      gap:8,alignItems:"center",padding:"5px 2px",borderTop:"1px solid #151515",fontSize:12,fontVariantNumeric:"tabular-nums"}}>
+                    <div key={r.id} style={{display:"grid",gridTemplateColumns:"minmax(72px,1fr) repeat(3,minmax(44px,1fr)) auto",
+                      gap:6,alignItems:"center",padding:"5px 2px",borderTop:"1px solid #151515",fontSize:12,fontVariantNumeric:"tabular-nums"}}>
                       <span style={{color:"#bbb"}}>{plDate(r.day)}</span>
                       <span style={{textAlign:"right",color:"#e8e8e8"}}>{r.weightKg!=null?`${r.weightKg} kg`:"—"}</span>
                       <span style={{textAlign:"right",color:"#8a8a8a"}}>{r.waistCm!=null?`${r.waistCm} cm`:"—"}</span>
@@ -244,13 +252,13 @@ export default function CaloriesTab(){
 
           {/* lewa kolumna — postęp dnia. Na telefonie idzie za produktami:
               pierwszy ekran licznika ma pokazywać przycisk dodawania, nie 500 px pierścieni. */}
-          <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,order:isWide?0:2}}>
+          <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,order:isWide?0:2,minWidth:0}}>
             <div style={{fontWeight:700,fontSize:14,marginBottom:14,color:"#ccc"}}>Postęp dnia</div>
             <NutrientRings totals={totToday} targets={serverProfile?.targets}/>
           </div>
 
           {/* środkowa kolumna — produkty dnia */}
-          <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16}}>
+          <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,minWidth:0}}>
           <div style={{marginBottom:14}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
               <div style={{display:"flex",alignItems:"center",gap:6,flex:"1 1 auto",justifyContent:isMobile?"space-between":"flex-start"}}>
@@ -284,8 +292,10 @@ export default function CaloriesTab(){
                   const open=!!openGroups[g.key];
                   return(
                     <div key={g.key} style={{padding:"7px 0",borderBottom:gi<dayGroups.length-1?"1px solid #1a1a1a":"none"}}>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                        <div style={{flex:1,minWidth:0}}>
+                      {/* flexWrap: przy „Na pewno?" albo edycji gramatury akcje
+                          schodzą do drugiego wiersza zamiast wypychać kartę poza ekran */}
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+                        <div style={{flex:"1 1 110px",minWidth:0}}>
                           <div style={{fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
                             <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.name}</span>
                             {multi&&(
@@ -299,7 +309,7 @@ export default function CaloriesTab(){
                           </div>
                           <div style={{fontSize:11,color:INK.muted}}>{n1(g.grams)}g · T:{n1(g.fatG)}g W:{n1(g.carbsG)}g B:{n1(g.proteinG)}g Bł:{n1(g.fiberG)}g Sól:{n1(g.saltG)}g</div>
                         </div>
-                        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,marginLeft:"auto"}}>
                           <span style={{fontSize:14,fontWeight:700,color:NUTRIENT.kcal}}>{Math.round(g.kcal)} kcal</span>
                           {!multi&&entryActions(g.entries[0])}
                         </div>
@@ -307,11 +317,11 @@ export default function CaloriesTab(){
                       {multi&&open&&(
                         <div style={{marginTop:6,paddingLeft:10,borderLeft:"2px solid #222"}}>
                           {g.entries.map(e=>(
-                            <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"5px 0"}}>
-                              <div style={{fontSize:11,color:INK.soft,flex:1,minWidth:0}}>
+                            <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"5px 0",flexWrap:"wrap"}}>
+                              <div style={{fontSize:11,color:INK.soft,flex:"1 1 100px",minWidth:0}}>
                                 {n1(e.grams)}g · T:{n1(e.fatG)}g W:{n1(e.carbsG)}g B:{n1(e.proteinG)}g
                               </div>
-                              <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,marginLeft:"auto"}}>
                                 <span style={{fontSize:12,fontWeight:700,color:NUTRIENT.kcal}}>{Math.round(e.kcal)} kcal</span>
                                 {entryActions(e)}
                               </div>
@@ -326,7 +336,7 @@ export default function CaloriesTab(){
             )}
           </div>
           {/* prawa kolumna — historia */}
-          <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,order:isWide?0:3}}>
+          <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,order:isWide?0:3,minWidth:0}}>
             <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#ccc"}}>📅 Historia kalorii</div>
             <CalYearView calLogs={dailyTotals} tdee={tdee} onYear={ensureYear} onPickDay={d=>{if(d<=today())setCalDate(d);}}/>
           </div>

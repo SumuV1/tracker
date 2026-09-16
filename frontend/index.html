@@ -28,6 +28,13 @@
 
       button, input, select, textarea { font-family: inherit; }
 
+      /* Pola formularzy nie mogą dyktować szerokości układu: input typu number
+         ma własną szerokość ~150 px i w siatce auto-fit / w wierszu flex
+         rozpychał kartę poza ekran telefonu. min-width: 0 pozwala siatce go
+         ścisnąć, max-width domyka do komórki, border-box liczy padding
+         do środka, żeby `width: 100%` nie wystawało o padding. */
+      input, select, textarea { box-sizing: border-box; min-width: 0; max-width: 100%; }
+
       /* Wygodniejsze cele dotykowe i brak niebieskiego błysku przy tapnięciu.
          [role="button"] to klikane div-y (kratki miesiąca, wiersze list). */
       button, [role="button"] { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }

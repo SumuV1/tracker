@@ -15,7 +15,9 @@ export function Ring({value,target,unit,label,icon,color,size=104,limit=false}){
   const stroke=over?(limit?"#ef4444":"#f59e0b"):color;
   const fmt=v=>Number.isInteger(v)?v:Math.round(v*10)/10;
   return(
-    <div style={{textAlign:"center"}}>
+    // minWidth:0 — jako element siatki pierścień nie może narzucać jej
+    // szerokości SVG (96 px), bo trzy obok siebie nie mieszczą się na 320 px.
+    <div style={{textAlign:"center",minWidth:0}}>
       <svg viewBox={`0 0 ${size} ${size}`} style={{width:"100%",maxWidth:size,display:"block",margin:"0 auto"}}>
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#26262b" strokeWidth="9"/>
         {pct!==null&&(
