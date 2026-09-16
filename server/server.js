@@ -56,7 +56,13 @@ app.use(express.static(path.join(__dirname, "public"), {
     }
   },
 }));
-app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+// Każda ścieżka poza /api to zakładka aplikacji (/nawyki, /kalorie/licznik…):
+// oddajemy index.html, a router w przeglądarce dobiera zakładkę z adresu.
+// no-cache, bo to ten plik wskazuje na aktualny hash bundla po wdrożeniu.
+app.get("*", (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache");
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 // ── Błędy ─────────────────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {

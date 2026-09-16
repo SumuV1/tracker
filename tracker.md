@@ -64,7 +64,13 @@ tracker/
 │       ├── api.js            # klient API (zastąpił shim window.storage)
 │       ├── plans.js          # dane planów treningowych
 │       ├── stability.js      # stany, techniki i grupy zakładki Stabilizacja
-│       └── App.jsx
+│       ├── App.jsx           # stan, akcje, ładowanie danych, szkielet strony
+│       ├── lib/
+│       │   ├── ui.js         # breakpointy, tokeny kolorów i czcionek, daty, kb()
+│       │   ├── router.js     # zakładki jako ścieżki (history.pushState)
+│       │   └── appContext.js # kontekst: stan i akcje z App dla zakładek
+│       ├── components/       # buttons, charts, calendar, FormulaPanel, LoginScreen
+│       └── tabs/             # Stability, Habits, Calories, Muscles — po jednym na zakładkę
 └── scripts/
     ├── deploy.sh
     ├── teardown.sh              # odwrotność deploy.sh
@@ -162,9 +168,29 @@ import App from "./App.jsx";
 createRoot(document.getElementById("root")).render(<App />);
 ```
 
-### `frontend/src/App.jsx`
+### `frontend/src/App.jsx` i podział na moduły
 
-Cały interfejs w jednym komponencie. Warstwa danych trzyma się kilku zasad:
+`App.jsx` trzyma stan, akcje i ładowanie danych oraz szkielet strony (nagłówek,
+pasek zakładek, baner błędu). Widok każdej zakładki jest osobnym plikiem w
+`tabs/`, a to, co wspólne — w `components/` i `lib/`. Zakładki nie dostają
+kilkudziesięciu propsów: sięgają po stan i akcje przez `useApp()` z
+`lib/appContext.js`. To świadomy pierwszy krok podziału — pliki per zakładka
+**bez zmiany zachowania**; przeniesienie stanu do zakładek to osobna decyzja.
+
+**Każda zakładka ma własny adres** (`lib/router.js`, bez zależności, na
+`history.pushState`): `/stabilizacja`, `/nawyki`, `/kalorie` (z podstronami
+`/kalorie/profil` i `/kalorie/licznik`), `/miesnie`. Konsekwencje:
+
+- przycisk wstecz na telefonie cofa do poprzedniej zakładki, zamiast zamykać
+  aplikację;
+- link do zakładki da się wysłać albo dodać do ekranu głównego, a odświeżenie
+  na `/kalorie/licznik` zostaje tam — serwer oddaje `index.html` dla każdej
+  ścieżki poza `/api`;
+- `/` i nieznana ścieżka lądują na stabilizacji przez `replaceState`, więc
+  wstecz nie wraca na pustkę; `/kalorie` bez podstrony to licznik, gdy BMI jest
+  już policzone, w przeciwnym razie profil.
+
+Warstwa danych trzyma się kilku zasad:
 
 - **Logowanie jest bramką** — bez ważnej sesji renderuje się `LoginScreen`,
   reszta aplikacji w ogóle się nie montuje.
