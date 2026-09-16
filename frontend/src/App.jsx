@@ -188,6 +188,24 @@ export default function App() {
 
   const [expandedHabit,setExpandedHabit]=useState({});
   const [avoidItems,setAvoidItems]=useState([]);
+  // Plany treningowe — wiersze z API: { id, name, data } gdzie `data` to plan
+  // w formacie sledzik-plan/1. Edytor zwraca wynik zamiast używać `run`, bo
+  // błąd zapisu ma pokazać się w otwartym edytorze, nie w banerze pod nim.
+  const [plans,setPlans]=useState([]);
+  const savePlan=async(plan,id)=>{
+    try{
+      const row=id?await api.updatePlan(id,plan):await api.addPlan(plan);
+      setPlans(l=>id?l.map(p=>p.id===id?row:p):[...l,row]);
+      return {ok:true,row};
+    }catch(e){
+      if(e.status===401){setLoginNotice("Sesja wygasła — zaloguj się ponownie.");setUser(null);}
+      return {ok:false,error:e.message};
+    }
+  };
+  const deletePlan=id=>run(async()=>{
+    await api.deletePlan(id);
+    setPlans(l=>l.filter(p=>p.id!==id));
+  });
   const [avoidName,setAvoidName]=useState("");
   const [avoidNote,setAvoidNote]=useState("");
   const [showAvoidForm,setShowAvoidForm]=useState(false);
@@ -262,11 +280,11 @@ export default function App() {
     if(!user)return;
     (async()=>{
       try{
-        const [h,p,f,c,a,av,ms,pr,ci,tu]=await Promise.all([
+        const [h,p,f,c,a,av,ms,pr,ci,tu,pl]=await Promise.all([
           api.habits(),api.profile(),api.foods({}),api.foodCategories(),api.anchors(),api.avoid(),
-          api.measurements(),api.principles(),api.checkins(14),api.techniqueUses(30),
+          api.measurements(),api.principles(),api.checkins(14),api.techniqueUses(30),api.plans(),
         ]);
-        setHabits(h);setServerProfile(p);setFoods(f);setFoodCats(c);setKotwice(a);setAvoidItems(av);
+        setHabits(h);setServerProfile(p);setFoods(f);setFoodCats(c);setKotwice(a);setAvoidItems(av);setPlans(pl);
         setMeasurements(ms);setPrinciples(pr);setCheckins(ci);
         setTechUses(Object.fromEntries(tu.map(r=>[r.technique,r])));
         setProfile(profileToForm(p));
@@ -511,7 +529,7 @@ export default function App() {
   if(!user)return <LoginScreen notice={loginNotice} onLogged={u=>{setLoginNotice("");setUser(u);setLoading(true);}}/>;
   if(loading)return splash("Ładowanie…");
 
-  const ctx={ addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, editTimeId, ensureYear, error, expandedHabit, filtered, foodCats, foods, getStreak, getView, getWeeklyRate, grams, gramsNum, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, offLoading, offQuery, offResults, openGroups, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
+  const ctx={ addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, editTimeId, ensureYear, error, expandedHabit, filtered, foodCats, foods, getStreak, getView, getWeeklyRate, grams, gramsNum, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, offLoading, offQuery, offResults, openGroups, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, savePlan, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
   return(
     <AppContext.Provider value={ctx}>
     <div style={{background:"#0a0a0a",minHeight:"100vh",fontFamily:FONT,color:"#f1f1f1",padding:isMobile?"16px 12px 32px":"24px 16px"}}>

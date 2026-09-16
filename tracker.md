@@ -62,15 +62,20 @@ tracker/
 │       ├── main.jsx
 │   ├── public/              # ikony i manifest, kopiowane do dist bez zmian
 │       ├── api.js            # klient API (zastąpił shim window.storage)
-│       ├── plans.js          # dane planów treningowych
+│       ├── plans.js          # dni tygodnia, HRmax — pomocniki planów
 │       ├── stability.js      # stany, techniki i grupy zakładki Stabilizacja
 │       ├── App.jsx           # stan, akcje, ładowanie danych, szkielet strony
 │       ├── lib/
 │       │   ├── ui.js         # breakpointy, tokeny kolorów i czcionek, daty, kb()
 │       │   ├── router.js     # zakładki jako ścieżki (history.pushState)
+│       │   ├── muscles.js    # słownik mięśni sylwetki (MUSCLES, warstwy)
+│       │   ├── muscleGuess.js # podpowiedź mięśni z nazw dnia i ćwiczeń
 │       │   └── appContext.js # kontekst: stan i akcje z App dla zakładek
 │       ├── components/       # buttons, charts, calendar, FormulaPanel, LoginScreen
-│       └── tabs/             # Stability, Habits, Calories, Muscles — po jednym na zakładkę
+│       └── tabs/             # Stability, Habits, Calories, Muscles (+ PlanEditor) — po jednym na zakładkę
+├── shared/
+│   ├── planSchema.mjs            # format sledzik-plan/1: walidator wspólny dla przeglądarki i API
+│   └── plans/tyler-durden.json   # przykładowy plan = wzór pliku do importu
 └── scripts/
     ├── deploy.sh
     ├── teardown.sh              # odwrotność deploy.sh
@@ -334,19 +339,61 @@ zostają ledwie widocznym tłem i **nie reagują na kliknięcia**. To rozwiązuj
 problem zasłaniania: zębaty przedni schowany pod piersiowym czy prostownik
 grzbietu pod najszerszym są dostępne bez walki z tym, co leży na wierzchu.
 
-#### Plany treningowe — `frontend/src/plans.js`
+#### Plany treningowe
 
 Plan to tydzień: każdy dzień ma partię, listę ćwiczeń i mięśnie, które
-podświetlają się na sylwetce. Dane siedzą w osobnym module, bo są treścią,
-a nie logiką — dopisanie kolejnego planu to dopisanie obiektu do
-`TRAINING_PLANS`, bez dotykania komponentów.
+podświetlają się na sylwetce. Plany leżą **w bazie** (tabela
+`training_plans`, cały plan w jednej kolumnie JSONB) i powstają w aplikacji —
+w edytorze, z importu pliku albo jednym przyciskiem z przykładu.
 
-Pola dnia poza listą ćwiczeń są opcjonalne i pokazują się tylko wtedy, gdy plan
-je podaje: `warmup`, `intro`, `remark`, `loadNote`, `changes`. Tak samo
-w ćwiczeniu — `load`, `rest` i znacznik `added`. Cardio opisujemy wariantami
-(`cardio.variants`), bo jeden dzień potrafi mieć wersję ciągłą i interwałową
-o różnych zakresach tętna. Plan może mieć własne `rules` — rozwijane zasady
-wspólne nad paskiem dni.
+**Format `sledzik-plan/1`** — `shared/planSchema.mjs`. Jeden plik, ten sam
+walidator w przeglądarce (błędy widać przed zapisem, przycisk „Zapisz" jest
+zablokowany, dopóki są) i na serwerze (żeby do bazy nie trafiło nic, czego
+sylwetka nie wyświetli). Katalog `shared/` jest kopiowany do obrazu obok
+`frontend/` i `server/`, a importowany jako `../shared` z obu; rozszerzenie
+`.mjs`, bo katalog nie ma package.json i Node wziąłby `.js` za CommonJS.
+
+```json
+{
+  "format": "sledzik-plan/1",
+  "name": "Tyler Durden", "summary": "…", "note": "…",
+  "rules": [{ "title": "Przerwy", "text": "…" }],
+  "days": {
+    "mon": {
+      "title": "Klatka piersiowa", "short": "Klatka",
+      "primary": ["pectoralis"], "support": ["deltoid_front", "triceps"],
+      "warmup": "…", "loadNote": "…",
+      "exercises": [{ "name": "Wyciskanie", "sets": "4 × 6–8", "load": "100 kg", "rest": "2 min", "desc": "…" }],
+      "cardio": { "machine": "Bieżnia", "variants": [{ "name": "…", "time": "50 min", "hrFrom": 65, "hrTo": 75, "desc": "…" }] }
+    },
+    "sun": { "title": "Wolne", "rest": true, "primary": [], "support": [], "exercises": [] }
+  }
+}
+```
+
+Wymagane: `name`, wszystkie siedem dni (`mon`…`sun`) z `title`, w ćwiczeniu
+`name` i `sets`, w wariancie cardio `time`, `hrFrom`, `hrTo` (30–100 % HRmax).
+Reszta opcjonalna; `short` domyślnie z tytułu. Identyfikatory mięśni
+(`MUSCLE_IDS`) muszą pokrywać się z kluczami `MUSCLES` w
+`frontend/src/lib/muscles.js`. Limity długości w `LIMITS`.
+
+**Przykład** — `shared/plans/tyler-durden.json`: scalony plan Tyler Durden
+(pięć dni siłowych, cardio, niedziela wolna), bez uwag o różnicach wobec
+poprzednich wersji. Jest wzorem pliku do importu i tym, co wgrywa przycisk
+„Wgraj przykład" na pustej liście planów.
+
+**Edytor** — `frontend/src/tabs/PlanEditor.jsx`. Jeden formularz dla nowego
+planu, edycji i importu: import z pliku (`⤓ Import` → wybór pliku albo
+wklejenie JSON-a) nie zapisuje nic wprost, tylko wypełnia formularz, żeby
+przed zapisem obejrzeć dni, ćwiczenia i mięśnie. Dni edytuje się pojedynczo
+(pasek dni; wykrzyknik przy dniu z błędami). Mięśnie to jeden zestaw chipów:
+dotknięcie przełącza brak → partia główna → wspomagający. Przycisk
+„Podpowiedz z nazw" bierze mięśnie ze słownika
+`frontend/src/lib/muscleGuess.js` (nazwa dnia decyduje o partii, nazwy
+ćwiczeń dokładają wspomagające). Nieznane mięśnie z importowanego pliku
+wypadają z komunikatem — walidator by je odrzucił, a w formularzu nie
+dałoby się ich poprawić. „Eksportuj JSON" pobiera plan w tym samym formacie;
+`Anuluj` przy niezapisanych zmianach wymaga drugiego dotknięcia.
 
 Każdy dzień rozdziela mięśnie na dwie role:
 
@@ -355,20 +402,16 @@ Każdy dzień rozdziela mięśnie na dwie role:
 | `primary` | partia, pod którą ułożony jest dzień | pełny kolor, biały obrys, poświata |
 | `support` | mięśnie wspomagające i stabilizujące w tych ćwiczeniach | kolor przygaszony, bez obrysu |
 
-Identyfikatory muszą pokrywać się z kluczami `MUSCLES`. Partia dnia potrafi
-leżeć w obu warstwach naraz (plecy: najszerszy jest powierzchowny, prostownik
-grzbietu głęboki), więc mięśnie dnia **prześwitują też spod nieaktywnej
-warstwy** — widać, że coś tam jest, a nad sylwetką pojawia się skrót do
-przełączenia warstwy. Kliknięcie etykiety mięśnia w karcie dnia przełącza
-warstwę samo.
+Partia dnia potrafi leżeć w obu warstwach naraz (plecy: najszerszy jest
+powierzchowny, prostownik grzbietu głęboki), więc mięśnie dnia **prześwitują
+też spod nieaktywnej warstwy** — widać, że coś tam jest, a nad sylwetką
+pojawia się skrót do przełączenia warstwy. Kliknięcie etykiety mięśnia
+w karcie dnia przełącza warstwę samo.
 
 Dzień cardio liczy zakres tętna ze wzoru Tanaki (`208 − 0,7 × wiek`), biorąc
 wiek z profilu. Bez uzupełnionego profilu pokazuje sam wzór i odsyła do
-zakładki „Kalorie & BMI".
-
-Plany są **tylko do odczytu** — nic z nich nie trafia do bazy. Postępu
-treningowego świadomie nie zapisujemy, dopóki nie wiadomo, w jakiej formie
-miałby być prowadzony.
+zakładki „Kalorie & BMI". Postępu treningowego nadal nie zapisujemy — plan
+mówi, co robić, nie co zrobiono.
 
 ---
 
@@ -426,6 +469,7 @@ w ogóle istnieje.
 | DELETE | `/api/meals/:id` | usunięcie wpisu |
 | GET/POST/DELETE | `/api/anchors` | kotwice |
 | GET/POST/PATCH/DELETE | `/api/avoid`, `/api/avoid/:id` | lista niewolnika |
+| GET/POST/PUT/DELETE | `/api/plans`, `/api/plans/:id` | plany treningowe — cały plan w ciele, walidacja `shared/planSchema.mjs` |
 | GET/POST/DELETE | `/api/measurements`, `/api/measurements/:id` | historia pomiarów ciała |
 | GET/POST/PATCH/DELETE | `/api/stability/principles[/:id]`, `POST …/seed` | zasady użytkownika |
 | GET/POST/DELETE | `/api/stability/checkins[/:id]?days=` | check-iny stanu |
@@ -521,6 +565,7 @@ Na bazie, która już istnieje, ten sam schemat zakłada `./scripts/db-init.sh`
 | `mood_checkins` | check-iny: stan + natężenie 1–5 z godziną |
 | `technique_uses` | użycia technik, po stałym kluczu z `stability.js` |
 | `avoid_items` | lista niewolnika — rzeczy, od których użytkownik trzyma się z daleka |
+| `training_plans` | plany treningowe: `name` + cały plan w `data` (JSONB, format `sledzik-plan/1`) |
 | `body_measurements` | historia pomiarów: waga i obwody, jeden wiersz na dzień |
 | `login_attempts` | nieudane logowania, do limitu prób |
 
@@ -578,20 +623,23 @@ zależności), format `scrypt$N$r$p$salt$hash`.
 ### `Containerfile`
 ```dockerfile
 # ---- etap 1: build frontendu ----
-FROM docker.io/library/node:20-alpine AS build
-WORKDIR /app
-COPY frontend/package*.json ./
+FROM registry.access.redhat.com/ubi9/nodejs-20 AS build
+WORKDIR /opt/app-root/src
+COPY --chown=1001:0 frontend/package*.json ./
 RUN npm install
-COPY frontend/ ./
-RUN npm run build            # → /app/dist
+COPY --chown=1001:0 frontend/ ./
+# Kod wspólny frontendu i serwera (walidacja planów) — importowany jako ../shared
+COPY --chown=1001:0 shared/ ../shared/
+RUN npm run build            # → /opt/app-root/src/dist
 
 # ---- etap 2: serwer Node ----
-FROM docker.io/library/node:20-alpine
-WORKDIR /srv
-COPY server/package*.json ./
+FROM registry.access.redhat.com/ubi9/nodejs-20
+WORKDIR /opt/app-root/src
+COPY --chown=1001:0 server/package*.json ./
 RUN npm install --omit=dev
-COPY server/ ./
-COPY --from=build /app/dist ./public
+COPY --chown=1001:0 server/ ./
+COPY --chown=1001:0 shared/ ../shared/
+COPY --from=build --chown=1001:0 /opt/app-root/src/dist ./public
 EXPOSE 3000
 CMD ["node", "server.js"]
 ```

@@ -208,3 +208,18 @@ CREATE TABLE IF NOT EXISTS anchors (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS anchors_user_idx ON anchors (user_id);
+
+-- ── Plany treningowe ──────────────────────────────────────────────────────
+-- Cały plan leży w jednej kolumnie JSONB w formacie „sledzik-plan/1"
+-- (shared/planSchema.mjs), bo aplikacja zawsze czyta i zapisuje plan w całości
+-- — tydzień, dni, ćwiczenia — i nigdy nie pyta o pojedyncze ćwiczenie. Nazwa
+-- zdublowana w kolumnie, żeby lista planów nie musiała parsować JSON-a.
+CREATE TABLE IF NOT EXISTS training_plans (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name       text NOT NULL CHECK (length(btrim(name)) > 0),
+  data       jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS training_plans_user_idx ON training_plans (user_id);

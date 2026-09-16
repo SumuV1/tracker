@@ -80,6 +80,12 @@ export const api = {
   patchAvoid: (id, body) => request(`/avoid/${id}`, { method: "PATCH", body }),
   deleteAvoid: id => request(`/avoid/${id}`, { method: "DELETE" }),
 
+  // Plany treningowe — cały plan w formacie sledzik-plan/1 (shared/planSchema.mjs).
+  plans: () => request("/plans"),
+  addPlan: plan => request("/plans", { method: "POST", body: plan }),
+  updatePlan: (id, plan) => request(`/plans/${id}`, { method: "PUT", body: plan }),
+  deletePlan: id => request(`/plans/${id}`, { method: "DELETE" }),
+
   anchors: () => request("/anchors"),
   addAnchor: body => request("/anchors", { method: "POST", body }),
   deleteAnchor: id => request(`/anchors/${id}`, { method: "DELETE" }),
