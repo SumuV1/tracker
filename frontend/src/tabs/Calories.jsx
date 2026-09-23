@@ -11,7 +11,7 @@ import { useApp } from "../lib/appContext.js";
 const FIELD={width:"100%",boxSizing:"border-box",minWidth:0,background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none"};
 
 export default function CaloriesTab(){
-  const { foodCats, addFood, addMeasurement, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, closeCustomForm, closeModal, customForm, dailyTotals, dayGroups, dayLoading, deleteCustomFood, deleteMeasurement, editFoodId, editGramsId, editGramsVal, ensureYear, error, filtered, grams, gramsNum, isMobile, isWide, measForm, measurements, modal, n1, offLoading, offQuery, offResults, openGroups, profile, removeEntry, saveCustomFood, saveGrams, search, searchOff, selCat, selFood, serverProfile, setBmiTab, setCalDate, setChartMetric, setCustomForm, setEditGramsId, setEditGramsVal, setError, setGrams, setMeasForm, setModal, setOffQuery, setOffResults, setOpenGroups, setProfile, setSearch, setSelCat, setSelFood, setShowCustomForm, setShowMeasForm, showCustomForm, showMeasForm, startEditFood, tdee, todayEntries, totToday }=useApp();
+  const { foodCats, addFood, addMeasurement, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, closeCustomForm, closeModal, customForm, dailyTotals, dayGroups, dayLoading, deleteCustomFood, deleteMeasurement, editFoodId, editGramsId, editGramsVal, ensureYear, error, filtered, grams, gramsNum, isMobile, isWide, measForm, measurements, modal, n1, offInfo, offLoading, offQuery, offResults, openGroups, profile, removeEntry, saveCustomFood, saveGrams, search, searchOff, selCat, selFood, serverProfile, setBmiTab, setCalDate, setChartMetric, setCustomForm, setEditGramsId, setEditGramsVal, setError, setGrams, setMeasForm, setModal, setOffInfo, setOffQuery, setOffResults, setOpenGroups, setProfile, setSearch, setSelCat, setSelFood, setShowCustomForm, setShowMeasForm, showCustomForm, showMeasForm, startEditFood, tdee, todayEntries, totToday }=useApp();
   const entryActions=e=>editGramsId===e.id?(
     <div style={{display:"flex",alignItems:"center",gap:4}}>
       <input autoFocus type="number" step="any" min={0} inputMode="decimal" value={editGramsVal}
@@ -364,7 +364,7 @@ export default function CaloriesTab(){
           )}
           <div style={{display:"flex",gap:4,background:"#0a0a0a",borderRadius:10,padding:3,marginBottom:10}}>
             {[[false,"📦 Baza lokalna"],[true,"🌍 Open Food Facts"]].map(([online,label])=>(
-              <button key={label} onClick={()=>{setSelFood(null);setOffResults(online?[]:null);}}
+              <button key={label} onClick={()=>{setSelFood(null);setOffInfo(null);setOffResults(online?[]:null);}}
                 style={{flex:1,background:(offResults!==null)===online?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"7px",
                   color:(offResults!==null)===online?"#fff":INK.soft,fontWeight:600,cursor:"pointer",fontSize:12}}>{label}</button>
             ))}
@@ -388,6 +388,15 @@ export default function CaloriesTab(){
                 Dane z bazy Open Food Facts. Wybrany produkt trafia na stałe do Twojego katalogu,
                 więc kolejnym razem znajdziesz go już lokalnie.
               </div>
+              {/* Open Food Facts zwraca wszystko, co pasuje do któregokolwiek słowa —
+                  serwer zostawia tylko trafienia w co najmniej dwa. Bez tej linijki
+                  krótsza lista wyglądałaby jak pusta baza. */}
+              {offInfo&&offInfo.dropped>0&&(
+                <div style={{fontSize:11,color:INK.soft,lineHeight:1.5,marginTop:4}}>
+                  Pasować musi {offInfo.need===1?"co najmniej 1 słowo":"co najmniej 2 słowa"} z zapytania.
+                  Odrzuconych luźnych trafień: {offInfo.dropped}.
+                </div>
+              )}
             </div>
           ):(
             <>

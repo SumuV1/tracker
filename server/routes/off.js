@@ -11,6 +11,11 @@ const SEARCH_URL = "https://search.openfoodfacts.org/search";
 const PRODUCT_URL = "https://world.openfoodfacts.org/api/v2/product";
 const FIELDS = "code,product_name,brands,quantity,nutriments";
 
+// Bierzemy więcej trafień, niż pokazujemy, bo zaraz odsiewamy te, które pasują
+// tylko do części zapytania (patrz „Dopasowanie słów”).
+const PAGE_SIZE = 100;
+const SHOW = 20;
+
 // Open Food Facts prosi o identyfikację aplikacji w każdym żądaniu.
 // Wyłącznie ASCII — nagłówki HTTP to ByteString, polski znak wywala fetch.
 const USER_AGENT = "Tracker/1.0 (self-hosted instance)";
@@ -110,13 +115,48 @@ function normalize(p) {
   };
 }
 
+// ── Dopasowanie słów ──────────────────────────────────────────────────────
+// Open Food Facts szuka „którekolwiek słowo” (multi_match z domyślnym OR), więc
+// na „mleko kokosowe bez cukru” odpowiadało „Sezamki bez cukru”. Wymuszenia
+// koniunkcji w tym API nie ma: „AND” leci jako zwykłe słowo, a składnia
+// „+słowo +słowo” rozbija zapytanie na filtr po nieistniejącym polu i zwraca
+// zero wyników. Zawężamy więc u siebie — na liście zostają tylko produkty,
+// których nazwa trafia w wymaganą liczbę słów zapytania.
+//
+// Wymagane = min(liczba słów, 2): jedno słowo działa jak dotąd, dwa i więcej
+// muszą trafić co najmniej dwoma. Przy dłuższych zapytaniach na górze ląduje
+// to, co trafiło w najwięcej słów.
+const REQUIRED_WORDS = 2;
+
+// Polska odmiana: „jogurt naturalny” kontra „jogurty naturalne”. Zamiast
+// słownika form porównujemy przedrostek. Słowa krótsze niż PREFIX muszą zgadzać
+// się dokładnie — na trzech literach dopasowanie łapie za dużo („ser” trafiałby
+// w „serce”).
+const PREFIX = 4;
+
+// Znaki diakrytyczne z porównania wypadają, żeby „losos” znalazł „łososia”.
+// „ł” nie rozkłada się w NFD, więc idzie osobno.
+const fold = s => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ł/g, "l");
+const words = s => fold(s).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+const wordMatches = (a, b) => {
+  if (a.length < PREFIX || b.length < PREFIX) return a === b;
+  return a.slice(0, PREFIX) === b.slice(0, PREFIX);
+};
+
+// Ile słów zapytania ma pokrycie w tekście produktu.
+const countHits = (queryWords, text) => {
+  const tokens = words(text);
+  return queryWords.filter(w => tokens.some(t => wordMatches(w, t))).length;
+};
+
 // ── Wyszukiwanie ──────────────────────────────────────────────────────────
 offRoutes.get("/search", wrap(async (req, res) => {
   const q = reqText(req.query.q, "q", { max: 80, min: 2 });
   const key = q.toLowerCase();
 
   const cached = cacheGet(key);
-  if (cached) return res.json({ results: cached, cached: true });
+  if (cached) return res.json({ ...cached, cached: true });
 
   if (!searchBudget()) {
     return res.status(429).json({
@@ -124,12 +164,22 @@ offRoutes.get("/search", wrap(async (req, res) => {
     });
   }
 
-  const url = `${SEARCH_URL}?q=${encodeURIComponent(q)}&page_size=25&fields=${FIELDS}`;
+  const url = `${SEARCH_URL}?q=${encodeURIComponent(q)}&page_size=${PAGE_SIZE}&fields=${FIELDS}`;
   const data = await offFetch(url);
-  const results = (data.hits || []).map(normalize).filter(Boolean).slice(0, 20);
+  const all = (data.hits || []).map(normalize).filter(Boolean);
 
-  cacheSet(key, results);
-  res.json({ results, cached: false });
+  const queryWords = [...new Set(words(q))];
+  const need = Math.min(queryWords.length, REQUIRED_WORDS);
+  const kept = all
+    .map(p => ({ p, hits: countHits(queryWords, `${p.name} ${p.quantity || ""}`) }))
+    .filter(x => x.hits >= need)
+    // Sortowanie jest stabilne, więc wewnątrz tej samej liczby trafień zostaje
+    // kolejność trafności z Open Food Facts.
+    .sort((a, b) => b.hits - a.hits);
+
+  const payload = { results: kept.slice(0, SHOW).map(x => x.p), dropped: all.length - kept.length, need };
+  cacheSet(key, payload);
+  res.json({ ...payload, cached: false });
 }));
 
 // ── Import do katalogu ────────────────────────────────────────────────────

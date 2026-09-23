@@ -516,6 +516,30 @@ przyjmuje ich z przeglądarki. Klient wskazuje wyłącznie, który produkt.
 Nagłówek `User-Agent` musi być czystym ASCII: nagłówki HTTP to ByteString,
 więc polski znak w nazwie aplikacji wywraca `fetch`.
 
+#### Dopasowanie do wielu słów
+
+Search-a-licious szuka **któregokolwiek słowa** (`multi_match` z domyślnym OR),
+więc „mleko kokosowe bez cukru” zwracało „Sezamki bez cukru”. Wymuszenia
+koniunkcji w tym API nie ma: `AND` leci jako zwykłe słowo, a składnia
+`+słowo +słowo` rozbija zapytanie na filtr po nieistniejącym polu i zwraca zero
+wyników. Zawężanie robi więc serwer: pobiera 100 trafień zamiast 20 i zostawia
+te, które trafiają w wymaganą liczbę słów.
+
+- **Wymagane = min(liczba słów zapytania, 2)** — jedno słowo działa jak dotąd,
+  dwa i więcej muszą trafić co najmniej dwoma.
+- Wyniki są sortowane po liczbie trafionych słów, więc przy dłuższym zapytaniu
+  pełne dopasowanie ląduje na górze (sortowanie jest stabilne, w obrębie tej
+  samej liczby zostaje kolejność trafności z Open Food Facts).
+- Słowa porównywane są po **przedrostku czterech znaków** i bez znaków
+  diakrytycznych — „jogurty naturalne” trafia w „jogurt naturalny”, a „losos”
+  w „łososia”. Słowa krótsze niż cztery znaki muszą zgadzać się dokładnie, bo
+  na trzech literach dopasowanie łapie za dużo („ser” trafiałby w „serce”).
+- Odpowiedź zawiera `need` i `dropped`; okno wyszukiwania pokazuje pod polem,
+  ile luźnych trafień odpadło, żeby krótsza lista nie wyglądała jak pusta baza.
+
+Filtr nie naprawia rankingu Open Food Facts — jeśli w pierwszej setce trafień
+nie ma produktu z pełnym dopasowaniem, nie weźmie się on znikąd.
+
 ### Wartości pochodne
 
 BMI, podstawowa (PPM) i całkowita przemiana materii (CPM) liczone są w
