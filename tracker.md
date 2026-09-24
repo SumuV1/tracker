@@ -811,6 +811,47 @@ DB_NAME=tracker
   / `/etc/hosts`), albo
 - po prostu adres IP hosta, jeśli DNS nie jest dostępny.
 
+### Zapora: dwie strefy
+
+Interfejs publiczny i tailnet są rozdzielone w firewalld, bo domyślnie **nie
+były**: interfejs bez przypisanej strefy wpada pod regułę zbiorczą
+`jump filter_IN_public` w `filter_INPUT_POLICIES`, więc ruch z Tailscale
+przechodził przez tę samą strefę co ruch z internetu.
+
+```bash
+sudo firewall-cmd --permanent --zone=trusted --add-interface=tailscale0
+sudo firewall-cmd --permanent --zone=public --remove-service=cockpit
+sudo firewall-cmd --reload
+```
+
+Po tym `public` (na `ens3`, z publicznym adresem) wpuszcza **wyłącznie SSH**,
+a wszystko inne — w tym Cockpit na 9090 — jest osiągalne tylko z tailnetu.
+Sprawdzenie: `firewall-cmd --zone=public --list-services`.
+
+Sam `tailscale serve` nie zależy od tych reguł: TLS kończy się w `tailscaled`
+w przestrzeni użytkownika, więc pakiety nie przechodzą przez łańcuch INPUT.
+Cockpit to zwykła usługa systemowa i przez ten łańcuch przechodzi — stąd
+konieczność strefy zaufanej, zamiast samego usunięcia usługi z `public`.
+
+### fail2ban
+
+SSH z publicznym adresem zbiera kilkanaście tysięcy prób logowania na dobę.
+Konfiguracja w `/etc/fail2ban/jail.local` (plik `.local` przeżywa aktualizacje
+pakietu), bany trafiają do firewalld jako rich rules:
+
+| Ustawienie | Wartość | Dlaczego |
+|---|---|---|
+| `backend` | `systemd` | sshd na Rocky nie pisze do `/var/log/secure`, logi są wyłącznie w dzienniku |
+| `ignoreip` | `127.0.0.1/8 ::1 100.64.0.0/10` | tailnet nigdy nie trafia do bana — to droga awaryjna, dopóki SSH przyjmuje hasła |
+| `maxretry` / `findtime` | 5 / 10 min | |
+| `bantime` + `increment` | 1 h, rosnąco do tygodnia | skaner wraca w kółko, człowiek nie |
+
+```bash
+sudo fail2ban-client status sshd     # ile zbanowanych, jakie adresy
+sudo firewall-cmd --list-rich-rules  # to samo widziane od strony zapory
+sudo fail2ban-client set sshd unbanip <adres>
+```
+
 ### Dostęp z zewnątrz: Tailscale
 
 Aplikacja nie jest wystawiona do internetu. Wchodzi się do niej przez tailnet:
