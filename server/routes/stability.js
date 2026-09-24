@@ -1,5 +1,5 @@
 import express from "express";
-import { query } from "../db.js";
+import { query, withTransaction } from "../db.js";
 import { wrap, reqText, optText, reqNumber, optNumber, reqId, BadRequest } from "../http.js";
 
 // Stabilizacja emocjonalna: zasady, check-iny, użycia technik.
@@ -85,17 +85,36 @@ const STARTER = [
   { text: "Ile czasu zyskuje ten, kto nie ogląda się na to, co powiedział, zrobił czy pomyślał bliźni, lecz tylko na to, co sam robi.",
     source: "Marek Aureliusz, Rozmyślania IV 18", states: ["spokoj"] },
 ];
+const SEED_NOTE = "Przykład startowy — podmień na własne słowa albo usuń.";
+
 stabilityRoutes.post("/principles/seed", wrap(async (req, res) => {
-  const { rows } = await query("SELECT 1 FROM principles WHERE user_id = $1 LIMIT 1", [req.user.id]);
-  if (rows.length) throw new BadRequest("Masz już zasady — zestaw startowy jest tylko na puste konto.");
-  for (const [i, p] of STARTER.entries()) {
-    await query(
-      `INSERT INTO principles (user_id, text, source, states, note, position) VALUES ($1,$2,$3,$4::text[],$5,$6)`,
-      [req.user.id, p.text, p.source, p.states, "Przykład startowy — podmień na własne słowa albo usuń.", i]
+  // Sprawdzenie „czy puste" i wstawianie muszą być w jednej transakcji: dwa
+  // równoległe kliknięcia wstawiłyby zestaw dwa razy. Wiersze idą jednym
+  // INSERT-em z rozpakowanych tablic zamiast pętlą po osobnych zapytaniach.
+  const rows = await withTransaction(async q => {
+    const { rows: existing } = await q(
+      "SELECT 1 FROM principles WHERE user_id = $1 LIMIT 1 FOR UPDATE", [req.user.id]
     );
-  }
-  const all = await query(`${SELECT_P} WHERE user_id = $1 ORDER BY position, id`, [req.user.id]);
-  res.status(201).json(all.rows);
+    if (existing.length) throw new BadRequest("Masz już zasady — zestaw startowy jest tylko na puste konto.");
+    await q(
+      `INSERT INTO principles (user_id, text, source, states, note, position)
+       SELECT $1, t.text, t.source, t.states::text[], $5, t.pos
+         FROM unnest($2::text[], $3::text[], $4::text[], $6::int[]) AS t(text, source, states, pos)`,
+      [
+        req.user.id,
+        STARTER.map(p => p.text),
+        STARTER.map(p => p.source),
+        // states to tablica w tablicy — przez parametr idzie jako literał
+        // Postgresa, bo sterownik nie rozpakuje zagnieżdżenia sam.
+        STARTER.map(p => `{${p.states.map(x => `"${x}"`).join(",")}}`),
+        SEED_NOTE,
+        STARTER.map((_, i) => i),
+      ]
+    );
+    const all = await q(`${SELECT_P} WHERE user_id = $1 ORDER BY position, id`, [req.user.id]);
+    return all.rows;
+  });
+  res.status(201).json(rows);
 }));
 
 // ── Check-iny ───────────────────────────────────────────────────────────

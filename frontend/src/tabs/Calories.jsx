@@ -11,7 +11,7 @@ import { useApp } from "../lib/appContext.js";
 const FIELD={width:"100%",boxSizing:"border-box",minWidth:0,background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none"};
 
 export default function CaloriesTab(){
-  const { foodCats, addFood, addMeasurement, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, closeCustomForm, closeModal, customForm, dailyTotals, dayGroups, dayLoading, deleteCustomFood, deleteMeasurement, editFoodId, editGramsId, editGramsVal, ensureYear, error, filtered, grams, gramsNum, isMobile, isWide, measForm, measurements, modal, n1, offInfo, offLoading, offQuery, offResults, openGroups, profile, removeEntry, saveCustomFood, saveGrams, search, searchOff, selCat, selFood, serverProfile, setBmiTab, setCalDate, setChartMetric, setCustomForm, setEditGramsId, setEditGramsVal, setError, setGrams, setMeasForm, setModal, setOffInfo, setOffQuery, setOffResults, setOpenGroups, setProfile, setSearch, setSelCat, setSelFood, setShowCustomForm, setShowMeasForm, showCustomForm, showMeasForm, startEditFood, tdee, todayEntries, totToday }=useApp();
+  const { foodCats, addFood, addMeasurement, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, closeCustomForm, closeModal, customForm, dailyTotals, dayGroups, dayLoading, deleteCustomFood, deleteMeasurement, editFoodId, editGramsId, editGramsVal, ensureYear, error, filtered, foodsTruncated, grams, gramsNum, isMobile, isWide, measForm, measurements, modal, n1, offInfo, offLoading, offQuery, offResults, openGroups, profile, removeEntry, saveCustomFood, saveGrams, search, searchOff, selCat, selFood, serverProfile, setBmiTab, setCalDate, setChartMetric, setCustomForm, setEditGramsId, setEditGramsVal, setError, setGrams, setMeasForm, setModal, setOffInfo, setOffQuery, setOffResults, setOpenGroups, setProfile, setSearch, setSelCat, setSelFood, setShowCustomForm, setShowMeasForm, showCustomForm, showMeasForm, startEditFood, tdee, todayEntries, totToday }=useApp();
   const entryActions=e=>editGramsId===e.id?(
     <div style={{display:"flex",alignItems:"center",gap:4}}>
       <input autoFocus type="number" step="any" min={0} inputMode="decimal" value={editGramsVal}
@@ -443,6 +443,13 @@ export default function CaloriesTab(){
                   <button onClick={closeCustomForm} style={{background:"#222",border:"1px solid #444",borderRadius:8,color:"#aaa",padding:"9px 16px",fontSize:13,cursor:"pointer"}}>Anuluj</button>
                 )}
               </div>
+            </div>
+          )}
+          {/* Serwer oddaje najwyżej `limit` produktów. Bez tej linijki katalog
+              urywałby się po cichu i wyglądało to jak brakujący produkt. */}
+          {offResults===null&&foodsTruncated&&(
+            <div style={{fontSize:11,color:"#c8a24a",lineHeight:1.5,marginBottom:8}}>
+              Katalog jest dłuższy, niż się mieści — wpisz nazwę, żeby zawęzić listę.
             </div>
           )}
           <div style={{maxHeight:220,overflowY:"auto",border:"1px solid #2a2a2a",borderRadius:10,marginBottom:14}}>

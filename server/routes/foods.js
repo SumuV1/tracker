@@ -10,22 +10,36 @@ const SELECT_FOOD = `
          fat_g AS "fatG", fiber_g AS "fiberG", salt_g AS "saltG"
     FROM foods`;
 
+const DEFAULT_LIMIT = 200;
+
+// W ILIKE „%" i „_" są wieloznacznikami, więc bez tego wpisanie „%" w
+// wyszukiwarkę pasowało do wszystkiego, a nazwa z podkreśleniem szukała za
+// szeroko. ESCAPE deklarujemy w zapytaniu, bo domyślnego znaku Postgres
+// (backslash) nie ma w standardzie.
+const likeEscape = s => s.replace(/([\\%_])/g, "\\$1");
+
 // Widoczne są produkty wspólne (builtin/off) oraz własne produkty użytkownika.
+// Filtrowanie idzie po stronie bazy: katalog rośnie z każdym importem z Open
+// Food Facts, a przeglądarka i tak pokazywała tylko to, co zmieściło się
+// w limicie — po jego przekroczeniu produkty znikałyby bez słowa.
 foodRoutes.get("/", wrap(async (req, res) => {
   const q = optText(req.query.q, "q", { max: 100 });
   const category = optText(req.query.category, "category", { max: 60 });
-  const limit = optNumber(req.query.limit, "limit", { min: 1, max: 500 }) ?? 200;
+  const limit = optNumber(req.query.limit, "limit", { min: 1, max: 500 }) ?? DEFAULT_LIMIT;
 
+  // Bierzemy jeden wiersz ponad limit — jeśli przyjdzie, wiadomo, że lista
+  // jest ucięta, i klient może o tym powiedzieć zamiast milczeć.
   const { rows } = await query(
     `${SELECT_FOOD}
       WHERE (user_id IS NULL OR user_id = $1)
-        AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%')
+        AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%' ESCAPE '\\')
         AND ($3::text IS NULL OR category = $3)
       ORDER BY (source = 'custom') DESC, name
       LIMIT $4`,
-    [req.user.id, q, category, limit]
+    [req.user.id, q === null ? null : likeEscape(q), category, limit + 1]
   );
-  res.json(rows);
+  const truncated = rows.length > limit;
+  res.json({ items: truncated ? rows.slice(0, limit) : rows, truncated, limit });
 }));
 
 foodRoutes.get("/categories", wrap(async (req, res) => {

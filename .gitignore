@@ -1,10 +1,30 @@
+# ── Sekrety i dane ────────────────────────────────────────────────────────
+# Wzorzec z wyjątkiem, bo .env.local i .env.production też bywają tworzone,
+# a .env.example ma zostać w repo jako dokumentacja zmiennych.
 .env
+.env.*
+!.env.example
+
+# Klucze i certyfikaty — generowane na hoście, nigdy nie do repo.
 certs/
+*.pem
+*.key
+*.crt
+*.p12
+
+# Zrzuty bazy. `backups/` to katalog docelowy, wzorce niżej łapią zrzut
+# zapisany przez pomyłkę gdzie indziej — łącznie z danymi o zdrowiu.
+backups/
+*.sql.gz
+*.dump
+
+# ── Zależności i wyniki budowania ─────────────────────────────────────────
 node_modules/
 dist/
+.vite/
 
-# Zrzuty bazy — zostają na hoście, do repo nie trafiają
-backups/
-
-# Lokalne uprawnienia Claude Code — nie do repo
+# ── Lokalne i tymczasowe ──────────────────────────────────────────────────
+# Uprawnienia Claude Code są per maszyna — reszta .claude/ (skille) zostaje.
 .claude/settings.local.json
+*.log
+.DS_Store

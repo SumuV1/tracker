@@ -474,6 +474,23 @@ server/
     ├── habits.js  profile.js  foods.js  meals.js  anchors.js
 ```
 
+### Walidacja wejścia — `server/http.js`
+
+Zestaw `reqText` / `optText` / `reqNumber` / `optNumber` / `reqDate` / `reqId` /
+`optTime`, używany w każdej trasie; granice zgadzają się z `CHECK`-ami w
+schemacie, żeby baza nie musiała odrzucać tego, co przeszło walidację. Dwa
+miejsca, które wyglądają na drobiazg, a nie są:
+
+- `reqNumber` używa `Number`, nie `parseFloat` — `parseFloat("100abc")` zwracał
+  **100**, więc literówka w gramaturze zapisywała się jako poprawna liczba.
+  `Number` ma własną pułapkę (`""` i sam biały znak daje 0), stąd jawne
+  odrzucenie pustego tekstu.
+- `reqDate` sprawdza nie tylko kształt `RRRR-MM-DD`, ale i **istnienie daty**.
+  Samo wyrażenie regularne przepuszczało `2026-99-99`, wartość leciała do
+  Postgresa, ten rzucał `date/time field value out of range`, a ten błąd nie ma
+  pola `status` — więc klient dostawał `500 Błąd serwera.` zamiast czytelnego
+  `400`.
+
 ### Trasy
 
 Wszystko poza `/api/health` i `/api/auth/login` wymaga zalogowania. Każde
@@ -491,7 +508,7 @@ w ogóle istnieje.
 | GET | `/api/habits/logs?from=&to=` | odhaczenia w zakresie dat |
 | PUT/DELETE | `/api/habits/:id/logs/:day` | odhaczenie / cofnięcie |
 | GET/PUT | `/api/profile` | profil wraz z BMI, PPM i CPM |
-| GET | `/api/foods?q=&category=` | katalog: wspólne + własne |
+| GET | `/api/foods?q=&category=&limit=` | katalog: wspólne + własne. Zwraca `{items, truncated, limit}` — filtruje **baza**, nie przeglądarka, a `truncated` mówi, że lista jest ucięta |
 | GET | `/api/foods/categories` | kategorie z licznikami |
 | POST/PATCH/DELETE | `/api/foods`, `/api/foods/:id` | własne produkty (poprawiać i kasować można wyłącznie swoje) |
 | GET/POST | `/api/meals?day=` | dziennik dnia |
@@ -572,6 +589,17 @@ te, które trafiają w wymaganą liczbę słów.
 Filtr nie naprawia rankingu Open Food Facts — jeśli w pierwszej setce trafień
 nie ma produktu z pełnym dopasowaniem, nie weźmie się on znikąd.
 
+#### Szukanie w katalogu lokalnym
+
+Katalog rośnie z każdym importem: raz pobrany produkt zostaje w tabeli `foods`
+na stałe. Dlatego filtruje go **baza**, a nie przeglądarka — przy filtrowaniu
+lokalnym produkty spoza limitu (`?limit=`, domyślnie 200) przestałyby się
+znajdować bez żadnego komunikatu. Serwer pobiera o wiersz więcej, niż oddaje,
+i tym rozpoznaje ucięcie; okno produktu mówi wtedy „Katalog jest dłuższy, niż
+się mieści". Frazę wysyłamy po 250 ms bez pisania, a lista zawęża się od razu
+lokalnie, więc pisanie nie czeka na sieć. W `ILIKE` znaki `%` i `_` są
+wieloznacznikami — bez `ESCAPE` wpisanie `%` pasowało do całego katalogu.
+
 ### Wartości pochodne
 
 BMI, podstawowa (PPM) i całkowita przemiana materii (CPM) liczone są w
@@ -604,6 +632,14 @@ do jednego miejsca następuje dopiero przy zwrocie. Błąd standardowy metody to
 Pliki z `db/init/` wykonuje Postgres przy inicjalizacji **pustego** wolumenu.
 Na bazie, która już istnieje, ten sam schemat zakłada `./scripts/db-init.sh`
 (pliki są idempotentne, więc powtórne uruchomienie niczego nie psuje).
+
+**Zapisy dotykające dwóch tabel idą w transakcji.** `withTransaction` z
+`server/db.js` podaje callbackowi `q` o sygnaturze `query`, tyle że na jednym
+połączeniu — użycie modułowego `query` w środku wyszłoby poza transakcję.
+Korzystają z tego: zapis profilu (`profiles` + dzisiejszy `body_measurements`),
+dopisanie pomiaru (`body_measurements` + przepisanie do `profiles`) i zestaw
+startowy zasad, gdzie `SELECT ... FOR UPDATE` przed `INSERT` zamyka wyścig
+dwóch równoległych kliknięć.
 
 ### Tabele — `db/init/01_schema.sql`
 
@@ -913,60 +949,30 @@ certyfikaty. **Kopia, której nigdy nie odtworzono, nie jest kopią**: dlatego
 liczby wierszy, nie dotykając produkcyjnej.
 
 ### `scripts/deploy.sh`
+
+Skrypt jest idempotentny — każdy krok pomija to, co już istnieje — więc da się
+go puszczać w kółko. Pełną treść ma `scripts/deploy.sh`; tutaj kolejność i to,
+co w niej nieoczywiste:
+
+| Krok | Co robi | Dlaczego tak |
+|---|---|---|
+| sieć, wolumen, `db-pod` | tworzy, jeśli nie ma | dane przeżywają wszystko poza `teardown.sh --volumes` |
+| **schemat bazy** | `./scripts/db-init.sh` na działającym Postgresie | pliki z `db/init/` wykonują się same **tylko** przy pustym wolumenie; bez tego kroku wdrożenie kodu z nową kolumną daje działający kontener i sypiące się API |
+| budowa obrazu | `podman build -t tracker-app -t tracker-app:$(git rev-parse --short HEAD)` | tag z numerem commita to jedyny sposób, żeby po nieudanym wdrożeniu wskazać poprzednią wersję po nazwie, a nie po gołym identyfikatorze obrazu |
+| wymiana kontenera | porównanie `Id` nowego obrazu z `.Image` działającego kontenera | wdrożenie bez zmian w kodzie nie zrywa działającej aplikacji |
+| certyfikat | generuje, jeśli brak | wymiana wymaga ręcznego `gen-self-signed-cert.sh` |
+| `nginx-pod` | publikuje porty na `BIND_ADDR` (+ `[::1]` przy pętli zwrotnej) | `localhost` bywa rozwiązywane najpierw na IPv6 i cel `tailscale serve` trafiłby w próżnię |
+| start i sprawdzenie | `podman start` wszystkich trzech, potem do 30 s czekania na 404 z `/api/nope` | po restarcie serwera kontenery istnieją, ale mogą leżeć; **brak odpowiedzi kończy skrypt kodem 1** — inaczej „Gotowe" padało także wtedy, gdy API milczało |
+
+Wycofanie po nieudanym wdrożeniu:
+
 ```bash
-#!/usr/bin/env bash
-set -euo pipefail
-cd "$(dirname "$0")/.."
-set -a; source .env; set +a
-
-NET=app-net
-
-echo "▶ Sieć"
-podman network exists "$NET" || podman network create "$NET"
-
-echo "▶ Wolumen bazy danych"
-podman volume exists pgdata || podman volume create pgdata
-
-echo "▶ db-pod (PostgreSQL, alias: db)"
-podman pod exists db-pod || podman pod create --name db-pod --network "${NET}:alias=db"
-podman container exists postgres || podman run -d --pod db-pod --name postgres --restart=always \
-  -e POSTGRES_USER="$DB_USER" \
-  -e POSTGRES_PASSWORD="$DB_PASSWORD" \
-  -e POSTGRES_DB="$DB_NAME" \
-  -v pgdata:/var/lib/postgresql/data:Z \
-  -v "$PWD/db/init:/docker-entrypoint-initdb.d:ro,Z" \
-  docker.io/library/postgres:16-alpine
-
-echo "▶ Budowa obrazu aplikacji"
-podman build -t tracker-app -f Containerfile .
-
-echo "▶ app-pod (React + API, alias: app)"
-podman pod exists app-pod || podman pod create --name app-pod --network "${NET}:alias=app"
-podman container exists tracker-app || podman run -d --pod app-pod --name tracker-app --restart=always \
-  -e DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}" \
-  tracker-app
-
-echo "▶ Certyfikat TLS (self-signed, bez domeny publicznej)"
-if [[ ! -f certs/fullchain.pem || ! -f certs/privkey.pem ]]; then
-  ./scripts/gen-self-signed-cert.sh
-else
-  echo "  już istnieje, pomijam (uruchom ./scripts/gen-self-signed-cert.sh ręcznie, by wymienić)"
-fi
-
-echo "▶ nginx-pod (HTTPS, alias: web)"
-podman pod exists nginx-pod || podman pod create --name nginx-pod \
-  --network "${NET}:alias=web" -p "${HTTP_PORT}:80" -p "${HTTPS_PORT}:443"
-podman container exists nginx || podman run -d --pod nginx-pod --name nginx --restart=always \
-  -e HOST="$HOST" \
-  -e HTTPS_PORT="$HTTPS_PORT" \
-  -v "$PWD/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro,Z" \
-  -v "$PWD/certs:/etc/nginx/certs:ro,Z" \
-  docker.io/library/nginx:alpine
-
-echo "✅ Gotowe: https://$HOST:$HTTPS_PORT"
-echo "   Certyfikat jest self-signed — przeglądarka pokaże ostrzeżenie,"
-echo "   patrz tracker.md, sekcja o zaufaniu certyfikatowi."
+podman images tracker-app              # wybierz tag poprzedniego commita
+podman rm -f tracker-app
+podman tag tracker-app:<skrót> tracker-app:latest
+./scripts/deploy.sh
 ```
+
 
 ### `scripts/teardown.sh`  (odwrotność `deploy.sh`)
 

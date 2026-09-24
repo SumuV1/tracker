@@ -30,8 +30,23 @@ podman container exists postgres || podman run -d --pod db-pod --name postgres -
   -v "$PWD/db/init:/docker-entrypoint-initdb.d:ro,Z" \
   docker.io/library/postgres:16-alpine
 
+echo "▶ Schemat bazy"
+# Pliki z db/init wykonują się SAME tylko przy tworzeniu pustego wolumenu.
+# Na działającej bazie trzeba je nałożyć osobno — bez tego wdrożenie kodu,
+# który potrzebuje nowej kolumny, daje działający kontener i sypiące się API.
+# Wszystkie pliki są idempotentne (CREATE/ALTER ... IF NOT EXISTS).
+if podman container inspect postgres >/dev/null 2>&1; then
+  podman start postgres >/dev/null
+  ./scripts/db-init.sh >/dev/null && echo "  schemat aktualny"
+fi
+
 echo "▶ Budowa obrazu aplikacji"
-podman build -t tracker-app -f Containerfile .
+# Obok `latest` zostaje tag z krótkim skrótem commita — to jedyny sposób,
+# żeby po nieudanym wdrożeniu wskazać poprzednią wersję po nazwie, a nie po
+# gołym identyfikatorze obrazu wyłowionym z `podman images`.
+REV=$(git rev-parse --short HEAD 2>/dev/null || echo nogit)
+podman build -t tracker-app -t "tracker-app:$REV" -f Containerfile .
+echo "  wersja: $REV (wycofanie: podman rm -f tracker-app && podman tag tracker-app:<poprzedni> tracker-app:latest && ./scripts/deploy.sh)"
 
 echo "▶ app-pod (React + API, alias: app)"
 podman pod exists app-pod || podman pod create --name app-pod --network "${NET}:alias=app"
@@ -86,13 +101,22 @@ echo "▶ Uruchomienie zatrzymanych kontenerów"
 podman start postgres tracker-app nginx >/dev/null
 
 echo "▶ Sprawdzenie"
+API_OK=0
 for _ in $(seq 1 30); do
   if curl -sk -o /dev/null -w '%{http_code}' "https://localhost:${HTTPS_PORT}/api/nope" 2>/dev/null | grep -q 404; then
-    echo "  API odpowiada"; break
+    echo "  API odpowiada"; API_OK=1; break
   fi
   sleep 1
 done
 podman ps -a --filter name='^(postgres|tracker-app|nginx)$' --format '  {{.Names}}\t{{.Status}}'
+
+# Bez tego skrypt kończył się słowem „Gotowe" także wtedy, gdy API milczało
+# przez całe 30 s — czyli dokładnie w sytuacji, dla której to sprawdzenie
+# powstało.
+if [[ "$API_OK" -ne 1 ]]; then
+  echo "❌ API nie odpowiedziało w ciągu 30 s. Logi: podman logs --tail 50 tracker-app" >&2
+  exit 1
+fi
 
 if [[ "$BIND_ADDR" == "0.0.0.0" ]]; then
   echo "✅ Gotowe: https://$HOST:$HTTPS_PORT"

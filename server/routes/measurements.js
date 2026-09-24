@@ -1,5 +1,5 @@
 import express from "express";
-import { query } from "../db.js";
+import { query, withTransaction } from "../db.js";
 import { wrap, reqDate, optNumber, reqId, BadRequest } from "../http.js";
 import { deriveBodyFat } from "../bodyfat.js";
 
@@ -48,25 +48,30 @@ measurementRoutes.post("/", wrap(async (req, res) => {
     throw new BadRequest("Pomiar bez żadnej wartości nie ma sensu.");
   }
 
-  const { rows } = await query(
-    `INSERT INTO body_measurements (user_id, day, weight_kg, neck_cm, waist_cm, hips_cm)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (user_id, day) DO UPDATE SET
-       weight_kg = EXCLUDED.weight_kg, neck_cm = EXCLUDED.neck_cm,
-       waist_cm  = EXCLUDED.waist_cm,  hips_cm = EXCLUDED.hips_cm
-     RETURNING id, to_char(day,'YYYY-MM-DD') AS day, weight_kg AS "weightKg",
-               neck_cm AS "neckCm", waist_cm AS "waistCm", hips_cm AS "hipsCm"`,
-    [req.user.id, day, weightKg, neckCm, waistCm, hipsCm]
-  );
+  // Pomiar i przepisanie go do profilu to jeden zapis — inaczej przerwane
+  // żądanie zostawia wykres i formularz z różnymi liczbami.
+  const rows = await withTransaction(async q => {
+    const { rows } = await q(
+      `INSERT INTO body_measurements (user_id, day, weight_kg, neck_cm, waist_cm, hips_cm)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (user_id, day) DO UPDATE SET
+         weight_kg = EXCLUDED.weight_kg, neck_cm = EXCLUDED.neck_cm,
+         waist_cm  = EXCLUDED.waist_cm,  hips_cm = EXCLUDED.hips_cm
+       RETURNING id, to_char(day,'YYYY-MM-DD') AS day, weight_kg AS "weightKg",
+                 neck_cm AS "neckCm", waist_cm AS "waistCm", hips_cm AS "hipsCm"`,
+      [req.user.id, day, weightKg, neckCm, waistCm, hipsCm]
+    );
 
-  // Pomiar z dzisiaj to zarazem stan bieżący. Bez tego wykres pokazywałby
-  // jedną wagę, a formularz profilu obok drugą.
-  await query(
-    `UPDATE profiles SET weight_kg = COALESCE($3, weight_kg), neck_cm = COALESCE($4, neck_cm),
-            waist_cm = COALESCE($5, waist_cm), hips_cm = COALESCE($6, hips_cm), updated_at = now()
-      WHERE user_id = $1 AND $2::date = current_date`,
-    [req.user.id, day, weightKg, neckCm, waistCm, hipsCm]
-  );
+    // Pomiar z dzisiaj to zarazem stan bieżący. Bez tego wykres pokazywałby
+    // jedną wagę, a formularz profilu obok drugą.
+    await q(
+      `UPDATE profiles SET weight_kg = COALESCE($3, weight_kg), neck_cm = COALESCE($4, neck_cm),
+              waist_cm = COALESCE($5, waist_cm), hips_cm = COALESCE($6, hips_cm), updated_at = now()
+        WHERE user_id = $1 AND $2::date = current_date`,
+      [req.user.id, day, weightKg, neckCm, waistCm, hipsCm]
+    );
+    return rows;
+  });
 
   const [row] = await withDerived(rows, req.user.id);
   res.status(201).json(row);

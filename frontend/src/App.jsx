@@ -283,8 +283,14 @@ export default function App() {
     setHabitLogs(logsToMap(rows));
   },[year]);
 
-  const reloadFoods=useCallback(async()=>{
-    setFoods(await api.foods({}));
+  // Katalog produktów filtruje baza, nie przeglądarka: rośnie z każdym importem
+  // z Open Food Facts, a serwer i tak oddaje najwyżej `limit` wierszy — przy
+  // filtrowaniu lokalnym produkty spoza tej setki przestałyby się znajdować bez
+  // żadnego komunikatu. `truncated` mówi, że lista jest ucięta.
+  const [foodsTruncated,setFoodsTruncated]=useState(false);
+  const reloadFoods=useCallback(async(params={})=>{
+    const r=await api.foods(params);
+    setFoods(r.items);setFoodsTruncated(r.truncated);
   },[]);
 
   const reloadDay=useCallback(async(day)=>{
@@ -312,7 +318,7 @@ export default function App() {
           api.measurements(),api.principles(),api.checkins(14),api.techniqueUses(30),api.plans(),
           api.planLog(today()),
         ]);
-        setHabits(h);setServerProfile(p);setFoods(f);setFoodCats(c);setKotwice(a);setAvoidItems(av);setPlans(pl);
+        setHabits(h);setServerProfile(p);setFoods(f.items);setFoodsTruncated(f.truncated);setFoodCats(c);setKotwice(a);setAvoidItems(av);setPlans(pl);
         setExLog({today:exToMap(xl.today),last:exToMap(xl.last)});
         setMeasurements(ms);setPrinciples(pr);setCheckins(ci);
         setTechUses(Object.fromEntries(tu.map(r=>[r.technique,r])));
@@ -464,7 +470,7 @@ export default function App() {
     if(selFood.offCode){
       const imported=await api.offImport(selFood.offCode);
       foodId=imported.id;
-      await Promise.all([reloadFoods(),api.foodCategories().then(setFoodCats)]);
+      await Promise.all([reloadFoods(foodQuery()),api.foodCategories().then(setFoodCats)]);
     }
     await api.addMeal({
       day:calDate,foodId,name:selFood.name,grams:gramsNum,
@@ -521,7 +527,7 @@ export default function App() {
     // z chwili dodania i opisują zjedzony posiłek, a nie dzisiejszy katalog.
     if(editFoodId)await api.patchFood(editFoodId,body);
     else await api.addFood(body);
-    await Promise.all([reloadFoods(),api.foodCategories().then(setFoodCats)]);
+    await Promise.all([reloadFoods(foodQuery()),api.foodCategories().then(setFoodCats)]);
     closeCustomForm();
   });
   const deleteCustomFood=id=>run(async()=>{
@@ -529,10 +535,26 @@ export default function App() {
     // Kasowanie produktu, który akurat siedzi w formularzu, zostawiłoby
     // otwartą edycję czegoś, czego już nie ma.
     if(editFoodId===id)closeCustomForm();
-    await Promise.all([reloadFoods(),api.foodCategories().then(setFoodCats)]);
+    await Promise.all([reloadFoods(foodQuery()),api.foodCategories().then(setFoodCats)]);
   });
 
   // ── Open Food Facts ──
+  // Bieżące zawężenie listy produktów. Po zapisie albo skasowaniu własnego
+  // produktu odświeżamy listę tym samym filtrem, żeby nie wyskakiwała nagle
+  // cała baza.
+  const foodQuery=()=>({q:search.trim()||undefined,category:selCat==="Wszystkie"?undefined:selCat});
+
+  // Zapytanie do serwera dopiero po chwili bez pisania — inaczej każda litera
+  // to osobne żądanie. Lokalne filtrowanie niżej działa w międzyczasie, więc
+  // lista zawęża się natychmiast, a serwer tylko ją prostuje.
+  useEffect(()=>{
+    if(!user||!modal||offResults!==null)return;
+    const t=setTimeout(()=>{
+      reloadFoods(foodQuery()).catch(e=>setError(e.message));
+    },250);
+    return()=>clearTimeout(t);
+  },[user,modal,offResults,search,selCat,reloadFoods]);
+
   const searchOff=()=>run(async()=>{
     if(offQuery.trim().length<2)return;
     setOffLoading(true);
@@ -559,7 +581,7 @@ export default function App() {
   if(!user)return <LoginScreen notice={loginNotice} onLogged={u=>{setLoginNotice("");setUser(u);setLoading(true);}}/>;
   if(loading)return splash("Ładowanie…");
 
-  const ctx={ addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, editTimeId, ensureYear, error, exEntry, exLast, expandedHabit, filtered, foodCats, foods, getStreak, getView, getWeeklyRate, grams, gramsNum, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, offInfo, offLoading, offQuery, offResults, openGroups, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, saveEx, savePlan, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffInfo, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
+  const ctx={ addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, editTimeId, ensureYear, error, exEntry, exLast, expandedHabit, filtered, foodCats, foods, foodsTruncated, getStreak, getView, getWeeklyRate, grams, gramsNum, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, offInfo, offLoading, offQuery, offResults, openGroups, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, saveEx, savePlan, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffInfo, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
   return(
     <AppContext.Provider value={ctx}>
     <div style={{background:"#0a0a0a",minHeight:"100vh",fontFamily:FONT,color:"#f1f1f1",padding:isMobile?"16px 12px 32px":"24px 16px"}}>

@@ -16,6 +16,28 @@ export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 export const query = (text, params) => pool.query(text, params);
 
+// Zapisy dotykające dwóch tabel muszą być niepodzielne. Bez tego przerwane
+// żądanie zostawiało profil i historię pomiarów z różnymi liczbami — a to
+// dokładnie ta para, którą aplikacja pokazuje obok siebie.
+// Callback dostaje `q` o tej samej sygnaturze co `query`, tyle że na jednym
+// połączeniu; użycie modułowego `query` w środku wyszłoby poza transakcję.
+export async function withTransaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn((text, params) => client.query(text, params));
+    await client.query("COMMIT");
+    return result;
+  } catch (e) {
+    // Wycofanie też potrafi paść (zerwane połączenie) — wtedy liczy się
+    // pierwotny błąd, a nie ten z porządków.
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 export async function waitForDb(retries = 20) {
   for (let i = 0; i < retries; i++) {
     try {

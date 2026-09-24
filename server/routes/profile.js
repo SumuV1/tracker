@@ -1,5 +1,5 @@
 import express from "express";
-import { query } from "../db.js";
+import { query, withTransaction } from "../db.js";
 import { wrap, optNumber, BadRequest } from "../http.js";
 import { deriveBodyFat } from "../bodyfat.js";
 
@@ -76,37 +76,41 @@ profileRoutes.put("/", wrap(async (req, res) => {
   const waistCm = optNumber(b.waistCm, "waistCm", { min: 40, max: 200 });
   const hipsCm = optNumber(b.hipsCm, "hipsCm", { min: 50, max: 200 });
 
-  const { rows } = await query(
-    `INSERT INTO profiles (user_id, weight_kg, height_cm, age_years, sex, activity,
-                           neck_cm, waist_cm, hips_cm, updated_at)
-     VALUES ($1, $2, $3, $4, COALESCE($5,'M'), COALESCE($6, 1), $7, $8, $9, now())
-     ON CONFLICT (user_id) DO UPDATE SET
-       weight_kg  = EXCLUDED.weight_kg,
-       height_cm  = EXCLUDED.height_cm,
-       age_years  = EXCLUDED.age_years,
-       sex        = EXCLUDED.sex,
-       activity   = EXCLUDED.activity,
-       neck_cm    = EXCLUDED.neck_cm,
-       waist_cm   = EXCLUDED.waist_cm,
-       hips_cm    = EXCLUDED.hips_cm,
-       updated_at = now()
-     RETURNING weight_kg AS "weightKg", height_cm AS "heightCm",
-               age_years AS "ageYears", sex, activity,
-               neck_cm AS "neckCm", waist_cm AS "waistCm", hips_cm AS "hipsCm"`,
-    [req.user.id, weightKg, heightCm, ageYears, sex, activity, neckCm, waistCm, hipsCm]
-  );
-  // Zapis profilu to zarazem pomiar z dzisiaj — inaczej historia byłaby pusta
-  // dopóki użytkownik sam by o niej nie pomyślał, a to jedyny moment, w którym
-  // i tak wpisuje świeże liczby.
-  if (weightKg !== null || neckCm !== null || waistCm !== null || hipsCm !== null) {
-    await query(
-      `INSERT INTO body_measurements (user_id, day, weight_kg, neck_cm, waist_cm, hips_cm)
-       VALUES ($1, current_date, $2, $3, $4, $5)
-       ON CONFLICT (user_id, day) DO UPDATE SET
-         weight_kg = EXCLUDED.weight_kg, neck_cm = EXCLUDED.neck_cm,
-         waist_cm  = EXCLUDED.waist_cm,  hips_cm = EXCLUDED.hips_cm`,
-      [req.user.id, weightKg, neckCm, waistCm, hipsCm]
+  // Profil i pomiar z dzisiaj to jeden zapis: albo obie tabele, albo żadna.
+  const rows = await withTransaction(async q => {
+    const { rows } = await q(
+      `INSERT INTO profiles (user_id, weight_kg, height_cm, age_years, sex, activity,
+                             neck_cm, waist_cm, hips_cm, updated_at)
+       VALUES ($1, $2, $3, $4, COALESCE($5,'M'), COALESCE($6, 1), $7, $8, $9, now())
+       ON CONFLICT (user_id) DO UPDATE SET
+         weight_kg  = EXCLUDED.weight_kg,
+         height_cm  = EXCLUDED.height_cm,
+         age_years  = EXCLUDED.age_years,
+         sex        = EXCLUDED.sex,
+         activity   = EXCLUDED.activity,
+         neck_cm    = EXCLUDED.neck_cm,
+         waist_cm   = EXCLUDED.waist_cm,
+         hips_cm    = EXCLUDED.hips_cm,
+         updated_at = now()
+       RETURNING weight_kg AS "weightKg", height_cm AS "heightCm",
+                 age_years AS "ageYears", sex, activity,
+                 neck_cm AS "neckCm", waist_cm AS "waistCm", hips_cm AS "hipsCm"`,
+      [req.user.id, weightKg, heightCm, ageYears, sex, activity, neckCm, waistCm, hipsCm]
     );
-  }
+    // Zapis profilu to zarazem pomiar z dzisiaj — inaczej historia byłaby pusta
+    // dopóki użytkownik sam by o niej nie pomyślał, a to jedyny moment, w którym
+    // i tak wpisuje świeże liczby.
+    if (weightKg !== null || neckCm !== null || waistCm !== null || hipsCm !== null) {
+      await q(
+        `INSERT INTO body_measurements (user_id, day, weight_kg, neck_cm, waist_cm, hips_cm)
+         VALUES ($1, current_date, $2, $3, $4, $5)
+         ON CONFLICT (user_id, day) DO UPDATE SET
+           weight_kg = EXCLUDED.weight_kg, neck_cm = EXCLUDED.neck_cm,
+           waist_cm  = EXCLUDED.waist_cm,  hips_cm = EXCLUDED.hips_cm`,
+        [req.user.id, weightKg, neckCm, waistCm, hipsCm]
+      );
+    }
+    return rows;
+  });
   res.json({ ...rows[0], ...derive(rows[0]) });
 }));

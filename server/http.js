@@ -11,11 +11,19 @@ export class BadRequest extends Error {
   }
 }
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export function reqDate(value, field) {
-  if (typeof value !== "string" || !DATE_RE.test(value)) {
-    throw new BadRequest(`Pole "${field}" musi mieć format RRRR-MM-DD.`);
+  const m = typeof value === "string" ? value.match(DATE_RE) : null;
+  if (!m) throw new BadRequest(`Pole "${field}" musi mieć format RRRR-MM-DD.`);
+  // Sam kształt nie wystarczy: "2026-99-99" przechodził przez wyrażenie i leciał
+  // do Postgresa, który rzucał "date/time field value out of range" — a ten błąd
+  // nie ma pola `status`, więc klient dostawał 500 zamiast czytelnego 400.
+  // UTC, bo chodzi o samą datę z kalendarza, nie o moment w czasie.
+  const [, y, mo, d] = m.map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) {
+    throw new BadRequest(`Pole "${field}" nie jest istniejącą datą.`);
   }
   return value;
 }
@@ -33,7 +41,14 @@ export function optText(value, field, opts = {}) {
 }
 
 export function reqNumber(value, field, { min = 0, max = 1e6 } = {}) {
-  const n = typeof value === "number" ? value : parseFloat(value);
+  // Number zamiast parseFloat: parseFloat("100abc") zwracał 100, więc literówka
+  // w gramaturze zapisywała się jako poprawna liczba. Number ma z kolei własną
+  // pułapkę — "" i sam biały znak zamienia na 0 — stąd jawne odrzucenie pustego
+  // tekstu i wszystkiego, co nie jest liczbą ani tekstem.
+  let n;
+  if (typeof value === "number") n = value;
+  else if (typeof value === "string" && value.trim() !== "") n = Number(value);
+  else n = NaN;
   if (!Number.isFinite(n)) throw new BadRequest(`Pole "${field}" musi być liczbą.`);
   if (n < min || n > max) throw new BadRequest(`Pole "${field}" musi mieścić się w zakresie ${min}–${max}.`);
   return n;
