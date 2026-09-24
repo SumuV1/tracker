@@ -410,8 +410,24 @@ w karcie dnia przełącza warstwę samo.
 
 Dzień cardio liczy zakres tętna ze wzoru Tanaki (`208 − 0,7 × wiek`), biorąc
 wiek z profilu. Bez uzupełnionego profilu pokazuje sam wzór i odsyła do
-zakładki „Kalorie & BMI". Postępu treningowego nadal nie zapisujemy — plan
-mówi, co robić, nie co zrobiono.
+zakładki „Kalorie & BMI".
+
+**Odhaczanie ćwiczeń.** Przy każdym ćwiczeniu w panelu dnia stoi pole wyboru,
+a nad listą pasek postępu („ZROBIONE DZIŚ 3 / 6"). Odhaczenie jest zapisywane
+od razu, optymistycznie — przy błędzie sieci wraca do poprzedniego stanu.
+
+Ćwiczenie nie ma własnego identyfikatora (plan to jeden JSON), więc wskazuje
+je trójka **plan + dzień tygodnia + pozycja w dniu**, a wiersz w tabeli
+`plan_exercise_logs` wiąże ją z **datą kalendarzową**. Stąd trzy rzeczy:
+
+- w przyszłym tygodniu ten sam dzień planu zaczyna się czysty, bez kasowania,
+- zostaje historia, co i kiedy zostało zrobione (kopia nazwy ćwiczenia leży
+  w wierszu, żeby dała się czytać także po edycji planu),
+- brak wiersza znaczy „niezrobione", więc odznaczenie to zwykły `DELETE`.
+
+Datę podaje przeglądarka, bo to jej strefa czasowa decyduje, co jest „dziś" —
+serwer stoi w UTC. Plan innego dnia tygodnia można otworzyć w dowolny dzień;
+odhaczenia i tak trafiają pod dzisiejszą datę i panel mówi to wprost.
 
 ---
 
@@ -470,6 +486,7 @@ w ogóle istnieje.
 | GET/POST/DELETE | `/api/anchors` | kotwice |
 | GET/POST/PATCH/DELETE | `/api/avoid`, `/api/avoid/:id` | lista niewolnika |
 | GET/POST/PUT/DELETE | `/api/plans`, `/api/plans/:id` | plany treningowe — cały plan w ciele, walidacja `shared/planSchema.mjs` |
+| GET/POST | `/api/plans/log` | odhaczone ćwiczenia: `?date=` zwraca dzisiejsze, `POST {planId, dayKey, exIndex, exName, date, done}` stawia lub kasuje wiersz |
 | GET/POST/DELETE | `/api/measurements`, `/api/measurements/:id` | historia pomiarów ciała |
 | GET/POST/PATCH/DELETE | `/api/stability/principles[/:id]`, `POST …/seed` | zasady użytkownika |
 | GET/POST/DELETE | `/api/stability/checkins[/:id]?days=` | check-iny stanu |
@@ -590,6 +607,7 @@ Na bazie, która już istnieje, ten sam schemat zakłada `./scripts/db-init.sh`
 | `technique_uses` | użycia technik, po stałym kluczu z `stability.js` |
 | `avoid_items` | lista niewolnika — rzeczy, od których użytkownik trzyma się z daleka |
 | `training_plans` | plany treningowe: `name` + cały plan w `data` (JSONB, format `sledzik-plan/1`) |
+| `plan_exercise_logs` | odhaczone ćwiczenia: (plan, dzień tygodnia, pozycja) + data; brak wiersza = niezrobione |
 | `body_measurements` | historia pomiarów: waga i obwody, jeden wiersz na dzień |
 | `login_attempts` | nieudane logowania, do limitu prób |
 

@@ -223,3 +223,21 @@ CREATE TABLE IF NOT EXISTS training_plans (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS training_plans_user_idx ON training_plans (user_id);
+
+-- Odhaczanie ćwiczeń: jeden wiersz = jedno ćwiczenie zrobione danego dnia.
+-- Brak wiersza znaczy „niezrobione", więc odznaczenie to zwykłe DELETE.
+-- Ćwiczenie wskazujemy pozycją w dniu planu (plan jest jednym JSON-em, jego
+-- elementy nie mają własnych identyfikatorów); nazwa leży obok jako kopia na
+-- chwilę odhaczenia, żeby historia dała się czytać po edycji planu.
+CREATE TABLE IF NOT EXISTS plan_exercise_logs (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_id    bigint NOT NULL REFERENCES training_plans(id) ON DELETE CASCADE,
+  log_date   date NOT NULL,
+  day_key    text NOT NULL CHECK (day_key IN ('mon','tue','wed','thu','fri','sat','sun')),
+  ex_index   int NOT NULL CHECK (ex_index >= 0),
+  ex_name    text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, plan_id, log_date, day_key, ex_index)
+);
+CREATE INDEX IF NOT EXISTS plan_exercise_logs_user_date_idx ON plan_exercise_logs (user_id, log_date);

@@ -85,6 +85,9 @@ export const api = {
   addPlan: plan => request("/plans", { method: "POST", body: plan }),
   updatePlan: (id, plan) => request(`/plans/${id}`, { method: "PUT", body: plan }),
   deletePlan: id => request(`/plans/${id}`, { method: "DELETE" }),
+  planLog: date => request(`/plans/log?${qs({ date })}`),
+  setPlanLog: (planId, dayKey, exIndex, exName, date, done) =>
+    request("/plans/log", { method: "POST", body: { planId, dayKey, exIndex, exName, date, done } }),
 
   anchors: () => request("/anchors"),
   addAnchor: body => request("/anchors", { method: "POST", body }),

@@ -148,23 +148,40 @@ function ExercisePanel({muscleId,onClose,sheet=false}){
 
 // Kafel jednego ćwiczenia z planu — obciążenie trzymamy osobno od serii,
 // bo w oryginale to dwie różne kolumny tabeli.
-function PlanExercise({ex,accent}){
+function PlanExercise({ex,accent,done,onToggle}){
   return(
-    <div style={{background:"#0a0a0a",border:`1px solid ${accent}28`,borderLeft:`3px solid ${accent}`,borderRadius:10,padding:"11px 13px",marginBottom:9}}>
-      <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0",lineHeight:1.35}}>
-        {ex.name}
+    <div style={{background:"#0a0a0a",border:`1px solid ${done?"#232630":accent+"28"}`,borderLeft:`3px solid ${done?"#2f3a34":accent}`,
+      borderRadius:10,padding:"11px 13px",marginBottom:9,display:"flex",gap:10,alignItems:"flex-start"}}>
+      {/* Pole wyboru rysowane samodzielnie: <input type="checkbox"> nie daje się
+          w tym motywie ostylować, a pole dotyku ma mieć 40 px przy kwadracie
+          24 px — stąd przezroczysty przycisk z ujemnym marginesem, który nie
+          rozpycha karty. */}
+      <button role="checkbox" aria-checked={done} aria-label={`${ex.name} — zrobione`}
+        title={done?"Odznacz — jednak nierobione":"Odhacz jako zrobione"} onClick={onToggle}
+        style={{flexShrink:0,width:40,height:40,margin:"-9px -8px -9px -10px",padding:0,border:"none",
+          background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <span style={{width:24,height:24,borderRadius:7,border:`2px solid ${done?accent:"#3a3f52"}`,
+          background:done?accent+"2e":"transparent",color:accent,fontSize:14,fontWeight:700,lineHeight:1,
+          display:"flex",alignItems:"center",justifyContent:"center"}}>{done?"✓":""}</span>
+      </button>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13.5,fontWeight:600,color:done?"#7a7a7a":"#f0f0f0",lineHeight:1.35,
+          textDecoration:done?"line-through":"none"}}>
+          {ex.name}
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:5,opacity:done?0.55:1}}>
+          <span style={{fontSize:10,fontWeight:700,background:accent+"30",color:accent,padding:"1px 8px",borderRadius:20}}>{ex.sets}</span>
+          {ex.load&&<span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{ex.load}</span>}
+          {ex.rest&&<span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.04)",color:INK.soft,padding:"1px 8px",borderRadius:20}}>⏸ {ex.rest}</span>}
+        </div>
+        {ex.desc&&<div style={{fontSize:11.5,color:done?"#6a6a6a":"#9a9a9a",lineHeight:1.55,marginTop:7}}>{ex.desc}</div>}
       </div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:5}}>
-        <span style={{fontSize:10,fontWeight:700,background:accent+"30",color:accent,padding:"1px 8px",borderRadius:20}}>{ex.sets}</span>
-        {ex.load&&<span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{ex.load}</span>}
-        {ex.rest&&<span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.04)",color:INK.soft,padding:"1px 8px",borderRadius:20}}>⏸ {ex.rest}</span>}
-      </div>
-      {ex.desc&&<div style={{fontSize:11.5,color:"#9a9a9a",lineHeight:1.55,marginTop:7}}>{ex.desc}</div>}
     </div>
   );
 }
 
 function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
+  const {isExDone,toggleExercise}=useApp();
   const label=WEEKDAYS.find(d=>d.key===dayKey)?.label||"";
   // Akcent karty bierzemy z pierwszego mięśnia dnia, żeby kolor panelu zgadzał
   // się z tym, co świeci na sylwetce.
@@ -182,6 +199,7 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
     );
   };
   const hr=day.cardio?maxHeartRate(age):null;
+  const doneCount=day.exercises.filter((_,i)=>isExDone(plan.id,dayKey,i)).length;
   const noteBox=(text,color)=>(
     <div style={{fontSize:11.5,color:color||"#8a8a8a",background:"#0d0f16",border:"1px solid #1e2130",
       borderRadius:8,padding:"9px 11px",marginBottom:11,lineHeight:1.6}}>{text}</div>
@@ -231,7 +249,28 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
             </div>
           </div>
         )}
-        {day.exercises.map((ex,i)=><PlanExercise key={i} ex={ex} accent={accent}/>)}
+        {day.exercises.length>0&&(
+          <div style={{marginBottom:11}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+              <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.1em",fontFamily:MONO,color:INK.soft}}>ZROBIONE DZIŚ</span>
+              <span style={{fontSize:12,fontWeight:700,fontFamily:MONO,color:doneCount?accent:INK.faint}}>{doneCount} / {day.exercises.length}</span>
+            </div>
+            <div style={{height:4,borderRadius:2,background:"#1e2130",marginTop:6,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${Math.round(100*doneCount/day.exercises.length)}%`,background:accent,borderRadius:2}}/>
+            </div>
+            {/* Plan innego dnia można otworzyć w dowolny dzień — odhaczenie i tak
+                ląduje pod dzisiejszą datą, więc lepiej to powiedzieć wprost. */}
+            {dayKey!==todayKey()&&(
+              <div style={{fontSize:10.5,color:INK.faint,marginTop:6,lineHeight:1.5}}>
+                To nie jest dzisiejszy dzień — odhaczenia i tak zapisują się na dzisiejszą datę.
+              </div>
+            )}
+          </div>
+        )}
+        {day.exercises.map((ex,i)=>(
+          <PlanExercise key={i} ex={ex} accent={accent} done={isExDone(plan.id,dayKey,i)}
+            onToggle={()=>toggleExercise(plan.id,dayKey,i,ex.name)}/>
+        ))}
         {day.loadNote&&noteBox(day.loadNote)}
         {plan.note&&<div style={{marginTop:6,fontSize:10.5,color:INK.muted,lineHeight:1.6,borderTop:"1px solid #1a1a1a",paddingTop:10}}>{plan.note}</div>}
       </div>
