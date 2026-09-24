@@ -207,21 +207,29 @@ export default function App() {
     await api.deletePlan(id);
     setPlans(l=>l.filter(p=>p.id!==id));
   });
-  // Odhaczone ćwiczenia z dzisiejszej daty — zbiór kluczy „plan|dzień|pozycja".
-  // Serwer wiąże je z datą kalendarzową, więc w przyszłym tygodniu ten sam
-  // dzień planu zaczyna się czysty, a historia zostaje.
-  const [exDone,setExDone]=useState(()=>new Set());
-  const exKey=(planId,dayKey,i)=>`${planId}|${dayKey}|${i}`;
-  const isExDone=(planId,dayKey,i)=>exDone.has(exKey(planId,dayKey,i));
-  const toggleExercise=(planId,dayKey,i,name)=>run(async()=>{
-    const key=exKey(planId,dayKey,i);
-    const next=!exDone.has(key);
-    const flip=add=>setExDone(s=>{const c=new Set(s);if(add)c.add(key);else c.delete(key);return c;});
-    flip(next);
+  // Dziennik pozycji planu: `today` to stan z dzisiejszej daty (odhaczenie +
+  // zanotowany ciężar), `last` — ostatni ciężar sprzed dzisiaj, czyli punkt
+  // odniesienia na ten trening. Klucz: „plan|rodzaj|dzień|pozycja"; rodzaj,
+  // bo ćwiczenia i warianty cardio numerowane są osobno.
+  const [exLog,setExLog]=useState({today:{},last:{}});
+  const exKey=(planId,kind,dayKey,i)=>`${planId}|${kind}|${dayKey}|${i}`;
+  const exToMap=rows=>Object.fromEntries((rows||[]).map(r=>[exKey(r.planId,r.kind,r.dayKey,r.exIndex),r]));
+  const exEntry=(planId,kind,dayKey,i)=>exLog.today[exKey(planId,kind,dayKey,i)]||null;
+  const exLast=(planId,kind,dayKey,i)=>exLog.last[exKey(planId,kind,dayKey,i)]||null;
+  // patch to { done } albo { maxLoad } — resztę dobieramy z obecnego stanu,
+  // bo serwer przyjmuje całe ustawienie pozycji, nie zmianę jednego pola.
+  const saveEx=(planId,kind,dayKey,i,name,patch)=>run(async()=>{
+    const key=exKey(planId,kind,dayKey,i);
+    const prev=exLog.today[key]||{done:false,maxLoad:null};
+    const next={...prev,...patch};
+    // Pozycja bez odhaczenia i bez ciężaru nie ma czego pamiętać — serwer
+    // kasuje wtedy wiersz, więc i tutaj znika z mapy.
+    const put=e=>setExLog(l=>{const t={...l.today};if(e.done||e.maxLoad!=null)t[key]={...e};else delete t[key];return {...l,today:t};});
+    put(next);
     try{
-      await api.setPlanLog(planId,dayKey,i,name,today(),next);
+      await api.setPlanLog({planId,dayKey,kind,exIndex:i,exName:name,date:today(),done:!!next.done,maxLoad:next.maxLoad});
     }catch(e){
-      flip(!next);   // cofamy optymistyczną zmianę
+      put(prev);   // cofamy optymistyczną zmianę
       throw e;
     }
   });
@@ -305,7 +313,7 @@ export default function App() {
           api.planLog(today()),
         ]);
         setHabits(h);setServerProfile(p);setFoods(f);setFoodCats(c);setKotwice(a);setAvoidItems(av);setPlans(pl);
-        setExDone(new Set(xl.map(r=>exKey(r.planId,r.dayKey,r.exIndex))));
+        setExLog({today:exToMap(xl.today),last:exToMap(xl.last)});
         setMeasurements(ms);setPrinciples(pr);setCheckins(ci);
         setTechUses(Object.fromEntries(tu.map(r=>[r.technique,r])));
         setProfile(profileToForm(p));
@@ -551,7 +559,7 @@ export default function App() {
   if(!user)return <LoginScreen notice={loginNotice} onLogged={u=>{setLoginNotice("");setUser(u);setLoading(true);}}/>;
   if(loading)return splash("Ładowanie…");
 
-  const ctx={ addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, editTimeId, ensureYear, error, exDone, expandedHabit, filtered, foodCats, foods, getStreak, getView, getWeeklyRate, grams, gramsNum, habitLogs, habits, habitsByCat, isChecked, isExDone, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, offInfo, offLoading, offQuery, offResults, openGroups, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, savePlan, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffInfo, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleExercise, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
+  const ctx={ addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, editTimeId, ensureYear, error, exEntry, exLast, expandedHabit, filtered, foodCats, foods, getStreak, getView, getWeeklyRate, grams, gramsNum, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, offInfo, offLoading, offQuery, offResults, openGroups, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, saveEx, savePlan, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffInfo, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
   return(
     <AppContext.Provider value={ctx}>
     <div style={{background:"#0a0a0a",minHeight:"100vh",fontFamily:FONT,color:"#f1f1f1",padding:isMobile?"16px 12px 32px":"24px 16px"}}>

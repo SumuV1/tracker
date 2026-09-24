@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { MOBILE, useMedia, INK, MONO } from "../lib/ui.js";
+import { MOBILE, useMedia, INK, MONO, plDate } from "../lib/ui.js";
 import { WEEKDAYS, todayKey, maxHeartRate } from "../plans.js";
 import { MUSCLES, MUSCLE_LAYER } from "../lib/muscles.js";
 import { useApp } from "../lib/appContext.js";
@@ -148,22 +148,59 @@ function ExercisePanel({muscleId,onClose,sheet=false}){
 
 // Kafel jednego ćwiczenia z planu — obciążenie trzymamy osobno od serii,
 // bo w oryginale to dwie różne kolumny tabeli.
-function PlanExercise({ex,accent,done,onToggle}){
+// Pole wyboru rysowane samodzielnie: <input type="checkbox"> nie daje się
+// w tym motywie ostylować, a pole dotyku ma mieć 40 px przy kwadracie 24 px —
+// stąd przezroczysty przycisk z ujemnym marginesem, który nie rozpycha karty.
+function DoneBox({done,accent,label,onToggle}){
+  return(
+    <button role="checkbox" aria-checked={done} aria-label={`${label} — zrobione`}
+      title={done?"Odznacz — jednak nierobione":"Odhacz jako zrobione"} onClick={onToggle}
+      style={{flexShrink:0,width:40,height:40,margin:"-9px -8px -9px -10px",padding:0,border:"none",
+        background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <span style={{width:24,height:24,borderRadius:7,border:`2px solid ${done?accent:"#3a3f52"}`,
+        background:done?accent+"2e":"transparent",color:accent,fontSize:14,fontWeight:700,lineHeight:1,
+        display:"flex",alignItems:"center",justifyContent:"center"}}>{done?"✓":""}</span>
+    </button>
+  );
+}
+
+// Największy ciężar z tej serii — notatka na następny tydzień, nie część planu.
+// Wartość trzymamy lokalnie i zapisujemy dopiero przy wyjściu z pola albo
+// Enterze, żeby każda wpisana cyfra nie leciała osobnym żądaniem. Przecinek
+// jest dopuszczalny, bo tak się to pisze po polsku.
+function LoadField({value,last,accent,label,onSave}){
+  const show=v=>v==null?"":String(v).replace(".",",");
+  const [text,setText]=useState(()=>show(value));
+  useEffect(()=>{setText(show(value));},[value]);
+  const commit=()=>{
+    const t=text.trim().replace(",",".");
+    const n=t===""?null:Number(t);
+    if(t!==""&&!(Number.isFinite(n)&&n>=0&&n<=9999)){setText(show(value));return;}
+    if(n!==value)onSave(n);
+  };
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:8}}>
+      <label style={{display:"flex",alignItems:"center",gap:6,fontSize:10.5,color:INK.soft}}>
+        <span>maks.</span>
+        <input value={text} inputMode="decimal" aria-label={`${label} — maksymalne obciążenie w kg`}
+          onChange={e=>setText(e.target.value)} onBlur={commit}
+          onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();if(e.key==="Escape")setText(show(value));}}
+          placeholder="—"
+          style={{width:64,padding:"5px 8px",borderRadius:7,border:`1px solid ${value!=null?accent+"66":"#2a2e3c"}`,
+            background:"#0d0f16",color:value!=null?"#f0f0f0":"#9a9a9a",fontSize:12,fontFamily:MONO,textAlign:"right",outline:"none"}}/>
+        <span>kg</span>
+      </label>
+      {last&&<span style={{fontSize:10.5,color:INK.faint}}>ostatnio {String(last.maxLoad).replace(".",",")} kg · {plDate(last.date).slice(0,5)}</span>}
+    </div>
+  );
+}
+
+function PlanExercise({ex,accent,entry,last,onToggle,onLoad}){
+  const done=!!entry?.done;
   return(
     <div style={{background:"#0a0a0a",border:`1px solid ${done?"#232630":accent+"28"}`,borderLeft:`3px solid ${done?"#2f3a34":accent}`,
       borderRadius:10,padding:"11px 13px",marginBottom:9,display:"flex",gap:10,alignItems:"flex-start"}}>
-      {/* Pole wyboru rysowane samodzielnie: <input type="checkbox"> nie daje się
-          w tym motywie ostylować, a pole dotyku ma mieć 40 px przy kwadracie
-          24 px — stąd przezroczysty przycisk z ujemnym marginesem, który nie
-          rozpycha karty. */}
-      <button role="checkbox" aria-checked={done} aria-label={`${ex.name} — zrobione`}
-        title={done?"Odznacz — jednak nierobione":"Odhacz jako zrobione"} onClick={onToggle}
-        style={{flexShrink:0,width:40,height:40,margin:"-9px -8px -9px -10px",padding:0,border:"none",
-          background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <span style={{width:24,height:24,borderRadius:7,border:`2px solid ${done?accent:"#3a3f52"}`,
-          background:done?accent+"2e":"transparent",color:accent,fontSize:14,fontWeight:700,lineHeight:1,
-          display:"flex",alignItems:"center",justifyContent:"center"}}>{done?"✓":""}</span>
-      </button>
+      <DoneBox done={done} accent={accent} label={ex.name} onToggle={onToggle}/>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:13.5,fontWeight:600,color:done?"#7a7a7a":"#f0f0f0",lineHeight:1.35,
           textDecoration:done?"line-through":"none"}}>
@@ -174,6 +211,7 @@ function PlanExercise({ex,accent,done,onToggle}){
           {ex.load&&<span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{ex.load}</span>}
           {ex.rest&&<span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.04)",color:INK.soft,padding:"1px 8px",borderRadius:20}}>⏸ {ex.rest}</span>}
         </div>
+        <LoadField value={entry?.maxLoad??null} last={last} accent={accent} label={ex.name} onSave={onLoad}/>
         {ex.desc&&<div style={{fontSize:11.5,color:done?"#6a6a6a":"#9a9a9a",lineHeight:1.55,marginTop:7}}>{ex.desc}</div>}
       </div>
     </div>
@@ -181,7 +219,7 @@ function PlanExercise({ex,accent,done,onToggle}){
 }
 
 function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
-  const {isExDone,toggleExercise}=useApp();
+  const {exEntry,exLast,saveEx}=useApp();
   const label=WEEKDAYS.find(d=>d.key===dayKey)?.label||"";
   // Akcent karty bierzemy z pierwszego mięśnia dnia, żeby kolor panelu zgadzał
   // się z tym, co świeci na sylwetce.
@@ -199,7 +237,14 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
     );
   };
   const hr=day.cardio?maxHeartRate(age):null;
-  const doneCount=day.exercises.filter((_,i)=>isExDone(plan.id,dayKey,i)).length;
+  // Pozycje dnia: ćwiczenia i warianty cardio numerowane osobno, stąd „rodzaj"
+  // w kluczu. Licznik na górze obejmuje jedne i drugie.
+  const entry=(kind,i)=>exEntry(plan.id,kind,dayKey,i);
+  const save=(kind,i,name,patch)=>saveEx(plan.id,kind,dayKey,i,name,patch);
+  const variants=day.cardio?day.cardio.variants:[];
+  const total=day.exercises.length+variants.length;
+  const doneCount=day.exercises.filter((_,i)=>entry("ex",i)?.done).length
+    +variants.filter((_,i)=>entry("cardio",i)?.done).length;
   const noteBox=(text,color)=>(
     <div style={{fontSize:11.5,color:color||"#8a8a8a",background:"#0d0f16",border:"1px solid #1e2130",
       borderRadius:8,padding:"9px 11px",marginBottom:11,lineHeight:1.6}}>{text}</div>
@@ -227,36 +272,14 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
           </div>
         )}
         {day.rest&&<div style={{fontSize:12.5,color:"#9a9a9a",lineHeight:1.65}}>{day.desc||"Dzień bez treningu."}</div>}
-        {day.cardio&&(
-          <div style={{background:"#0a0a0a",border:`1px solid ${accent}28`,borderLeft:`3px solid ${accent}`,borderRadius:10,padding:"12px 13px",marginBottom:10}}>
-            <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0"}}>{day.cardio.machine||"Cardio"}</div>
-            {day.cardio.variants.map((v,i)=>(
-              <div key={i} style={{marginTop:i?10:7,paddingTop:i?10:0,borderTop:i?"1px solid #1c1c1c":"none"}}>
-                {v.name&&<div style={{fontSize:11,fontWeight:700,color:"#c9c9c9",marginBottom:5}}>{v.name}</div>}
-                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  <span style={{fontSize:10,fontWeight:700,background:accent+"30",color:accent,padding:"1px 8px",borderRadius:20}}>{v.time}</span>
-                  <span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{v.hrFrom}–{v.hrTo}% HRmax</span>
-                  {hr&&<span style={{fontSize:10,fontWeight:700,background:accent+"1e",color:accent,padding:"1px 8px",borderRadius:20}}>{Math.round(hr*v.hrFrom/100)}–{Math.round(hr*v.hrTo/100)} ud./min</span>}
-                </div>
-                {v.desc&&<div style={{fontSize:11.5,color:"#9a9a9a",lineHeight:1.55,marginTop:6}}>{v.desc}</div>}
-              </div>
-            ))}
-            <div style={{marginTop:10,paddingTop:9,borderTop:"1px solid #1c1c1c",fontSize:11.5,color:"#9a9a9a",lineHeight:1.55}}>
-              Tętno maksymalne wg wzoru <span style={{color:"#c9c9c9",fontFamily:MONO}}>208 − 0,7 × wiek</span> — dokładniejszego niż popularne 220 − wiek.
-              {hr
-                ?<> Dla Twoich <b>{age} lat</b>: HRmax ≈ <b style={{color:accent}}>{hr}</b> ud./min.</>
-                :<> Podaj wiek w zakładce „Kalorie &amp; BMI”, a policzę zakresy w uderzeniach na minutę.</>}
-            </div>
-          </div>
-        )}
-        {day.exercises.length>0&&(
+        {total>0&&(
           <div style={{marginBottom:11}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
               <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.1em",fontFamily:MONO,color:INK.soft}}>ZROBIONE DZIŚ</span>
-              <span style={{fontSize:12,fontWeight:700,fontFamily:MONO,color:doneCount?accent:INK.faint}}>{doneCount} / {day.exercises.length}</span>
+              <span style={{fontSize:12,fontWeight:700,fontFamily:MONO,color:doneCount?accent:INK.faint}}>{doneCount} / {total}</span>
             </div>
             <div style={{height:4,borderRadius:2,background:"#1e2130",marginTop:6,overflow:"hidden"}}>
-              <div style={{height:"100%",width:`${Math.round(100*doneCount/day.exercises.length)}%`,background:accent,borderRadius:2}}/>
+              <div style={{height:"100%",width:`${Math.round(100*doneCount/total)}%`,background:accent,borderRadius:2}}/>
             </div>
             {/* Plan innego dnia można otworzyć w dowolny dzień — odhaczenie i tak
                 ląduje pod dzisiejszą datą, więc lepiej to powiedzieć wprost. */}
@@ -267,9 +290,42 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
             )}
           </div>
         )}
+        {day.cardio&&(
+          <div style={{background:"#0a0a0a",border:`1px solid ${accent}28`,borderLeft:`3px solid ${accent}`,borderRadius:10,padding:"12px 13px",marginBottom:10}}>
+            <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0"}}>{day.cardio.machine||"Cardio"}</div>
+            {variants.map((v,i)=>{
+              const label=v.name||day.cardio.machine||"Cardio";
+              const vdone=!!entry("cardio",i)?.done;
+              return(
+                <div key={i} style={{marginTop:i?10:9,paddingTop:i?10:0,borderTop:i?"1px solid #1c1c1c":"none",
+                  display:"flex",gap:10,alignItems:"flex-start"}}>
+                  <DoneBox done={vdone} accent={accent} label={label}
+                    onToggle={()=>save("cardio",i,label,{done:!vdone})}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    {v.name&&<div style={{fontSize:11,fontWeight:700,color:vdone?"#6a6a6a":"#c9c9c9",marginBottom:5,
+                      textDecoration:vdone?"line-through":"none"}}>{v.name}</div>}
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6,opacity:vdone?0.55:1}}>
+                      <span style={{fontSize:10,fontWeight:700,background:accent+"30",color:accent,padding:"1px 8px",borderRadius:20}}>{v.time}</span>
+                      <span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{v.hrFrom}–{v.hrTo}% HRmax</span>
+                      {hr&&<span style={{fontSize:10,fontWeight:700,background:accent+"1e",color:accent,padding:"1px 8px",borderRadius:20}}>{Math.round(hr*v.hrFrom/100)}–{Math.round(hr*v.hrTo/100)} ud./min</span>}
+                    </div>
+                    {v.desc&&<div style={{fontSize:11.5,color:vdone?"#6a6a6a":"#9a9a9a",lineHeight:1.55,marginTop:6}}>{v.desc}</div>}
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{marginTop:10,paddingTop:9,borderTop:"1px solid #1c1c1c",fontSize:11.5,color:"#9a9a9a",lineHeight:1.55}}>
+              Tętno maksymalne wg wzoru <span style={{color:"#c9c9c9",fontFamily:MONO}}>208 − 0,7 × wiek</span> — dokładniejszego niż popularne 220 − wiek.
+              {hr
+                ?<> Dla Twoich <b>{age} lat</b>: HRmax ≈ <b style={{color:accent}}>{hr}</b> ud./min.</>
+                :<> Podaj wiek w zakładce „Kalorie &amp; BMI”, a policzę zakresy w uderzeniach na minutę.</>}
+            </div>
+          </div>
+        )}
         {day.exercises.map((ex,i)=>(
-          <PlanExercise key={i} ex={ex} accent={accent} done={isExDone(plan.id,dayKey,i)}
-            onToggle={()=>toggleExercise(plan.id,dayKey,i,ex.name)}/>
+          <PlanExercise key={i} ex={ex} accent={accent} entry={entry("ex",i)} last={exLast(plan.id,"ex",dayKey,i)}
+            onToggle={()=>save("ex",i,ex.name,{done:!entry("ex",i)?.done})}
+            onLoad={n=>save("ex",i,ex.name,{maxLoad:n})}/>
         ))}
         {day.loadNote&&noteBox(day.loadNote)}
         {plan.note&&<div style={{marginTop:6,fontSize:10.5,color:INK.muted,lineHeight:1.6,borderTop:"1px solid #1a1a1a",paddingTop:10}}>{plan.note}</div>}

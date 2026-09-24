@@ -224,20 +224,36 @@ CREATE TABLE IF NOT EXISTS training_plans (
 );
 CREATE INDEX IF NOT EXISTS training_plans_user_idx ON training_plans (user_id);
 
--- Odhaczanie ćwiczeń: jeden wiersz = jedno ćwiczenie zrobione danego dnia.
--- Brak wiersza znaczy „niezrobione", więc odznaczenie to zwykłe DELETE.
--- Ćwiczenie wskazujemy pozycją w dniu planu (plan jest jednym JSON-em, jego
--- elementy nie mają własnych identyfikatorów); nazwa leży obok jako kopia na
--- chwilę odhaczenia, żeby historia dała się czytać po edycji planu.
+-- Odhaczanie ćwiczeń: jeden wiersz = jedna pozycja z danego dnia — ćwiczenie
+-- albo wariant cardio. Wiersz istnieje, gdy jest co pamiętać: odhaczenie
+-- (`done`) albo zanotowany ciężar (`max_load`); zdjęcie obu kasuje wiersz.
+-- Pozycję wskazuje para (kind, ex_index), bo ćwiczenia i warianty cardio
+-- numerowane są niezależnie i oba zaczynają od zera. Nazwa leży obok jako
+-- kopia na chwilę zapisu, żeby historia dała się czytać po edycji planu.
 CREATE TABLE IF NOT EXISTS plan_exercise_logs (
   id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   plan_id    bigint NOT NULL REFERENCES training_plans(id) ON DELETE CASCADE,
   log_date   date NOT NULL,
   day_key    text NOT NULL CHECK (day_key IN ('mon','tue','wed','thu','fri','sat','sun')),
+  kind       text NOT NULL DEFAULT 'ex' CHECK (kind IN ('ex','cardio')),
   ex_index   int NOT NULL CHECK (ex_index >= 0),
   ex_name    text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (user_id, plan_id, log_date, day_key, ex_index)
+  done       boolean NOT NULL DEFAULT true,
+  max_load   numeric(6,2) CHECK (max_load IS NULL OR max_load >= 0),
+  created_at timestamptz NOT NULL DEFAULT now()
 );
+-- Trzy kolumny doszły po pierwszym wydaniu tabeli. Na działającej bazie trzeba
+-- je dołożyć i przełożyć klucz jednoznaczności na taki z `kind` — inaczej
+-- wariant cardio nr 0 i ćwiczenie nr 0 biłyby się o ten sam wiersz.
+ALTER TABLE plan_exercise_logs ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'ex' CHECK (kind IN ('ex','cardio'));
+ALTER TABLE plan_exercise_logs ADD COLUMN IF NOT EXISTS done boolean NOT NULL DEFAULT true;
+ALTER TABLE plan_exercise_logs ADD COLUMN IF NOT EXISTS max_load numeric(6,2) CHECK (max_load IS NULL OR max_load >= 0);
+ALTER TABLE plan_exercise_logs DROP CONSTRAINT IF EXISTS plan_exercise_logs_user_id_plan_id_log_date_day_key_ex_inde_key;
+CREATE UNIQUE INDEX IF NOT EXISTS plan_exercise_logs_entry_idx
+  ON plan_exercise_logs (user_id, plan_id, log_date, day_key, kind, ex_index);
 CREATE INDEX IF NOT EXISTS plan_exercise_logs_user_date_idx ON plan_exercise_logs (user_id, log_date);
+-- Podpowiedź „ostatnio tyle" pyta o najnowszy zapisany ciężar danej pozycji.
+CREATE INDEX IF NOT EXISTS plan_exercise_logs_load_idx
+  ON plan_exercise_logs (user_id, plan_id, day_key, kind, ex_index, log_date DESC)
+  WHERE max_load IS NOT NULL;

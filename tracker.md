@@ -412,18 +412,33 @@ Dzień cardio liczy zakres tętna ze wzoru Tanaki (`208 − 0,7 × wiek`), bior�
 wiek z profilu. Bez uzupełnionego profilu pokazuje sam wzór i odsyła do
 zakładki „Kalorie & BMI".
 
-**Odhaczanie ćwiczeń.** Przy każdym ćwiczeniu w panelu dnia stoi pole wyboru,
-a nad listą pasek postępu („ZROBIONE DZIŚ 3 / 6"). Odhaczenie jest zapisywane
-od razu, optymistycznie — przy błędzie sieci wraca do poprzedniego stanu.
+**Odhaczanie i ciężar.** Każde ćwiczenie i każdy wariant cardio ma pole
+wyboru, a nad listą stoi pasek postępu („ZROBIONE DZIŚ 3 / 6" — liczy jedne
+i drugie). Przy ćwiczeniach jest dodatkowo pole **maks. … kg**: największy
+ciężar z tej serii. To notatka na następny trening, nie część planu — obok
+pola widać **„ostatnio 92,5 kg · 17.09"**, czyli ostatnią zanotowaną wartość
+tej pozycji sprzed dzisiaj. Warianty cardio pola ciężaru nie mają: na bieżni
+„maksymalne obciążenie" nic nie znaczy.
 
-Ćwiczenie nie ma własnego identyfikatora (plan to jeden JSON), więc wskazuje
-je trójka **plan + dzień tygodnia + pozycja w dniu**, a wiersz w tabeli
-`plan_exercise_logs` wiąże ją z **datą kalendarzową**. Stąd trzy rzeczy:
+Zapis leci od razu, optymistycznie — przy błędzie sieci stan wraca do
+poprzedniego. Ciężar zapisuje się przy wyjściu z pola albo Enterze, żeby
+każda wpisana cyfra nie szła osobnym żądaniem; przecinek jest dopuszczalny.
+
+Pozycja dnia nie ma własnego identyfikatora (plan to jeden JSON), więc
+wskazuje ją czwórka **plan + dzień tygodnia + rodzaj + numer w dniu**, a
+wiersz w tabeli `plan_exercise_logs` wiąże ją z **datą kalendarzową**.
+Rodzaj (`ex` / `cardio`) jest konieczny, bo ćwiczenia i warianty cardio
+numerowane są niezależnie i oba zaczynają od zera. Stąd:
 
 - w przyszłym tygodniu ten sam dzień planu zaczyna się czysty, bez kasowania,
-- zostaje historia, co i kiedy zostało zrobione (kopia nazwy ćwiczenia leży
-  w wierszu, żeby dała się czytać także po edycji planu),
-- brak wiersza znaczy „niezrobione", więc odznaczenie to zwykły `DELETE`.
+- zostaje historia, co i kiedy zostało zrobione i z jakim ciężarem (kopia
+  nazwy leży w wierszu, żeby dała się czytać także po edycji planu),
+- wiersz istnieje, gdy jest co pamiętać: odhaczenie **albo** ciężar. Zdjęcie
+  obu kasuje wiersz, więc sam ciężar da się zanotować bez odhaczania.
+
+Klient wysyła **całe docelowe ustawienie pozycji** (`done` + `maxLoad`), a nie
+zmianę jednego pola — inaczej „nie podałem pola" i „wyczyść pole" byłyby nie
+do odróżnienia.
 
 Datę podaje przeglądarka, bo to jej strefa czasowa decyduje, co jest „dziś" —
 serwer stoi w UTC. Plan innego dnia tygodnia można otworzyć w dowolny dzień;
@@ -486,7 +501,7 @@ w ogóle istnieje.
 | GET/POST/DELETE | `/api/anchors` | kotwice |
 | GET/POST/PATCH/DELETE | `/api/avoid`, `/api/avoid/:id` | lista niewolnika |
 | GET/POST/PUT/DELETE | `/api/plans`, `/api/plans/:id` | plany treningowe — cały plan w ciele, walidacja `shared/planSchema.mjs` |
-| GET/POST | `/api/plans/log` | odhaczone ćwiczenia: `?date=` zwraca dzisiejsze, `POST {planId, dayKey, exIndex, exName, date, done}` stawia lub kasuje wiersz |
+| GET/POST | `/api/plans/log` | dziennik pozycji planu: `?date=` zwraca `{today, last}` (stan dnia + ostatni ciężar sprzed tej daty), `POST {planId, dayKey, kind, exIndex, exName, date, done, maxLoad}` zapisuje lub kasuje wiersz |
 | GET/POST/DELETE | `/api/measurements`, `/api/measurements/:id` | historia pomiarów ciała |
 | GET/POST/PATCH/DELETE | `/api/stability/principles[/:id]`, `POST …/seed` | zasady użytkownika |
 | GET/POST/DELETE | `/api/stability/checkins[/:id]?days=` | check-iny stanu |
@@ -607,7 +622,7 @@ Na bazie, która już istnieje, ten sam schemat zakłada `./scripts/db-init.sh`
 | `technique_uses` | użycia technik, po stałym kluczu z `stability.js` |
 | `avoid_items` | lista niewolnika — rzeczy, od których użytkownik trzyma się z daleka |
 | `training_plans` | plany treningowe: `name` + cały plan w `data` (JSONB, format `sledzik-plan/1`) |
-| `plan_exercise_logs` | odhaczone ćwiczenia: (plan, dzień tygodnia, pozycja) + data; brak wiersza = niezrobione |
+| `plan_exercise_logs` | dziennik pozycji planu: (plan, dzień tygodnia, rodzaj, numer) + data, `done` i `max_load`; brak wiersza = nic do zapamiętania |
 | `body_measurements` | historia pomiarów: waga i obwody, jeden wiersz na dzień |
 | `login_attempts` | nieudane logowania, do limitu prób |
 
