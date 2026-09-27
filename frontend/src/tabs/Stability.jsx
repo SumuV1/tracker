@@ -1,19 +1,36 @@
+import { useRef } from "react";
 import { MONO, INK, today, plDate, plTime } from "../lib/ui.js";
 import { kb } from "../lib/ui.js";
 import { IconBtn, DeleteBtn } from "../components/buttons.jsx";
 import { MeasurementChart } from "../components/charts.jsx";
 import { STATES, STATE_MAP, GROUPS, TECHNIQUES, dailyPick } from "../stability.js";
+import { PILLARS, CANON, CANON_PRINCIPLES, canonAsPrinciple } from "../philosophy.js";
 import { useApp } from "../lib/appContext.js";
 
 export default function StabilityTab(){
-  const { addCheckin, addKotwica, checkins, ciIntensity, ciNote, ciSaved, ciState, currentState, delKotwica, deleteCheckin, deletePrinciple, editPrinciple, isMobile, kotwicaEmoji, kotwicaInput, kotwice, principleForm, principleOffset, principles, savePrinciple, seedPrinciples, setCiIntensity, setCiNote, setCiState, setKotwicaEmoji, setKotwicaInput, setPrincipleForm, setPrincipleOffset, setShowAllTech, setShowPrinciples, setTechExpanded, showAllTech, showPrinciples, techExpanded, techUses, todayCheckins, useTechnique }=useApp();
+  const { addCheckin, addKotwica, checkins, ciIntensity, ciNote, ciSaved, ciState, currentState, delKotwica, deleteCheckin, deletePrinciple, editPrinciple, isMobile, kotwicaEmoji, kotwicaInput, kotwice, philOpen, philRule, principleForm, principleOffset, principles, savePrinciple, seedPrinciples, setCiIntensity, setCiNote, setCiState, setKotwicaEmoji, setKotwicaInput, setPhilOpen, setPhilRule, setPrincipleForm, setPrincipleOffset, setShowAllTech, setShowPrinciples, setTechExpanded, showAllTech, showPrinciples, techExpanded, techUses, todayCheckins, useTechnique }=useApp();
 
   const ACC="#e8b84b";                       // akcent zakładki (nie seria danych)
   const st=currentState?STATE_MAP[currentState]:null;
-  // Zasada dnia: najpierw te przypisane do bieżącego stanu, w braku — wszystkie.
-  const pool=st?principles.filter(p=>(p.states||[]).includes(st.key)):[];
+  // Zasada dnia losuje z jednej puli: zasady własne plus kanon filozofii.
+  // Przy zaznaczonym stanie zostają zasady przypisane do niego ORAZ te bez
+  // żadnego przypisania — pusta lista stanów znaczy „na każdy stan", dokładnie
+  // tak, jak obiecuje podpis w formularzu. Wcześniej filtr je wycinał.
+  const all=[...principles,...CANON_PRINCIPLES];
+  const pool=st?all.filter(p=>!(p.states||[]).length||p.states.includes(st.key)):[];
   const fromPool=pool.length>0;
-  const principle=dailyPick(fromPool?pool:principles,today(),principleOffset);
+  const principle=dailyPick(fromPool?pool:all,today(),principleOffset);
+  // Kanon jest kodem, nie wierszem w bazie — zamiast edycji proponuje
+  // przepisanie po swojemu, czyli nową zasadę własną z tą samą treścią.
+  const zasadaRef=useRef(null);
+  const copyRule=r=>{
+    // Bez `id`: identyfikator kanonu („canon:klucz") nie jest kluczem w bazie,
+    // a formularz z wypełnionym `id` poszedłby PATCH-em na nieistniejący wiersz
+    // zamiast zapisać nową zasadę.
+    const k=canonAsPrinciple(r);
+    editPrinciple({text:k.text,source:k.source,states:k.states,note:k.note});
+    requestAnimationFrame(()=>zasadaRef.current?.scrollIntoView?.({behavior:"smooth",block:"center"}));
+  };
   const techs=TECHNIQUES.filter(t=>showAllTech||!st||t.states.includes(st.key));
   const card={background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?14:18,marginBottom:14};
   const chip=(on,color)=>({background:on?color+"22":"#0f0f0f",border:`1px solid ${on?color:"#2a2a2a"}`,borderRadius:20,
@@ -29,40 +46,31 @@ export default function StabilityTab(){
       </div>
 
       {/* ── 1. Zasada dnia ── */}
-      <div style={{...card,border:`1px solid ${ACC}33`}}>
+      <div ref={zasadaRef} style={{...card,border:`1px solid ${ACC}33`}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10}}>
           <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.12em",color:ACC,fontFamily:MONO}}>
             ZASADA NA DZIŚ{fromPool&&st?` · ${st.label.toUpperCase()}`:""}
           </div>
-          {principles.length>0&&(
-            <div style={{display:"flex",gap:6}}>
-              {(fromPool?pool:principles).length>1&&(
-                <button onClick={()=>setPrincipleOffset(o=>o+1)} style={{background:"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 10px",fontSize:11,cursor:"pointer",minHeight:32}}>↻ Inna</button>
+          <div style={{display:"flex",gap:6}}>
+              {(fromPool?pool:all).length>1&&(
+                <button onClick={()=>setPrincipleOffset(o=>o+1)} style={{background:"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 12px",fontSize:11,cursor:"pointer",minHeight:44}}>↻ Inna</button>
               )}
-              <button onClick={()=>setShowPrinciples(v=>!v)} style={{background:showPrinciples?"#2a2a2a":"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>
-                {showPrinciples?"Zwiń":`Wszystkie (${principles.length})`}
+              <button onClick={()=>setShowPrinciples(v=>!v)} style={{background:showPrinciples?"#2a2a2a":"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 12px",fontSize:11,cursor:"pointer",minHeight:44}}>
+                {showPrinciples?"Zwiń":`Moje (${principles.length})`}
               </button>
-            </div>
-          )}
+          </div>
         </div>
-        {principle?(
+        {principle&&(
           <div>
             <div style={{fontSize:isMobile?17:19,fontWeight:600,color:"#f1f1f1",lineHeight:1.5,fontStyle:"italic"}}>„{principle.text}”</div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginTop:10,flexWrap:"wrap"}}>
               <div style={{fontSize:12,color:"#8a8a8a"}}>— {principle.source||"ja do siebie"}</div>
-              <button onClick={()=>editPrinciple(principle)} style={{background:"none",border:"none",color:INK.soft,fontSize:12,cursor:"pointer",textDecoration:"underline",padding:"8px 6px",minHeight:36}}>✎ edytuj</button>
+              <button onClick={()=>principle.canon?copyRule(principle.canon):editPrinciple(principle)}
+                style={{background:"none",border:"none",color:INK.soft,fontSize:12,cursor:"pointer",textDecoration:"underline",padding:"8px 6px",minHeight:36}}>
+                {principle.canon?"✎ zapisz po swojemu":"✎ edytuj"}
+              </button>
             </div>
             {principle.note&&<div style={{fontSize:11.5,color:INK.soft,marginTop:8,lineHeight:1.5,borderTop:"1px solid #1e1e1e",paddingTop:8}}>{principle.note}</div>}
-          </div>
-        ):(
-          <div style={{textAlign:"center",padding:"14px 0 6px"}}>
-            <div style={{fontSize:13,color:"#8a8a8a",lineHeight:1.6,marginBottom:12}}>
-              Tu będzie jedna zasada dziennie — Twoimi słowami, z tego, co u Ciebie działa.
-            </div>
-            <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
-              <button onClick={()=>editPrinciple(null)} style={{background:ACC,color:"#000",border:"none",borderRadius:8,padding:"8px 16px",fontWeight:700,fontSize:13,cursor:"pointer"}}>Dodaj pierwszą zasadę</button>
-              <button onClick={seedPrinciples} style={{background:"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"8px 16px",fontSize:13,cursor:"pointer"}}>Wstaw 6 maksym stoików na start</button>
-            </div>
           </div>
         )}
 
@@ -81,7 +89,15 @@ export default function StabilityTab(){
                 <DeleteBtn onDelete={()=>deletePrinciple(p.id)} title="Usuń zasadę" size={24}/>
               </div>
             ))}
+            {principles.length===0&&(
+              <div style={{fontSize:12.5,color:INK.faint,lineHeight:1.6,marginBottom:10}}>
+                Nie masz jeszcze własnych zasad. Zasada na dziś idzie z filozofii poniżej — własne dopisują się do tej samej puli.
+              </div>
+            )}
             <button onClick={()=>editPrinciple(null)} style={{width:"100%",marginTop:10,padding:"9px",borderRadius:10,border:"2px dashed #333",background:"transparent",color:"#888",fontWeight:600,fontSize:13,cursor:"pointer"}}>+ Dodaj zasadę</button>
+            {principles.length===0&&(
+              <button onClick={seedPrinciples} style={{width:"100%",marginTop:8,padding:"9px",borderRadius:10,border:"1px solid #333",background:"#222",color:"#aaa",fontSize:13,cursor:"pointer"}}>Wstaw 6 maksym stoików na start</button>
+            )}
           </div>
         )}
 
@@ -171,7 +187,7 @@ export default function StabilityTab(){
             {st&&!showAllTech?<>Co pomaga przy: <span style={{color:ACC}}>{st.icon} {st.label.toLowerCase()}</span></>:"Techniki"}
           </div>
           {st&&(
-            <button onClick={()=>setShowAllTech(v=>!v)} style={{background:"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 10px",fontSize:11,cursor:"pointer"}}>
+            <button onClick={()=>setShowAllTech(v=>!v)} style={{background:"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 12px",fontSize:11,cursor:"pointer",minHeight:44}}>
               {showAllTech?"Tylko pasujące":"Pokaż wszystkie"}
             </button>
           )}
@@ -212,7 +228,7 @@ export default function StabilityTab(){
                         <ol style={{margin:"0 0 12px",paddingLeft:20,fontSize:12.5,color:"#ddd",lineHeight:1.7}}>
                           {t.steps.map((s,i)=><li key={i}>{s}</li>)}
                         </ol>
-                        <button onClick={()=>useTechnique(t.key)} style={{background:g.color+"22",border:`1px solid ${g.color}`,borderRadius:999,padding:"6px 16px",color:g.color,fontSize:12,fontWeight:700,cursor:"pointer"}}>✓ Zrobiłem</button>
+                        <button onClick={()=>useTechnique(t.key)} style={{background:g.color+"22",border:`1px solid ${g.color}`,borderRadius:999,padding:"6px 18px",color:g.color,fontSize:12,fontWeight:700,cursor:"pointer",minHeight:44}}>✓ Zrobiłem</button>
                       </div>
                     )}
                   </div>
@@ -223,7 +239,89 @@ export default function StabilityTab(){
         })}
       </div>
 
-      {/* ── 4. Kotwice ── */}
+      {/* ── 4. Filozofia ── */}
+      {/* Kanon: cztery filary, dwadzieścia jedna zasad. Filar rozwija się
+          tapnięciem, zasada też — pod spodem stoi jej rozwinięcie, stany, przy
+          których ma sens, i przepisanie do zasad własnych. */}
+      <div style={{...card,border:`1px solid ${ACC}22`}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:4}}>
+          <div style={{fontSize:15,fontWeight:700,color:"#f1f1f1"}}>📜 Filozofia</div>
+          <button onClick={()=>setPhilOpen(o=>PILLARS.every(x=>o[x.key])?{}:Object.fromEntries(PILLARS.map(x=>[x.key,true])))}
+            style={{background:"#222",border:"1px solid #333",borderRadius:8,color:"#aaa",padding:"4px 12px",fontSize:11,cursor:"pointer",minHeight:44}}>
+            {PILLARS.every(x=>philOpen[x.key])?"Zwiń wszystko":"Rozwiń wszystko"}
+          </button>
+        </div>
+        <div style={{fontSize:11.5,color:INK.soft,marginBottom:12,lineHeight:1.5}}>
+          {CANON.length} zasad w czterech filarach — stąd i z Twoich zasad losuje się zasada na dziś.
+          {st?<> Przy stanie {st.icon} {st.label.toLowerCase()} pasujące są oznaczone.</>:<> Zaznacz stan wyżej, żeby zobaczyć, które pasują teraz.</>}
+        </div>
+        {PILLARS.map(fil=>{
+          const rules=CANON.filter(r=>r.pillar===fil.key);
+          const open=!!philOpen[fil.key];
+          const hits=st?rules.filter(r=>!r.states.length||r.states.includes(st.key)).length:0;
+          return(
+            <div key={fil.key} style={{background:"#0f0f0f",border:`1px solid ${open?ACC+"55":"#1e1e1e"}`,borderRadius:10,marginBottom:8}}>
+              <div {...kb(()=>setPhilOpen(o=>({...o,[fil.key]:!o[fil.key]})))} aria-expanded={open}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",cursor:"pointer",minHeight:44}}>
+                <span style={{fontSize:18,flexShrink:0}}>{fil.icon}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13.5,fontWeight:600,color:"#f0f0f0"}}>
+                    <span style={{fontFamily:MONO,fontSize:11,color:ACC,marginRight:6}}>{fil.numeral}</span>
+                    {fil.label}
+                    <span style={{fontSize:11,color:INK.faint,fontWeight:400}}> · {rules.length}</span>
+                  </div>
+                  <div style={{fontSize:11,color:INK.soft,marginTop:2,lineHeight:1.45}}>{fil.desc}</div>
+                </div>
+                {hits>0&&<span style={{fontSize:11,color:ACC,flexShrink:0,whiteSpace:"nowrap"}}>{st.icon} {hits}</span>}
+                <span style={{color:INK.muted,fontSize:12,flexShrink:0}}>{open?"▲":"▼"}</span>
+              </div>
+              {open&&rules.map(r=>{
+                const ro=!!philRule[r.key];
+                const dzis=principle?.id==="canon:"+r.key;
+                const pas=!!st&&(!r.states.length||r.states.includes(st.key));
+                return(
+                  <div key={r.key} style={{borderTop:"1px solid #1b1b1b",padding:"0 14px",background:dzis?ACC+"14":"transparent"}}>
+                    <div {...kb(()=>setPhilRule(o=>({...o,[r.key]:!o[r.key]})))} aria-expanded={ro}
+                      style={{display:"flex",gap:9,alignItems:"flex-start",padding:"11px 0",cursor:"pointer",minHeight:44}}>
+                      <span style={{fontFamily:MONO,fontSize:11,color:dzis?ACC:INK.faint,flexShrink:0,paddingTop:2,minWidth:15,textAlign:"right"}}>{r.n}</span>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:12.5,color:dzis?"#f1f1f1":"#ddd",lineHeight:1.5,fontWeight:dzis?600:400}}>{r.text}</div>
+                        {dzis&&<div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:ACC,fontFamily:MONO,marginTop:4}}>NA DZIŚ</div>}
+                      </div>
+                      {pas&&!dzis&&<span style={{fontSize:11,flexShrink:0,paddingTop:2}} title={`Pasuje przy: ${st.label}`}>{st.icon}</span>}
+                      <span style={{color:INK.muted,fontSize:11,flexShrink:0,paddingTop:2}}>{ro?"▲":"▼"}</span>
+                    </div>
+                    {ro&&(
+                      <div style={{paddingBottom:12,paddingLeft:24}}>
+                        {(r.detail||[]).map((d,i)=><div key={i} style={{fontSize:12,color:INK.soft,lineHeight:1.6}}>{d}</div>)}
+                        {r.bullets&&(
+                          <ul style={{margin:"6px 0 0",paddingLeft:16,fontSize:12,color:"#ccc",lineHeight:1.7}}>
+                            {r.bullets.map((b,i)=><li key={i}>{b}</li>)}
+                          </ul>
+                        )}
+                        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center",marginTop:9}}>
+                          <span style={{fontSize:10.5,color:INK.faint}}>{r.states.length?"Przy:":"Przy każdym stanie"}</span>
+                          {r.states.map(k=>(
+                            <span key={k} style={{fontSize:10,color:"#8a8a8a",background:"#0a0a0a",border:"1px solid #2a2a2a",borderRadius:10,padding:"1px 7px"}}>
+                              {STATE_MAP[k]?.icon} {STATE_MAP[k]?.label}
+                            </span>
+                          ))}
+                        </div>
+                        <button onClick={()=>copyRule(r)}
+                          style={{marginTop:9,background:ACC+"22",border:`1px solid ${ACC}`,borderRadius:999,padding:"7px 18px",color:ACC,fontSize:12,fontWeight:700,cursor:"pointer",minHeight:44}}>
+                          ✎ zapisz po swojemu
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── 5. Kotwice ── */}
       <div style={{...card,border:"1px solid #30888a44"}}>
         <div style={{fontSize:15,fontWeight:700,color:"#f1f1f1",marginBottom:3}}>⚓ Kotwice</div>
         <div style={{fontSize:11.5,color:INK.soft,marginBottom:12,lineHeight:1.5}}>Rzeczy, które historycznie pomagały — nawet trochę. Ochota pojawia się w trakcie, nie przed.</div>

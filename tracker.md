@@ -64,6 +64,7 @@ tracker/
 │       ├── api.js            # klient API (zastąpił shim window.storage)
 │       ├── plans.js          # dni tygodnia, HRmax — pomocniki planów
 │       ├── stability.js      # stany, techniki i grupy zakładki Stabilizacja
+│       ├── philosophy.js     # kanon filozofii: cztery filary, 21 zasad
 │       ├── App.jsx           # stan, akcje, ładowanie danych, szkielet strony
 │       ├── lib/
 │       │   ├── ui.js         # breakpointy, tokeny kolorów i czcionek, daty, kb()
@@ -279,15 +280,17 @@ i dołek to ta sama nieumiejętność w różnych strojach. Treść już wcześn
 pasowała do nowej nazwy: oddech, zimna woda, uziemienie i defuzja to techniki
 regulacji pobudzenia, nie techniki „na smutek".
 
-Cztery sekcje, od góry:
+Pięć sekcji, od góry:
 
 1. **Zasada dnia** — jedna, nie wszystkie. Losowana deterministycznie z daty
    (`dailyPick`), więc odświeżenie nie zmienia bodźca; przycisk „inna" tak.
-   Najpierw z zasad przypisanych do ostatniego stanu, w braku — ze wszystkich.
-   Treść jest użytkownika: pola *zasada*, *skąd*, *na jaki stan*, *dlaczego to
+   Pula to zasady własne **plus kanon filozofii** (sekcja 4). Przy zaznaczonym
+   stanie zostają zasady przypisane do niego oraz te bez żadnego przypisania —
+   pusta lista stanów znaczy „na każdy stan", dokładnie tak, jak obiecuje podpis
+   w formularzu. Wcześniej filtr wycinał zasady bez stanów i podpis kłamał.
+   Treść zasady własnej to pola *zasada*, *skąd*, *na jaki stan*, *dlaczego to
    u mnie działa*. Zestaw startowy (sześć maksym stoików z uczciwą atrybucją)
-   wgrywa się wyłącznie na puste konto i jest oznaczony jako przykład — strona
-   ma działać od pierwszego wejścia, ale wartość jest w słowach użytkownika.
+   wgrywa się wyłącznie na puste konto i jest oznaczony jako przykład.
 2. **Check-in** — sześć stanów (spokój, napięcie, złość, lęk, dołek, nakręcenie),
    natężenie 1–5, opcjonalne zdanie. To jest właściwa część: nie da się
    regulować czegoś, czego się nie mierzy. Pod spodem lista i wykres z 14 dni —
@@ -298,11 +301,28 @@ Cztery sekcje, od góry:
    *rozplątanie* (wyjście z pętli myślowej), *rozruch* (niskie pobudzenie).
    Po check-inie zostają te pasujące; „Zrobiłem" zapisuje użycie po stałym
    `key`, a przy technice widać „użyta N× w 30 dni, ostatnio…".
-4. **Kotwice** — bez zmian, trafiły do sekcji rozruchu, gdzie mają zastosowanie.
+4. **Filozofia** — kanon: cztery filary (Działanie, Dyscyplina, Umysł,
+   Tożsamość) i 21 zasad z rozwinięciami. Filar i zasada rozwijają się
+   tapnięciem; przy zaznaczonym stanie pasujące zasady są oznaczone jego ikoną,
+   a nagłówek filaru pokazuje, ile ich w nim jest. Zasada wylosowana na dziś ma
+   w kanonie podpis „NA DZIŚ" — te dwie sekcje pokazują tę samą treść, więc
+   muszą się zgadzać na widoku.
+5. **Kotwice** — bez zmian, trafiły do sekcji rozruchu, gdzie mają zastosowanie.
 
 Lista stanów jest zamknięta i pilnowana także `CHECK`-iem w bazie; jej
 rozszerzenie to zmiana w `stability.js`, w `STATE_KEYS` trasy i w ograniczeniu
 tabeli (instrukcja w komentarzu przy `mood_checkins`).
+
+**Kanon w kodzie, zasady własne w bazie.** `philosophy.js` jest treścią, jak
+`TECHNIQUES` — tekst zadeklarowany raz, nie wpis dopisywany codziennie. Dzięki
+temu nie wymagał migracji i nie da się go skasować przez przypadek, ale też nie
+da się go edytować w miejscu: przycisk „zapisz po swojemu" zakłada **nową zasadę
+własną** z treścią, źródłem i stanami kanonu, gotową do przepisania własnymi
+słowami. Formularz dostaje pola bez `id` — identyfikator kanonu („canon:klucz")
+nie jest kluczem w bazie, a z wypełnionym `id` zapis poszedłby `PATCH`-em na
+nieistniejący wiersz. Każda zasada ma stały `key` (ten sam wzorzec co klucze
+technik), więc dopisanie albo przestawienie zasady nie zmienia znaczenia niczego,
+co już zapisano.
 
 #### Zakładka nawyków
 
