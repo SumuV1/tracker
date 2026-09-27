@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { INK, NUTRIENT, toISO, today, BF_SCALE, ACTIVITY, plDate , kb } from "../lib/ui.js";
 import { IconBtn, DeleteBtn } from "../components/buttons.jsx";
 import { FormulaPanel } from "../components/FormulaPanel.jsx";
 import { NutrientRings, MeasurementChart } from "../components/charts.jsx";
 import { CalYearView } from "../components/calendar.jsx";
 import { useApp } from "../lib/appContext.js";
+import RecipeEditor from "./RecipeEditor.jsx";
 
 // Pole formularza: `width:100%` z box-sizing, bo input typu number bez tego ma
 // własną szerokość (~150 px) i siatka auto-fit nie potrafi go ścisnąć —
@@ -11,7 +13,9 @@ import { useApp } from "../lib/appContext.js";
 const FIELD={width:"100%",boxSizing:"border-box",minWidth:0,background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none"};
 
 export default function CaloriesTab(){
-  const { foodCats, addFood, addMeasurement, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, closeCustomForm, closeModal, customForm, dailyTotals, dayGroups, dayLoading, deleteCustomFood, deleteMeasurement, editFoodId, editGramsId, editGramsVal, ensureYear, error, filtered, foodsTruncated, grams, gramsNum, isMobile, isWide, measForm, measurements, modal, n1, offInfo, offLoading, offQuery, offResults, openGroups, profile, removeEntry, saveCustomFood, saveGrams, search, searchOff, selCat, selFood, serverProfile, setBmiTab, setCalDate, setChartMetric, setCustomForm, setEditGramsId, setEditGramsVal, setError, setGrams, setMeasForm, setModal, setOffInfo, setOffQuery, setOffResults, setOpenGroups, setProfile, setSearch, setSelCat, setSelFood, setShowCustomForm, setShowMeasForm, showCustomForm, showMeasForm, startEditFood, tdee, todayEntries, totToday }=useApp();
+  const { foodCats, addFood, addMeasurement, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, closeCustomForm, closeModal, customForm, dailyTotals, dayGroups, dayLoading, deleteCustomFood, deleteMeasurement, editFoodId, editGramsId, deleteRecipe, dishes, editGramsVal, ensureYear, error, filtered, foodTab, foodsTruncated, grams, gramsNum, toggleDish, isMobile, isWide, measForm, measurements, modal, n1, offInfo, offLoading, offQuery, offResults, openGroups, profile, removeEntry, saveCustomFood, saveGrams, search, searchOff, selCat, selFood, serverProfile, setBmiTab, setCalDate, setChartMetric, setCustomForm, setEditGramsId, setEditGramsVal, setError, setGrams, setMeasForm, setFoodTab, setModal, setOffInfo, setOffQuery, setOffResults, setOpenGroups, setProfile, setSearch, setSelCat, setSelFood, setShowCustomForm, setShowMeasForm, showCustomForm, showMeasForm, startEditFood, tdee, todayEntries, totToday }=useApp();
+  // Edytor przepisu: null = zamknięty, {} = nowy, obiekt dania = edycja.
+  const [recipeEd,setRecipeEd]=useState(null);
   const entryActions=e=>editGramsId===e.id?(
     <div style={{display:"flex",alignItems:"center",gap:4}}>
       <input autoFocus type="number" step="any" min={0} inputMode="decimal" value={editGramsVal}
@@ -363,14 +367,18 @@ export default function CaloriesTab(){
             </div>
           )}
           <div style={{display:"flex",gap:4,background:"#0a0a0a",borderRadius:10,padding:3,marginBottom:10}}>
-            {[[false,"📦 Baza lokalna"],[true,"🌍 Open Food Facts"]].map(([online,label])=>(
-              <button key={label} onClick={()=>{setSelFood(null);setOffInfo(null);setOffResults(online?[]:null);}}
-                style={{flex:1,background:(offResults!==null)===online?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"7px",
-                  color:(offResults!==null)===online?"#fff":INK.soft,fontWeight:600,cursor:"pointer",fontSize:12}}>{label}</button>
+            {/* Trzy zakładki na 360 px: po ~104 px na przycisk, więc na telefonie
+                krótkie etykiety. Wysokość 44 px — to cel dotyku, nie ozdoba. */}
+            {[["local","📦 Katalog","📦 Baza lokalna"],["dish","🍲 Dania","🍲 Dania i przepisy"],["off","🌍 OFF","🌍 Open Food Facts"]].map(([key,krotka,dluga])=>(
+              <button key={key} aria-pressed={foodTab===key}
+                onClick={()=>{setSelFood(null);setOffInfo(null);setOffResults(key==="off"?[]:null);setFoodTab(key);}}
+                style={{flex:1,minHeight:44,background:foodTab===key?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"7px 4px",
+                  color:foodTab===key?"#fff":INK.soft,fontWeight:600,cursor:"pointer",fontSize:12,
+                  whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{isMobile?krotka:dluga}</button>
             ))}
           </div>
 
-          {offResults!==null?(
+          {foodTab==="off"?(
             <div style={{marginBottom:10}}>
               <div style={{display:"flex",gap:8,marginBottom:6}}>
                 <input value={offQuery} onChange={e=>setOffQuery(e.target.value)}
@@ -398,6 +406,20 @@ export default function CaloriesTab(){
                 </div>
               )}
             </div>
+          ):foodTab==="dish"?(
+            <div style={{marginBottom:10}}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Szukaj dania…"
+                aria-label="Szukaj dania"
+                style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1px solid #333",background:"#0a0a0a",color:"#fff",fontSize:14,marginBottom:8,boxSizing:"border-box",outline:"none"}}/>
+              <button onClick={()=>setRecipeEd({})}
+                style={{width:"100%",minHeight:44,padding:"10px",borderRadius:10,border:"2px dashed #5DCAA566",background:"transparent",color:"#5DCAA5",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:8}}>
+                ＋ Nowy przepis
+              </button>
+              <div style={{fontSize:11,color:INK.muted,lineHeight:1.5}}>
+                Przepis liczy kalorie i makro z kilku produktów katalogu. Obok niego stoją
+                gotowe dania z bazy — te oznaczone 🍲 w katalogu.
+              </div>
+            </div>
           ):(
             <>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Szukaj produktu…"
@@ -409,9 +431,9 @@ export default function CaloriesTab(){
           </div>
             </>
           )}
-          <button onClick={()=>showCustomForm?closeCustomForm():setShowCustomForm(true)} style={{width:"100%",padding:"9px",borderRadius:10,border:`2px dashed ${showCustomForm?"#ef4444":"#667eea"}`,background:"transparent",color:showCustomForm?"#ef4444":"#667eea",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:10}}>
+          {foodTab!=="dish"&&<button onClick={()=>showCustomForm?closeCustomForm():setShowCustomForm(true)} style={{width:"100%",padding:"9px",borderRadius:10,border:`2px dashed ${showCustomForm?"#ef4444":"#667eea"}`,background:"transparent",color:showCustomForm?"#ef4444":"#667eea",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:10}}>
             {showCustomForm?"❌ Anuluj":"➕ Dodaj własny produkt"}
-          </button>
+          </button>}
           {showCustomForm&&(
             <div style={{background:"#0a0a0a",borderRadius:12,padding:14,marginBottom:12,border:"1px solid #2a2a2a"}}>
               <div style={{fontSize:13,fontWeight:700,color:"#c084fc",marginBottom:2}}>{editFoodId?"Edycja własnego produktu (na 100g)":"Własny produkt (na 100g)"}</div>
@@ -447,7 +469,7 @@ export default function CaloriesTab(){
           )}
           {/* Serwer oddaje najwyżej `limit` produktów. Bez tej linijki katalog
               urywałby się po cichu i wyglądało to jak brakujący produkt. */}
-          {offResults===null&&foodsTruncated&&(
+          {foodTab==="local"&&foodsTruncated&&(
             <div style={{fontSize:11,color:"#c8a24a",lineHeight:1.5,marginBottom:8}}>
               Katalog jest dłuższy, niż się mieści — wpisz nazwę, żeby zawęzić listę.
             </div>
@@ -456,20 +478,38 @@ export default function CaloriesTab(){
             {offLoading&&<div style={{padding:20,textAlign:"center",color:"#667eea"}}>⏳ Pytam Open Food Facts…</div>}
             {!offLoading&&filtered.length===0&&(
               <div style={{padding:20,textAlign:"center",color:INK.muted}}>
-                {offResults!==null?(offQuery?"Brak wyników w Open Food Facts":"Wpisz nazwę i kliknij Szukaj"):"Brak wyników"}
+                {foodTab==="off"?(offQuery?"Brak wyników w Open Food Facts":"Wpisz nazwę i kliknij Szukaj")
+                  :foodTab==="dish"?"Nie masz jeszcze żadnego dania — zacznij od „Nowy przepis”."
+                  :"Brak wyników"}
               </div>
             )}
             {filtered.map(f=>(
               <div key={f.offCode||f.id} {...kb(()=>setSelFood(f))} aria-pressed={!!selFood&&(selFood.offCode||selFood.id)===(f.offCode||f.id)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #1a1a1a",background:selFood&&(selFood.offCode||selFood.id)===(f.offCode||f.id)?"#1a1030":"transparent",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:6}}>
+                {/* minWidth:0 — bez tego długa nazwa dania rozpycha wiersz
+                    poza kartę na telefonie. */}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                     {f.name}
                     {f.source==="custom"&&<span style={{fontSize:10,background:"#c084fc",color:"#000",padding:"1px 5px",borderRadius:4,fontWeight:700}}>WŁASNY</span>}
+                    {f.source==="recipe"&&<span style={{fontSize:10,background:"#5DCAA5",color:"#06231a",padding:"1px 5px",borderRadius:4,fontWeight:700}}>PRZEPIS</span>}
                   </div>
-                  <div style={{fontSize:11,color:INK.muted}}>{f.category}</div>
+                  <div style={{fontSize:11,color:INK.muted}}>
+                    {f.source==="recipe"&&f.items?.length
+                      ?f.items.map(i=>i.name).join(" · ")
+                      :f.category}
+                  </div>
                 </div>
-                <div style={{textAlign:"right",fontSize:11,display:"flex",alignItems:"center",gap:8}}>
+                <div style={{textAlign:"right",fontSize:11,display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                   <div><div style={{fontWeight:700,color:NUTRIENT.kcal}}>{f.kcal} kcal</div><div style={{color:INK.muted}}>B:{f.proteinG}g W:{f.carbsG}g T:{f.fatG}g</div></div>
+                  {/* Oznaczenie „to jest danie" — moje przypisanie z katalogu to
+                      tylko punkt wyjścia, musi dać się poprawić jednym dotknięciem. */}
+                  {foodTab!=="off"&&f.source!=="recipe"&&(
+                    <IconBtn onClick={()=>toggleDish(f.id,!f.isDish)}
+                      title={f.isDish?"To nie jest gotowe danie":"Oznacz jako gotowe danie"}
+                      bg={f.isDish?"#10231d":"#1a1a1a"} border={f.isDish?"#5DCAA5":"#333"} color={f.isDish?"#5DCAA5":"#777"}>🍲</IconBtn>
+                  )}
+                  {f.source==="recipe"&&<IconBtn onClick={()=>setRecipeEd(f)} title="Edytuj przepis" bg="#1c2030" border="#2f3550" color="#8fa6e8">✎</IconBtn>}
+                  {f.source==="recipe"&&<DeleteBtn onDelete={()=>deleteRecipe(f.id)} title="Usuń przepis"/>}
                   {f.source==="custom"&&<IconBtn onClick={()=>startEditFood(f)} title="Edytuj produkt" bg={editFoodId===f.id?"#2a1a3a":"#1c2030"} border={editFoodId===f.id?"#c084fc":"#2f3550"} color={editFoodId===f.id?"#c084fc":"#8fa6e8"}>✎</IconBtn>}
                   {f.source==="custom"&&<DeleteBtn onDelete={()=>deleteCustomFood(f.id)} title="Usuń produkt"/>}
                 </div>
@@ -500,6 +540,12 @@ export default function CaloriesTab(){
           </button>
         </div>
       </div>
+    )}
+    {/* Edytor przepisu leży nad oknem produktu (z-index 1000 vs 999) — wybór
+        składników musi przykryć listę, z której właśnie wybierasz. */}
+    {recipeEd&&(
+      <RecipeEditor initial={recipeEd.id?recipeEd:null}
+        onClose={row=>{setRecipeEd(null);if(row)setSelFood(row);}}/>
     )}
   </>);
 }

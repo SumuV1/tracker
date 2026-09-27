@@ -54,6 +54,14 @@ export const api = {
   patchFood: (id, body) => request(`/foods/${id}`, { method: "PATCH", body }),
   deleteFood: id => request(`/foods/${id}`, { method: "DELETE" }),
 
+  // Dania: własne przepisy (ze składem) i pozycje katalogu oznaczone jako
+  // gotowe danie. Wartości odżywcze przepisu liczy serwer ze składników.
+  dishes: () => request("/recipes"),
+  addRecipe: body => request("/recipes", { method: "POST", body }),
+  updateRecipe: (id, body) => request(`/recipes/${id}`, { method: "PUT", body }),
+  deleteRecipe: id => request(`/recipes/${id}`, { method: "DELETE" }),
+  setDish: (id, isDish) => request(`/recipes/dish/${id}`, { method: "PATCH", body: { isDish } }),
+
   meals: day => request(`/meals?${qs({ day })}`),
   dailyTotals: year => request(`/meals/daily-totals?${qs({ year })}`),
   addMeal: body => request("/meals", { method: "POST", body }),

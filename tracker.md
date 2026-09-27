@@ -72,7 +72,7 @@ tracker/
 │       │   ├── muscleGuess.js # podpowiedź mięśni z nazw dnia i ćwiczeń
 │       │   └── appContext.js # kontekst: stan i akcje z App dla zakładek
 │       ├── components/       # buttons, charts, calendar, FormulaPanel, LoginScreen
-│       └── tabs/             # Stability, Habits, Calories, Muscles (+ PlanEditor) — po jednym na zakładkę
+│       └── tabs/             # Stability, Habits, Calories, Muscles (+ PlanEditor, RecipeEditor)
 ├── shared/
 │   ├── planSchema.mjs            # format sledzik-plan/1: walidator wspólny dla przeglądarki i API
 │   └── plans/tyler-durden.json   # przykładowy plan = wzór pliku do importu
@@ -471,7 +471,7 @@ server/
 ├── auth.js            # scrypt, sesje, limiter logowania, requireAuth
 ├── http.js            # walidacja wejścia i opakowanie handlerów async
 └── routes/
-    ├── habits.js  profile.js  foods.js  meals.js  anchors.js
+    ├── habits.js  profile.js  foods.js  meals.js  recipes.js  anchors.js
 ```
 
 ### Walidacja wejścia — `server/http.js`
@@ -510,6 +510,9 @@ w ogóle istnieje.
 | GET/PUT | `/api/profile` | profil wraz z BMI, PPM i CPM |
 | GET | `/api/foods?q=&category=&limit=` | katalog: wspólne + własne. Zwraca `{items, truncated, limit}` — filtruje **baza**, nie przeglądarka, a `truncated` mówi, że lista jest ucięta |
 | GET | `/api/foods/categories` | kategorie z licznikami |
+| GET | `/api/recipes` | dania: własne przepisy (ze składem) i pozycje katalogu oznaczone jako gotowe danie |
+| POST/PUT/DELETE | `/api/recipes`, `/api/recipes/:id` | przepis — w ciele nazwa, skład i opcjonalna waga po przygotowaniu; wartości odżywcze liczy serwer |
+| PATCH | `/api/recipes/dish/:id` | oznaczenie pozycji katalogu jako gotowego dania (`{isDish}`) |
 | POST/PATCH/DELETE | `/api/foods`, `/api/foods/:id` | własne produkty (poprawiać i kasować można wyłącznie swoje) |
 | GET/POST | `/api/meals?day=` | dziennik dnia |
 | GET | `/api/meals/daily-totals?year=` | sumy kalorii per dzień |
@@ -600,6 +603,37 @@ się mieści". Frazę wysyłamy po 250 ms bez pisania, a lista zawęża się od 
 lokalnie, więc pisanie nie czeka na sieć. W `ILIKE` znaki `%` i `_` są
 wieloznacznikami — bez `ESCAPE` wpisanie `%` pasowało do całego katalogu.
 
+### Przepisy i gotowe dania
+
+Zakładka **🍲 Dania** w oknie dodawania produktu trzyma dwie rzeczy obok siebie:
+własne **przepisy** (danie złożone z kilku produktów katalogu) i **gotowe dania**
+z bazy — pozycje oznaczone flagą `is_dish`.
+
+**Przepis jest zwykłym wierszem `foods`** ze źródłem `recipe`, a `recipe_items`
+trzyma tylko skład. To jest sedno rozwiązania: dzięki temu dziennik, wyszukiwarka
+i edycja gramatury działają bez jednej linijki zmiany — przepis dodaje się do dnia
+tak samo jak każdy inny produkt, bo dla reszty aplikacji **jest** produktem.
+`meal_entries` i tak kopiuje wartości w chwili dodania, więc późniejsza zmiana
+przepisu nie rusza tego, co już zjedzone.
+
+Wartości na 100 g liczy **serwer** ze składników i zapisuje w tym wierszu;
+przeglądarka przysyła wyłącznie skład. Formularz pokazuje te same liczby na żywo,
+ale to podgląd — wiążące jest to, co policzył serwer.
+
+**Waga po przygotowaniu** (`recipe_yield_g`, opcjonalna) rozwiązuje problem, który
+psuje większość domowych liczników: gotowanie odparowuje wodę, więc suma gramów
+składników nie jest wagą tego, co ląduje na talerzu. Puste pole = liczymy na sumę.
+
+Flaga `is_dish` siedzi na wspólnych wierszach katalogu, bo aplikacja jest
+jednoosobowa. Przy wielu kontach trzeba by ją przenieść do tabeli wiążącej
+użytkownika z produktem — inaczej jedna osoba przestawiałaby widok drugiej.
+Przypisanie da się poprawić jednym dotknięciem 🍲 przy pozycji w katalogu:
+pierwsze oznaczenie 46 pozycji było moim zgadywaniem, nie wyrocznią.
+
+Klucz obcy składnika jest `RESTRICT`: skasowanie produktu użytego w przepisie
+kończy się czytelnym komunikatem z nazwą przepisu, a nie po cichu wydrążonym
+daniem.
+
 ### Wartości pochodne
 
 BMI, podstawowa (PPM) i całkowita przemiana materii (CPM) liczone są w
@@ -650,7 +684,8 @@ dwóch równoległych kliknięć.
 | `habits` | nawyki: nazwa, kategoria, godzina przypomnienia, kolejność |
 | `habit_logs` | odhaczenia, klucz `(habit_id, day)` — obecność wiersza znaczy „zrobione" |
 | `profiles` | waga, wzrost, wiek, płeć, poziom aktywności, obwody szyi / talii / bioder — jeden wiersz na konto |
-| `foods` | katalog produktów: `builtin` (wspólne), `custom` (prywatne), `off` (cache OpenFoodFacts) |
+| `foods` | katalog produktów: `builtin` (wspólne), `custom` (prywatne), `off` (cache OpenFoodFacts), `recipe` (własne przepisy). `is_dish` = to gotowe danie, nie składnik |
+| `recipe_items` | skład przepisu: które produkty i po ile gramów |
 | `meal_entries` | dziennik posiłków — wartości odżywcze zapisane w chwili dodania |
 | `anchors` | kotwice — rzeczy, które historycznie pomagały (zakładka Stabilizacja) |
 | `principles` | zasady użytkownika: tekst, źródło, do jakich stanów pasują |

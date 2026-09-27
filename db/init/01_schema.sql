@@ -102,7 +102,7 @@ CREATE INDEX IF NOT EXISTS body_measurements_user_day_idx ON body_measurements (
 -- Wszystkie wartości odżywcze są na 100 g.
 CREATE TABLE IF NOT EXISTS foods (
   id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  source      text NOT NULL CHECK (source IN ('builtin','custom','off')),
+  source      text NOT NULL CHECK (source IN ('builtin','custom','off','recipe')),
   user_id     bigint REFERENCES users(id) ON DELETE CASCADE,  -- NULL = wspólny
   off_barcode text,
   name        text NOT NULL CHECK (length(btrim(name)) > 0),
@@ -116,12 +116,43 @@ CREATE TABLE IF NOT EXISTS foods (
   fetched_at  timestamptz,                                    -- kiedy z OFF
   created_at  timestamptz NOT NULL DEFAULT now(),
   -- produkt prywatny wtedy i tylko wtedy, gdy ma właściciela
-  CONSTRAINT foods_owner_matches_source CHECK ((source = 'custom') = (user_id IS NOT NULL)),
+  CONSTRAINT foods_owner_matches_source CHECK ((source IN ('custom','recipe')) = (user_id IS NOT NULL)),
   CONSTRAINT foods_barcode_only_for_off CHECK (off_barcode IS NULL OR source = 'off')
 );
 CREATE UNIQUE INDEX IF NOT EXISTS foods_off_barcode_key ON foods (off_barcode) WHERE source = 'off';
 CREATE INDEX IF NOT EXISTS foods_user_idx ON foods (user_id);
 CREATE INDEX IF NOT EXISTS foods_name_idx ON foods (lower(name));
+
+-- „Danie" to pozycja, którą je się jako posiłek, a nie składnik: zupa, pizza,
+-- sałatka, pierogi. Flaga jest na wspólnych wierszach katalogu, bo aplikacja
+-- jest jednoosobowa — przy wielu kontach trzeba by ją przenieść do osobnej
+-- tabeli wiążącej użytkownika z produktem.
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS is_dish boolean NOT NULL DEFAULT false;
+-- Waga po przygotowaniu. Gotowanie odparowuje wodę, więc suma składników nie
+-- jest wagą gotowego dania — bez tego wartości na 100 g wychodziłyby za niskie.
+-- NULL = licz z sumy składników.
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS recipe_yield_g numeric(7,2) CHECK (recipe_yield_g IS NULL OR recipe_yield_g > 0);
+-- Źródło 'recipe' i właściciel dla przepisów doszły po pierwszym wydaniu tabeli.
+ALTER TABLE foods DROP CONSTRAINT IF EXISTS foods_source_check;
+ALTER TABLE foods ADD CONSTRAINT foods_source_check CHECK (source IN ('builtin','custom','off','recipe'));
+ALTER TABLE foods DROP CONSTRAINT IF EXISTS foods_owner_matches_source;
+ALTER TABLE foods ADD CONSTRAINT foods_owner_matches_source CHECK ((source IN ('custom','recipe')) = (user_id IS NOT NULL));
+CREATE INDEX IF NOT EXISTS foods_dish_idx ON foods (is_dish) WHERE is_dish;
+
+-- Skład przepisu: które produkty katalogu i po ile gramów. Wartości odżywcze
+-- dania liczy serwer z tych wierszy i zapisuje w kolumnach `foods`, żeby
+-- dziennik, wyszukiwarka i edycja gramatury działały tak samo jak dla produktu.
+-- RESTRICT na składniku: skasowanie produktu użytego w przepisie musi się
+-- odbić z komunikatem, a nie po cichu wydrążyć przepis.
+CREATE TABLE IF NOT EXISTS recipe_items (
+  id       bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  dish_id  bigint NOT NULL REFERENCES foods(id) ON DELETE CASCADE,
+  food_id  bigint NOT NULL REFERENCES foods(id) ON DELETE RESTRICT,
+  grams    numeric(7,2) NOT NULL CHECK (grams > 0),
+  position int NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS recipe_items_dish_idx ON recipe_items (dish_id);
+CREATE INDEX IF NOT EXISTS recipe_items_food_idx ON recipe_items (food_id);
 
 -- ── Dziennik posiłków ─────────────────────────────────────────────────────
 -- Wartości odżywcze kopiujemy w chwili dodania wpisu, już przeliczone na

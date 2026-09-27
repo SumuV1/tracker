@@ -1,11 +1,11 @@
 import express from "express";
 import { query } from "../db.js";
-import { wrap, reqText, optText, reqNumber, optNumber, reqId } from "../http.js";
+import { wrap, reqText, optText, reqNumber, optNumber, reqId, BadRequest } from "../http.js";
 
 export const foodRoutes = express.Router();
 
 const SELECT_FOOD = `
-  SELECT id, source, name, category,
+  SELECT id, source, name, category, is_dish AS "isDish",
          kcal, protein_g AS "proteinG", carbs_g AS "carbsG",
          fat_g AS "fatG", fiber_g AS "fiberG", salt_g AS "saltG"
     FROM foods`;
@@ -116,6 +116,16 @@ foodRoutes.patch("/:id", wrap(async (req, res) => {
 
 // Kasować można wyłącznie własne produkty — wspólnych nie ruszamy.
 foodRoutes.delete("/:id", wrap(async (req, res) => {
+  // Klucz obcy w recipe_items jest RESTRICT, więc bez tego sprawdzenia
+  // skasowanie składnika kończyłoby się błędem bazy i kodem 500.
+  const used = await query(
+    `SELECT f.name FROM recipe_items ri JOIN foods f ON f.id = ri.dish_id
+      WHERE ri.food_id = $1 ORDER BY f.name LIMIT 3`,
+    [reqId(req.params.id)]
+  );
+  if (used.rows.length) {
+    throw new BadRequest("Ten produkt jest składnikiem przepisu: " + used.rows.map(r => r.name).join(", ") + ". Usuń go najpierw z przepisu.");
+  }
   const { rowCount } = await query(
     "DELETE FROM foods WHERE id = $1 AND user_id = $2 AND source = 'custom'",
     [reqId(req.params.id), req.user.id]
