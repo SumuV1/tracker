@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { NUTRIENT, INK, plDate, OVER, mixHex } from "../lib/ui.js";
+import { NUTRIENT, INK, plDate, OVER, WARM_FROM, mixHex } from "../lib/ui.js";
 
 
 // Pierścienie postępu: jedna wartość względem dziennego celu, osobno dla każdego
@@ -18,6 +18,17 @@ import { NUTRIENT, INK, plDate, OVER, mixHex } from "../lib/ui.js";
 // kolorze. Każdy rysujemy tym samym okręgiem, wycinając kawałek przez
 // `strokeDasharray` + `strokeDashoffset`.
 const SEG_PER_LAP = 36;        // 10° na segment — na 96 px gładko, a to 36 węzłów
+
+// Kolor łuku w punkcie `p` (ułamek celu). Jedna ciągła droga: kolor składnika →
+// żółć → czerwień, bez skoku na żadnej granicy.
+//   do 85 %   — czysty kolor składnika
+//   85–100 %  — przejście do OVER.from
+//   100–200 % — dalej do OVER.to
+//   powyżej   — już czerwień
+export const kolorLuku = (p, base) =>
+  p <= WARM_FROM ? base
+  : p <= 1 ? mixHex(base, OVER.from, (p - WARM_FROM) / (1 - WARM_FROM))
+  : mixHex(OVER.from, OVER.to, Math.min(p - 1, 1));
 
 function segmenty(od, doFrac){
   const dlugosc = doFrac - od;
@@ -39,6 +50,7 @@ export function Ring({value,target,unit,label,icon,color,size=104,limit=false}){
   const pct=frac!==null?Math.round(frac*100):null;
   const over=pct!==null&&pct>100;
   const nadwyzka=frac===null?0:Math.max(frac-1,0);
+  const zimny=frac===null?0:Math.min(frac,WARM_FROM);
   // Kolor, w którym nadwyżka się kończy — służy też podpisowi pod pierścieniem.
   const overColor=mixHex(OVER.from,OVER.to,nadwyzka);
   const fmt=v=>Number.isInteger(v)?v:Math.round(v*10)/10;
@@ -48,17 +60,26 @@ export function Ring({value,target,unit,label,icon,color,size=104,limit=false}){
     <div style={{textAlign:"center",minWidth:0}}>
       <svg viewBox={`0 0 ${size} ${size}`} style={{width:"100%",maxWidth:size,display:"block",margin:"0 auto"}}>
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#26262b" strokeWidth="9"/>
-        {/* okrążenie 1: sam cel, w kolorze składnika */}
-        {frac!==null&&Math.min(frac,1)>0&&(
+        {/* okrążenie 1, odcinek chłodny: do 85 % celu czysty kolor składnika */}
+        {zimny>0&&(
           <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="9"
-            strokeLinecap={frac>=1?"butt":"round"} strokeDasharray={`${Math.min(frac,1)*C} ${C}`}
+            strokeLinecap={frac>WARM_FROM?"butt":"round"} strokeDasharray={`${zimny*C} ${C}`}
             transform={`rotate(-90 ${size/2} ${size/2})`}
             style={{transition:"stroke-dasharray 0.45s ease"}}/>
         )}
-        {/* okrążenie 2: nadwyżka 100–200 %, gradient bursztyn → czerwień */}
-        {segmenty(0,Math.min(nadwyzka,1)).map((sg,i)=>(
+        {/* okrążenie 1, odcinek ciepły: 85–100 %, kolor składnika wchodzi w żółć */}
+        {segmenty(WARM_FROM,Math.min(frac??0,1)).map((sg,i,a)=>(
+          <circle key={"w"+i} cx={size/2} cy={size/2} r={r} fill="none"
+            stroke={kolorLuku(sg.t,color)} strokeWidth="9"
+            strokeLinecap={i===a.length-1&&frac<1?"round":"butt"}
+            strokeDasharray={`${sg.len*C} ${C}`} strokeDashoffset={-sg.start*C}
+            transform={`rotate(-90 ${size/2} ${size/2})`}/>
+        ))}
+        {/* okrążenie 2: nadwyżka 100–200 %, żółć → czerwień */}
+        {segmenty(0,Math.min(nadwyzka,1)).map((sg,i,a)=>(
           <circle key={"o"+i} cx={size/2} cy={size/2} r={r} fill="none"
-            stroke={mixHex(OVER.from,OVER.to,sg.t)} strokeWidth="9" strokeLinecap="butt"
+            stroke={kolorLuku(1+sg.t,color)} strokeWidth="9"
+            strokeLinecap={i===a.length-1&&nadwyzka<1?"round":"butt"}
             strokeDasharray={`${sg.len*C} ${C}`} strokeDashoffset={-sg.start*C}
             transform={`rotate(-90 ${size/2} ${size/2})`}/>
         ))}

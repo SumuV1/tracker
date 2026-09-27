@@ -60,16 +60,61 @@ export const NUTRIENT = {
 // kalorii. Wcześniej każdy z tych wykresów miał własne progi, więc czerwony
 // znaczył w jednym 120 %, a w drugim 200 %. Bursztyn zaczyna się dokładnie tam,
 // gdzie cel został osiągnięty; czerwień przy dwukrotności.
-export const OVER = { from: "#f59e0b", to: "#ef4444" };
+// `from` to jasna żółć, nie bursztyn: bursztyn #f59e0b miał ΔE 15,2 do koloru
+// węgli (#c98500) i na tym samym pierścieniu zlewał się z nim w jedno.
+// #facc15 daje ΔE 32,1 i kontrast 9,8:1 do toru.
+export const OVER = { from: "#facc15", to: "#ef4444" };
 
-// Mieszanie dwóch kolorów w sRGB. Do gradientu wzdłuż łuku wystarczy: różnica
-// wobec mieszania w przestrzeni percepcyjnej jest na odcinku bursztyn→czerwień
-// niewidoczna, a kosztuje trzy linijki zamiast biblioteki.
+// Od tego ułamka celu łuk zaczyna się ocieplać w stronę `OVER.from`. Bez tego
+// kolor składnika przechodził w żółć skokiem dokładnie na 100 %. Próg jest ten
+// sam, na którym kalendarz kalorii rozdziela pasma 50–85 % i 85–100 %.
+export const WARM_FROM = 0.85;
+
+// Mieszanie kolorów w OKLCH, po krótszym łuku barwy. Interpolacja w sRGB
+// wygląda niewinnie, ale między odległymi barwami przechodzi PRZEZ SZAROŚĆ:
+// niebieski #3987e5 zmieszany po połowie z żółcią #facc15 daje brudny beż,
+// i na pierścieniu kalorii widać to jako szarawą wstęgę. W OKLCH ta sama para
+// idzie przez turkus i zieleń — czyli tak, jak człowiek spodziewa się przejścia.
+const srgbToLin = v => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+const linToSrgb = v => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+
+function toOklch(hex) {
+  const [r, g, b] = [1, 3, 5].map(i => srgbToLin(parseInt(hex.slice(i, i + 2), 16) / 255));
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  const L = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+  const A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+  const B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+  return [L, Math.hypot(A, B), Math.atan2(B, A)];
+}
+
+function fromOklch([L, C, h]) {
+  const A = C * Math.cos(h), B = C * Math.sin(h);
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s = (L - 0.0894841775 * A - 1.2914855480 * B) ** 3;
+  const rgb = [
+    +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+  ];
+  return "#" + rgb.map(v => Math.round(Math.max(0, Math.min(1, linToSrgb(v))) * 255)
+    .toString(16).padStart(2, "0")).join("");
+}
+
 export const mixHex = (a, b, t) => {
   const u = Math.max(0, Math.min(1, t));
-  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-  const [x, y] = [p(a), p(b)];
-  return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * u).toString(16).padStart(2, "0")).join("");
+  const [A, B] = [toOklch(a), toOklch(b)];
+  // Barwa po krótszej stronie koła; kolor bez nasycenia nie ma własnej barwy,
+  // więc przejmuje barwę drugiego — inaczej szarość ciągnęłaby gradient w bok.
+  let hA = A[2], hB = B[2];
+  if (A[1] < 1e-4) hA = hB;
+  if (B[1] < 1e-4) hB = hA;
+  let d = hB - hA;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return fromOklch([A[0] + (B[0] - A[0]) * u, A[1] + (B[1] - A[1]) * u, hA + d * u]);
 };
 
 export const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
