@@ -634,6 +634,30 @@ Klucz obcy składnika jest `RESTRICT`: skasowanie produktu użytego w przepisie
 kończy się czytelnym komunikatem z nazwą przepisu, a nie po cichu wydrążonym
 daniem.
 
+### Pierścienie postępu dnia
+
+`components/charts.jsx`, komponent `Ring`. Przekroczenie celu nie zmienia koloru
+całego łuku — **dokłada kolejne okrążenie na wierzchu**, tak jak pierścienie
+w zegarku:
+
+| Zakres | Kolor |
+|---|---|
+| 0–100 % | własny kolor składnika (bez zmian) |
+| 100–200 % | jaskrawy żółty `#facc15` (kontrast 9,8:1 do toru) |
+| powyżej 200 % | czerwony `#ef4444` |
+
+Dzięki temu na jednym pierścieniu widać naraz, że cel jest zrobiony **i** o ile
+został przekroczony: przy 105 % zostaje pełny kolor bazowy plus krótki żółty
+łuk. Przy dokładnie 200 % żółte okrążenie zakrywa bazowe w całości, a powyżej
+300 % czerwone zostaje pełne — wtedy prawdę mówi liczba w środku i podpis
+(`+438% ponad cel`). Kolor nigdy nie jest jedynym nośnikiem informacji.
+
+Pełne okrążenie rysuje się z `stroke-linecap: butt`, częściowe z `round` —
+inaczej zaokrąglone końce nakładałyby się na siebie w punkcie startu.
+
+Kalendarz roczny niżej ma **własną skalę** (`<50 %`, `50–85 %`, `85–100 %`,
+`100–120 %`, `>120 %`) i te progi nie pokrywają się z progami pierścieni.
+
 ### Wartości pochodne
 
 BMI, podstawowa (PPM) i całkowita przemiana materii (CPM) liczone są w

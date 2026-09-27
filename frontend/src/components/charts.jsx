@@ -7,12 +7,25 @@ import { NUTRIENT, INK, plDate } from "../lib/ui.js";
 // sumują się do wspólnej całości, więc każdy dostaje własny wskaźnik.
 // Nazwa i liczby są zawsze wypisane tekstem: kolor wyłącznie wzmacnia odczyt,
 // nigdy nie jest jedynym nośnikiem informacji.
+// Kolory kolejnych okrążeń. Pierwsze — kolor składnika. Każdy procent ponad
+// 100 % dokłada się jaskrawym żółtym na wierzchu, ponad 200 % — czerwonym.
+// Ring zamiast zmiany koloru całego łuku: dzięki temu widać i to, że cel jest
+// zrobiony, i ile go przekroczyłeś.
+const OVER_1 = "#facc15";   // 100–200 %, kontrast 9,8:1 do toru
+const OVER_2 = "#ef4444";   // powyżej 200 %
+
 export function Ring({value,target,unit,label,icon,color,size=104,limit=false}){
   const r=(size-14)/2, C=2*Math.PI*r;
-  const pct=target?Math.round((value/target)*100):null;
+  const frac=target?value/target:null;
+  const pct=frac!==null?Math.round(frac*100):null;
   const over=pct!==null&&pct>100;
-  const shown=Math.min(100,pct??0);
-  const stroke=over?(limit?"#ef4444":"#f59e0b"):color;
+  // Trzy nakładane okrążenia; powyżej 300 % czerwone zostaje pełne, a prawdę
+  // mówi liczba w środku.
+  const laps=frac===null?[]:[
+    {frac:Math.min(frac,1),                    stroke:color},
+    {frac:Math.min(Math.max(frac-1,0),1),      stroke:OVER_1},
+    {frac:Math.min(Math.max(frac-2,0),1),      stroke:OVER_2},
+  ].filter(l=>l.frac>0);
   const fmt=v=>Number.isInteger(v)?v:Math.round(v*10)/10;
   return(
     // minWidth:0 — jako element siatki pierścień nie może narzucać jej
@@ -20,12 +33,12 @@ export function Ring({value,target,unit,label,icon,color,size=104,limit=false}){
     <div style={{textAlign:"center",minWidth:0}}>
       <svg viewBox={`0 0 ${size} ${size}`} style={{width:"100%",maxWidth:size,display:"block",margin:"0 auto"}}>
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#26262b" strokeWidth="9"/>
-        {pct!==null&&(
-          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={stroke} strokeWidth="9"
-            strokeLinecap="round" strokeDasharray={`${(shown/100)*C} ${C}`}
+        {laps.map((l,i)=>(
+          <circle key={i} cx={size/2} cy={size/2} r={r} fill="none" stroke={l.stroke} strokeWidth="9"
+            strokeLinecap={l.frac>=1?"butt":"round"} strokeDasharray={`${l.frac*C} ${C}`}
             transform={`rotate(-90 ${size/2} ${size/2})`}
             style={{transition:"stroke-dasharray 0.45s ease"}}/>
-        )}
+        ))}
         <text x={size/2} y={size/2-1} textAnchor="middle" dominantBaseline="middle"
           fill="#f1f1f1" fontSize={size/4.2} fontWeight="700" fontFamily="inherit">
           {pct!==null?`${pct}%`:"—"}
@@ -37,9 +50,12 @@ export function Ring({value,target,unit,label,icon,color,size=104,limit=false}){
         <span style={{color:"#f1f1f1",fontWeight:700}}>{fmt(value)}</span>
         {target?<span style={{color:INK.soft}}> / {target} {unit}</span>:<span style={{color:INK.soft}}> {unit}</span>}
       </div>
+      {/* Kolor nie może być jedynym nośnikiem informacji — obok zawsze liczba
+          i słowo. „Limit" (sól) kontra „cel" zostaje, bo przekroczenie limitu
+          znaczy co innego niż przekroczenie celu. */}
       {over&&(
-        <div style={{fontSize:10,color:limit?"#ef4444":"#f59e0b",fontWeight:600,marginTop:2}}>
-          {limit?"ponad limit":"ponad cel"}
+        <div style={{fontSize:10,color:pct>200?OVER_2:OVER_1,fontWeight:600,marginTop:2}}>
+          +{pct-100}% ponad {limit?"limit":"cel"}
         </div>
       )}
     </div>
