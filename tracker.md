@@ -638,25 +638,34 @@ daniem.
 
 `components/charts.jsx`, komponent `Ring`. Przekroczenie celu nie zmienia koloru
 całego łuku — **dokłada kolejne okrążenie na wierzchu**, tak jak pierścienie
-w zegarku:
+w zegarku. Dzięki temu widać naraz, że cel jest zrobiony **i** o ile został
+przekroczony: przy 105 % zostaje pełny kolor bazowy plus krótki bursztynowy łuk.
 
-| Zakres | Kolor |
-|---|---|
-| 0–100 % | własny kolor składnika (bez zmian) |
-| 100–200 % | jaskrawy żółty `#facc15` (kontrast 9,8:1 do toru) |
-| powyżej 200 % | czerwony `#ef4444` |
+| Warstwa | Zakres | Kolor |
+|---|---|---|
+| 1 | 0–100 % | własny kolor składnika (`NUTRIENT`) |
+| 2 | 100–200 % | gradient `OVER.from` → `OVER.to` wzdłuż łuku |
+| 3 | powyżej 200 % | pełny `OVER.to` — skala się skończyła |
 
-Dzięki temu na jednym pierścieniu widać naraz, że cel jest zrobiony **i** o ile
-został przekroczony: przy 105 % zostaje pełny kolor bazowy plus krótki żółty
-łuk. Przy dokładnie 200 % żółte okrążenie zakrywa bazowe w całości, a powyżej
-300 % czerwone zostaje pełne — wtedy prawdę mówi liczba w środku i podpis
+**Skala `OVER` w `lib/ui.js` jest wspólna z kalendarzem kalorii.** Wcześniej
+każdy z tych wykresów miał własne progi, więc czerwień znaczyła w jednym 120 %,
+a w drugim 200 %. Teraz bursztyn `#f59e0b` zaczyna się dokładnie tam, gdzie cel
+padł, a czerwień `#ef4444` wypada przy dwukrotności — i te same dwa kolory
+opisują w kalendarzu pasma `100–120 %` i `>120 %`.
+
+Gradient wzdłuż łuku wymaga obejścia: **SVG nie ma gradientu stożkowego**,
+a liniowy biegnie wzdłuż prostej, nie wzdłuż okręgu. Łuk nadwyżki składamy więc
+z krótkich segmentów (10° każdy, maks. 36 na okrążenie), wycinanych z tego
+samego okręgu przez `strokeDasharray` + `strokeDashoffset`, z kolorem
+interpolowanym w sRGB (`mixHex`). Segmenty zachodzą na siebie o 35 % długości,
+inaczej między nimi prześwituje tor.
+
+Przy dokładnie 200 % drugie okrążenie zakrywa bazowe w całości, a powyżej 300 %
+trzecie zakrywa wszystko — wtedy prawdę mówi liczba w środku i podpis
 (`+438% ponad cel`). Kolor nigdy nie jest jedynym nośnikiem informacji.
 
 Pełne okrążenie rysuje się z `stroke-linecap: butt`, częściowe z `round` —
 inaczej zaokrąglone końce nakładałyby się na siebie w punkcie startu.
-
-Kalendarz roczny niżej ma **własną skalę** (`<50 %`, `50–85 %`, `85–100 %`,
-`100–120 %`, `>120 %`) i te progi nie pokrywają się z progami pierścieni.
 
 ### Wartości pochodne
 

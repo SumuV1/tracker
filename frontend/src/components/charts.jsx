@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { NUTRIENT, INK, plDate } from "../lib/ui.js";
+import { NUTRIENT, INK, plDate, OVER, mixHex } from "../lib/ui.js";
 
 
 // Pierścienie postępu: jedna wartość względem dziennego celu, osobno dla każdego
@@ -7,25 +7,40 @@ import { NUTRIENT, INK, plDate } from "../lib/ui.js";
 // sumują się do wspólnej całości, więc każdy dostaje własny wskaźnik.
 // Nazwa i liczby są zawsze wypisane tekstem: kolor wyłącznie wzmacnia odczyt,
 // nigdy nie jest jedynym nośnikiem informacji.
-// Kolory kolejnych okrążeń. Pierwsze — kolor składnika. Każdy procent ponad
-// 100 % dokłada się jaskrawym żółtym na wierzchu, ponad 200 % — czerwonym.
-// Ring zamiast zmiany koloru całego łuku: dzięki temu widać i to, że cel jest
-// zrobiony, i ile go przekroczyłeś.
-const OVER_1 = "#facc15";   // 100–200 %, kontrast 9,8:1 do toru
-const OVER_2 = "#ef4444";   // powyżej 200 %
+// Przekroczenie celu nie zmienia koloru całego łuku — dokłada kolejne okrążenie
+// na wierzchu, tak jak pierścienie w zegarku. Kolor nadwyżki przechodzi płynnie
+// przez skalę `OVER` z lib/ui.js, tę samą, którą kalendarz kalorii oznacza
+// 100–120 % i powyżej: bursztyn tam, gdzie cel właśnie padł, czerwień przy
+// dwukrotności. Powyżej 200 % kolejne okrążenie jest już całe czerwone.
+//
+// SVG nie ma gradientu stożkowego, a liniowy biegnie wzdłuż prostej, nie wzdłuż
+// okręgu — więc łuk nadwyżki składamy z krótkich segmentów o interpolowanym
+// kolorze. Każdy rysujemy tym samym okręgiem, wycinając kawałek przez
+// `strokeDasharray` + `strokeDashoffset`.
+const SEG_PER_LAP = 36;        // 10° na segment — na 96 px gładko, a to 36 węzłów
+
+function segmenty(od, doFrac){
+  const dlugosc = doFrac - od;
+  if (dlugosc <= 0) return [];
+  const n = Math.max(1, Math.ceil(dlugosc * SEG_PER_LAP));
+  // Segmenty zachodzą na siebie o ułamek, inaczej między nimi prześwitywałby tor.
+  const zapas = dlugosc / n * 0.35;
+  return Array.from({ length: n }, (_, i) => {
+    const a = od + dlugosc * i / n;
+    const b = od + dlugosc * (i + 1) / n;
+    // Kolor bierzemy ze środka segmentu, licząc pozycję w obrębie nadwyżki.
+    return { start: a, len: (b - a) + (i < n - 1 ? zapas : 0), t: (a + b) / 2 };
+  });
+}
 
 export function Ring({value,target,unit,label,icon,color,size=104,limit=false}){
   const r=(size-14)/2, C=2*Math.PI*r;
   const frac=target?value/target:null;
   const pct=frac!==null?Math.round(frac*100):null;
   const over=pct!==null&&pct>100;
-  // Trzy nakładane okrążenia; powyżej 300 % czerwone zostaje pełne, a prawdę
-  // mówi liczba w środku.
-  const laps=frac===null?[]:[
-    {frac:Math.min(frac,1),                    stroke:color},
-    {frac:Math.min(Math.max(frac-1,0),1),      stroke:OVER_1},
-    {frac:Math.min(Math.max(frac-2,0),1),      stroke:OVER_2},
-  ].filter(l=>l.frac>0);
+  const nadwyzka=frac===null?0:Math.max(frac-1,0);
+  // Kolor, w którym nadwyżka się kończy — służy też podpisowi pod pierścieniem.
+  const overColor=mixHex(OVER.from,OVER.to,nadwyzka);
   const fmt=v=>Number.isInteger(v)?v:Math.round(v*10)/10;
   return(
     // minWidth:0 — jako element siatki pierścień nie może narzucać jej
@@ -33,12 +48,27 @@ export function Ring({value,target,unit,label,icon,color,size=104,limit=false}){
     <div style={{textAlign:"center",minWidth:0}}>
       <svg viewBox={`0 0 ${size} ${size}`} style={{width:"100%",maxWidth:size,display:"block",margin:"0 auto"}}>
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#26262b" strokeWidth="9"/>
-        {laps.map((l,i)=>(
-          <circle key={i} cx={size/2} cy={size/2} r={r} fill="none" stroke={l.stroke} strokeWidth="9"
-            strokeLinecap={l.frac>=1?"butt":"round"} strokeDasharray={`${l.frac*C} ${C}`}
+        {/* okrążenie 1: sam cel, w kolorze składnika */}
+        {frac!==null&&Math.min(frac,1)>0&&(
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="9"
+            strokeLinecap={frac>=1?"butt":"round"} strokeDasharray={`${Math.min(frac,1)*C} ${C}`}
             transform={`rotate(-90 ${size/2} ${size/2})`}
             style={{transition:"stroke-dasharray 0.45s ease"}}/>
+        )}
+        {/* okrążenie 2: nadwyżka 100–200 %, gradient bursztyn → czerwień */}
+        {segmenty(0,Math.min(nadwyzka,1)).map((sg,i)=>(
+          <circle key={"o"+i} cx={size/2} cy={size/2} r={r} fill="none"
+            stroke={mixHex(OVER.from,OVER.to,sg.t)} strokeWidth="9" strokeLinecap="butt"
+            strokeDasharray={`${sg.len*C} ${C}`} strokeDashoffset={-sg.start*C}
+            transform={`rotate(-90 ${size/2} ${size/2})`}/>
         ))}
+        {/* okrążenie 3: powyżej 200 % — już bez gradientu, skala się skończyła */}
+        {nadwyzka>1&&(
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={OVER.to} strokeWidth="9"
+            strokeLinecap={nadwyzka-1>=1?"butt":"round"}
+            strokeDasharray={`${Math.min(nadwyzka-1,1)*C} ${C}`}
+            transform={`rotate(-90 ${size/2} ${size/2})`}/>
+        )}
         <text x={size/2} y={size/2-1} textAnchor="middle" dominantBaseline="middle"
           fill="#f1f1f1" fontSize={size/4.2} fontWeight="700" fontFamily="inherit">
           {pct!==null?`${pct}%`:"—"}
@@ -54,7 +84,7 @@ export function Ring({value,target,unit,label,icon,color,size=104,limit=false}){
           i słowo. „Limit" (sól) kontra „cel" zostaje, bo przekroczenie limitu
           znaczy co innego niż przekroczenie celu. */}
       {over&&(
-        <div style={{fontSize:10,color:pct>200?OVER_2:OVER_1,fontWeight:600,marginTop:2}}>
+        <div style={{fontSize:10,color:overColor,fontWeight:600,marginTop:2}}>
           +{pct-100}% ponad {limit?"limit":"cel"}
         </div>
       )}

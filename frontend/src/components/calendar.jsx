@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { INK, DAY_LABELS, MONTHS_PL, today, getDaysInMonth, getDaysInYear, kb } from "../lib/ui.js";
+import { INK, DAY_LABELS, MONTHS_PL, today, getDaysInMonth, getDaysInYear, kb, OVER } from "../lib/ui.js";
 
 // `compact` = widok wchodzi do wąskiego kafla kategorii, a nie na całą
 // szerokość zakładki: mniejsze odstępy, mniejsze podpisy, ten sam układ.
@@ -90,8 +90,10 @@ export function CalYearView({calLogs,tdee,onYear,onPickDay}){
       if(pct<=0.5)return"#1e3a2a";
       if(pct<=0.85)return"#22c55e";
       if(pct<=1.0)return"#4ade80";
-      if(pct<=1.2)return"#f59e0b";
-      return"#ef4444";
+      // Te same dwa kolory, co nadwyżka w pierścieniach postępu — bursztyn
+      // zaraz po przekroczeniu celu, czerwień przy dużym przekroczeniu.
+      if(pct<=1.2)return OVER.from;
+      return OVER.to;
     }
     const intensity=Math.min(1,cal/maxCal);
     return`rgb(20,${Math.round(70+intensity*130)},50)`;
@@ -105,7 +107,7 @@ export function CalYearView({calLogs,tdee,onYear,onPickDay}){
       </div>
       {tdee && (
         <div style={{display:"flex",gap:10,marginBottom:10,flexWrap:"wrap"}}>
-          {[["#1e3a2a","<50%"],["#22c55e","50–85%"],["#4ade80","85–100%"],["#f59e0b","100–120%"],["#ef4444",">120%"]].map(([c,l])=>(
+          {[["#1e3a2a","<50%"],["#22c55e","50–85%"],["#4ade80","85–100%"],[OVER.from,"100–120%"],[OVER.to,">120%"]].map(([c,l])=>(
             <div key={l} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"#888"}}>
               <div style={{width:10,height:10,borderRadius:2,background:c}}/>{l}
             </div>

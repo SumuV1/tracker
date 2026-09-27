@@ -56,6 +56,22 @@ export const NUTRIENT = {
   salt:    "#9085e9",
 };
 
+// Skala przekroczenia celu — wspólna dla pierścieni „Postępu dnia" i kalendarza
+// kalorii. Wcześniej każdy z tych wykresów miał własne progi, więc czerwony
+// znaczył w jednym 120 %, a w drugim 200 %. Bursztyn zaczyna się dokładnie tam,
+// gdzie cel został osiągnięty; czerwień przy dwukrotności.
+export const OVER = { from: "#f59e0b", to: "#ef4444" };
+
+// Mieszanie dwóch kolorów w sRGB. Do gradientu wzdłuż łuku wystarczy: różnica
+// wobec mieszania w przestrzeni percepcyjnej jest na odcinku bursztyn→czerwień
+// niewidoczna, a kosztuje trzy linijki zamiast biblioteki.
+export const mixHex = (a, b, t) => {
+  const u = Math.max(0, Math.min(1, t));
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * u).toString(16).padStart(2, "0")).join("");
+};
+
 export const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 export const MINUTES = ["00","15","30","45"];
 export const TILE = 36;
