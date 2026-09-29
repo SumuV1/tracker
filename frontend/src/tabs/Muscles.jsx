@@ -4,6 +4,7 @@ import { WEEKDAYS, todayKey, maxHeartRate } from "../plans.js";
 import { MUSCLES, MUSCLE_LAYER } from "../lib/muscles.js";
 import { useApp } from "../lib/appContext.js";
 import { DeleteBtn } from "../components/buttons.jsx";
+import { MeasurementChart } from "../components/charts.jsx";
 import PlanEditor, { downloadPlan, EXAMPLE, ACC } from "./PlanEditor.jsx";
 
 // ══════════════════════════════════════════════════════════════════
@@ -22,32 +23,32 @@ const BODY_SVG_MARKUP = `
 </svg>`;
 
 const FRONT_PATHS = {
-  platysma:["M 200.0,110 L 216.0,110 Q 223.0,126 221.0,144 L 206.0,148 L 200.0,147 Z","M 200.0,110 L 184.0,110 Q 177.0,126 179.0,144 L 194.0,148 L 200.0,147 Z"],
+  platysma:["M 200.0,110 L 215.0,110 Q 219.0,126 217.0,142 L 205.0,146 L 200.0,145 Z","M 200.0,110 L 185.0,110 Q 181.0,126 183.0,142 L 195.0,146 L 200.0,145 Z"],
   sternocleidomastoid:["M 201.0,112 Q 213.0,118 214.0,133 Q 212.0,144 205.0,148 L 200.0,147 Q 204.0,130 200.0,113 Z","M 199.0,112 Q 187.0,118 186.0,133 Q 188.0,144 195.0,148 L 200.0,147 Q 196.0,130 200.0,113 Z"],
-  scalenes:["M 213.0,119 Q 222.0,129 221.0,143 L 214.0,145 Q 215.0,132 209.0,123 Z","M 187.0,119 Q 178.0,129 179.0,143 L 186.0,145 Q 185.0,132 191.0,123 Z"],
+  scalenes:["M 212.0,119 Q 218.0,129 217.0,141 L 211.0,143 Q 212.0,132 207.0,123 Z","M 188.0,119 Q 182.0,129 183.0,141 L 189.0,143 Q 188.0,132 193.0,123 Z"],
   deltoid_front:["M 234.0,146 Q 266.0,152 282.0,184 L 288.0,214 Q 272.0,225 258.0,214 L 250.0,176 Q 243.0,156 234.0,146 Z","M 166.0,146 Q 134.0,152 118.0,184 L 112.0,214 Q 128.0,225 142.0,214 L 150.0,176 Q 157.0,156 166.0,146 Z"],
   pectoralis:["M 205.0,150 L 236.0,147 Q 252.0,159 254.0,183 Q 249.0,208 229.0,219 L 205.0,222 Z","M 195.0,150 L 164.0,147 Q 148.0,159 146.0,183 Q 151.0,208 171.0,219 L 195.0,222 Z"],
   serratus:["M 234.0,224 L 250.0,215 L 254.0,229 L 244.0,233 L 254.0,239 L 244.0,245 L 254.0,251 L 248.0,264 L 234.0,256 Z","M 166.0,224 L 150.0,215 L 146.0,229 L 156.0,233 L 146.0,239 L 156.0,245 L 146.0,251 L 152.0,264 L 166.0,256 Z"],
   rectus_abdominis:["M 204.0,226 L 231.0,222 Q 233.0,284 227.0,330 L 220.0,358 L 204.0,360 Z","M 196.0,226 L 169.0,222 Q 167.0,284 173.0,330 L 180.0,358 L 196.0,360 Z"],
   obliques:["M 233.0,224 L 256.0,218 Q 259.0,256 252.0,292 L 238.0,330 L 222.0,352 L 229.0,304 Z","M 167.0,224 L 144.0,218 Q 141.0,256 148.0,292 L 162.0,330 L 178.0,352 L 171.0,304 Z"],
-  biceps:["M 254.0,196 Q 277.0,206 284.0,240 L 289.0,286 Q 274.0,297 261.0,289 L 257.0,240 Z","M 146.0,196 Q 123.0,206 116.0,240 L 111.0,286 Q 126.0,297 139.0,289 L 143.0,240 Z"],
-  forearm_front:["M 263.0,302 Q 284.0,311 291.0,347 L 299.0,404 Q 288.0,417 277.0,409 L 272.0,353 Z","M 137.0,302 Q 116.0,311 109.0,347 L 101.0,404 Q 112.0,417 123.0,409 L 128.0,353 Z"],
-  quadriceps:["M 209.0,428 L 252.0,420 Q 260.0,466 256.0,504 L 250.0,548 L 213.0,550 L 207.0,474 Z","M 191.0,428 L 148.0,420 Q 140.0,466 144.0,504 L 150.0,548 L 187.0,550 L 193.0,474 Z"],
-  sartorius:["M 245.0,422 L 255.0,430 Q 230.0,478 218.0,514 L 212.0,548 L 203.0,546 Q 214.0,500 232.0,458 Z","M 155.0,422 L 145.0,430 Q 170.0,478 182.0,514 L 188.0,548 L 197.0,546 Q 186.0,500 168.0,458 Z"],
-  adductors:["M 200.0,426 L 219.0,432 Q 216.0,478 209.0,522 L 200.0,524 Z","M 200.0,426 L 181.0,432 Q 184.0,478 191.0,522 L 200.0,524 Z"],
+  biceps:["M 254.0,196 Q 277.0,206 284.0,240 L 289.0,286 Q 282.0,296 274.0,289 L 268.0,240 Z","M 146.0,196 Q 123.0,206 116.0,240 L 111.0,286 Q 118.0,296 126.0,289 L 132.0,240 Z"],
+  forearm_front:["M 279.0,308 Q 291.0,314 293.0,352 L 299.0,402 Q 293.0,412 288.0,404 L 284.0,352 Z","M 121.0,308 Q 109.0,314 107.0,352 L 101.0,402 Q 107.0,412 112.0,404 L 116.0,352 Z"],
+  quadriceps:["M 209.0,428 L 251.0,422 Q 257.0,466 253.0,504 L 247.0,546 L 214.0,548 L 207.0,474 Z","M 191.0,428 L 149.0,422 Q 143.0,466 147.0,504 L 153.0,546 L 186.0,548 L 193.0,474 Z"],
+  sartorius:["M 245.0,422 L 255.0,430 Q 231.0,478 219.0,514 L 215.0,546 L 209.0,544 Q 215.0,500 232.0,458 Z","M 155.0,422 L 145.0,430 Q 169.0,478 181.0,514 L 185.0,546 L 191.0,544 Q 185.0,500 168.0,458 Z"],
+  adductors:["M 204.0,430 L 220.0,434 Q 217.0,478 211.0,518 L 207.0,520 Z","M 196.0,430 L 180.0,434 Q 183.0,478 189.0,518 L 193.0,520 Z"],
   tibialis:["M 215.0,560 L 238.0,556 Q 241.0,616 236.0,672 L 229.0,702 L 220.0,700 L 217.0,624 Z","M 185.0,560 L 162.0,556 Q 159.0,616 164.0,672 L 171.0,702 L 180.0,700 L 183.0,624 Z"],
 };
 const BACK_PATHS = {
-  trapezius:["M 700.0,130 L 716.0,134 Q 744.0,142 758.0,159 L 749.0,185 L 731.0,197 L 700.0,254 Z","M 700.0,130 L 684.0,134 Q 656.0,142 642.0,159 L 651.0,185 L 669.0,197 L 700.0,254 Z"],
+  trapezius:["M 700.0,130 L 714.0,134 Q 734.0,148 752.0,162 L 745.0,186 L 729.0,198 L 700.0,254 Z","M 700.0,130 L 686.0,134 Q 666.0,148 648.0,162 L 655.0,186 L 671.0,198 L 700.0,254 Z"],
   deltoid_back:["M 746.0,152 Q 774.0,160 782.0,188 L 787.0,216 Q 771.0,227 757.0,216 L 749.0,182 Z","M 654.0,152 Q 626.0,160 618.0,188 L 613.0,216 Q 629.0,227 643.0,216 L 651.0,182 Z"],
   infraspinatus:["M 714.0,198 L 746.0,192 L 752.0,222 L 732.0,236 L 712.0,222 Z","M 686.0,198 L 654.0,192 L 648.0,222 L 668.0,236 L 688.0,222 Z"],
   latissimus:["M 700.0,258 L 734.0,204 Q 754.0,220 759.0,256 Q 757.0,300 744.0,326 L 700.0,336 Z","M 700.0,258 L 666.0,204 Q 646.0,220 641.0,256 Q 643.0,300 656.0,326 L 700.0,336 Z"],
   erector_spinae:["M 700.0,194 L 713.0,199 Q 717.0,270 712.0,340 L 700.0,346 Z","M 700.0,194 L 687.0,199 Q 683.0,270 688.0,340 L 700.0,346 Z"],
-  triceps:["M 756.0,198 Q 779.0,209 786.0,244 L 791.0,288 Q 776.0,299 763.0,291 L 759.0,244 Z","M 644.0,198 Q 621.0,209 614.0,244 L 609.0,288 Q 624.0,299 637.0,291 L 641.0,244 Z"],
-  forearm_back:["M 766.0,304 Q 787.0,313 794.0,348 L 802.0,406 Q 791.0,419 780.0,411 L 775.0,355 Z","M 634.0,304 Q 613.0,313 606.0,348 L 598.0,406 Q 609.0,419 620.0,411 L 625.0,355 Z"],
+  triceps:["M 756.0,198 Q 779.0,209 786.0,244 L 791.0,288 Q 784.0,298 776.0,291 L 766.0,244 Z","M 644.0,198 Q 621.0,209 614.0,244 L 609.0,288 Q 616.0,298 624.0,291 L 634.0,244 Z"],
+  forearm_back:["M 779.0,308 Q 791.0,314 793.0,352 L 799.0,402 Q 793.0,412 788.0,404 L 784.0,352 Z","M 621.0,308 Q 609.0,314 607.0,352 L 601.0,402 Q 607.0,412 612.0,404 L 616.0,352 Z"],
   gluteus:["M 700.0,338 L 742.0,328 Q 759.0,350 758.0,382 Q 745.0,410 700.0,414 Z","M 700.0,338 L 658.0,328 Q 641.0,350 642.0,382 Q 655.0,410 700.0,414 Z"],
   hamstrings:["M 707.0,420 L 752.0,415 Q 759.0,462 753.0,506 L 746.0,548 L 711.0,550 L 705.0,474 Z","M 693.0,420 L 648.0,415 Q 641.0,462 647.0,506 L 654.0,548 L 689.0,550 L 695.0,474 Z"],
-  gastrocnemius:["M 712.0,556 L 747.0,552 Q 753.0,604 745.0,650 L 733.0,686 L 716.0,684 L 710.0,632 Z","M 688.0,556 L 653.0,552 Q 647.0,604 655.0,650 L 667.0,686 L 684.0,684 L 690.0,632 Z"],
+  gastrocnemius:["M 714.0,562 L 744.0,560 Q 743.0,604 737.0,646 L 730.0,680 L 719.0,678 L 713.0,632 Z","M 686.0,562 L 656.0,560 Q 657.0,604 663.0,646 L 670.0,680 L 681.0,678 L 687.0,632 Z"],
 };
 
 
@@ -168,7 +169,7 @@ function DoneBox({done,accent,label,onToggle}){
 // Wartość trzymamy lokalnie i zapisujemy dopiero przy wyjściu z pola albo
 // Enterze, żeby każda wpisana cyfra nie leciała osobnym żądaniem. Przecinek
 // jest dopuszczalny, bo tak się to pisze po polsku.
-function LoadField({value,last,accent,label,onSave}){
+function LoadField({value,last,accent,label,onSave,historia,onHistoria}){
   const show=v=>v==null?"":String(v).replace(".",",");
   const [text,setText]=useState(()=>show(value));
   useEffect(()=>{setText(show(value));},[value]);
@@ -191,12 +192,83 @@ function LoadField({value,last,accent,label,onSave}){
         <span>kg</span>
       </label>
       {last&&<span style={{fontSize:10.5,color:INK.faint}}>ostatnio {String(last.maxLoad).replace(".",",")} kg · {plDate(last.date).slice(0,5)}</span>}
+      {onHistoria&&(
+        <button onClick={onHistoria} aria-expanded={!!historia} aria-label={`${label} — historia ciężarów`}
+          style={{marginLeft:"auto",minHeight:36,padding:"4px 11px",borderRadius:8,cursor:"pointer",fontSize:11,
+            background:historia?accent+"22":"transparent",border:`1px solid ${historia?accent+"88":"#2a2e3c"}`,
+            color:historia?"#f0f0f0":INK.soft}}>
+          📈 {historia?"zwiń":"progres"}
+        </button>
+      )}
     </div>
   );
 }
 
-function PlanExercise({ex,accent,entry,last,onToggle,onLoad}){
+// Historia ciężarów jednego ćwiczenia: po co był zapis, jeśli nie widać
+// postępu. Dane idą po NAZWIE ćwiczenia, więc przeniesienie go w planie nie
+// gubi krzywej. Wczytujemy dopiero po rozwinięciu — na liście bywa kilkanaście
+// pozycji, a interesuje zwykle jedna.
+function LoadHistory({name,accent,isMobile}){
+  const {exHistory,openExHistory}=useApp();
+  // Pobranie jest samo-strażujące (druga prośba o tę samą nazwę nic nie robi),
+  // więc zależność od funkcji z kontekstu nie kręci pętli.
+  useEffect(()=>{openExHistory(name);},[name,openExHistory]);
+  const h=exHistory[name];
+  if(h===undefined||h===null){
+    return <div style={{fontSize:11.5,color:INK.faint,padding:"10px 2px"}}>Wczytuję historię…</div>;
+  }
+  if(!h.rows.length){
+    return(
+      <div style={{fontSize:11.5,color:INK.faint,lineHeight:1.6,padding:"8px 2px"}}>
+        Nie ma jeszcze żadnego zapisanego ciężaru. Wpisz go po serii — od drugiego
+        zapisu pojawi się tu wykres.
+      </div>
+    );
+  }
+  const ost=h.rows[h.rows.length-1], pierwszy=h.rows[0];
+  const zmiana=ost.maxLoad-pierwszy.maxLoad;
+  const kg=n=>String(Math.round(n*100)/100).replace(".",",");
+  const kafel=(etykieta,wartosc,opis,kolor)=>(
+    <div style={{flex:"1 1 90px",minWidth:0,background:"#0d0f16",border:"1px solid #1e2130",borderRadius:9,padding:"8px 10px"}}>
+      <div style={{fontSize:9.5,letterSpacing:"0.08em",color:INK.faint,fontFamily:MONO,marginBottom:3}}>{etykieta}</div>
+      <div style={{fontSize:15,fontWeight:700,color:kolor||"#f0f0f0",fontFamily:MONO}}>{wartosc}</div>
+      <div style={{fontSize:10,color:INK.faint,marginTop:2}}>{opis}</div>
+    </div>
+  );
+  return(
+    <div className="rozwin">
+      <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:10}}>
+        {kafel("REKORD",kg(h.best.maxLoad)+" kg",plDate(h.best.date),accent)}
+        {kafel("OSTATNIO",kg(ost.maxLoad)+" kg",plDate(ost.date))}
+        {h.rows.length>1&&kafel("OD POCZĄTKU",(zmiana>0?"+":"")+kg(zmiana)+" kg",
+          `${h.rows.length} zapisów`,zmiana>0?"#5DCAA5":zmiana<0?"#e0736d":"#f0f0f0")}
+      </div>
+      <MeasurementChart rows={h.rows.map(r=>({day:r.date,maxLoad:r.maxLoad}))} metric="maxLoad"
+        isMobile={isMobile} color={accent} noun="zapis"/>
+      <div style={{marginTop:8,maxHeight:132,overflowY:"auto"}}>
+        {[...h.rows].reverse().map((r,i,tab)=>{
+          const poprz=tab[i+1];
+          const d=poprz?r.maxLoad-poprz.maxLoad:null;
+          return(
+            <div key={r.date} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 2px",
+              borderTop:"1px solid #1a1d28",fontSize:11.5,fontVariantNumeric:"tabular-nums"}}>
+              <span style={{color:INK.faint,flexShrink:0}}>{plDate(r.date)}</span>
+              <span style={{color:"#e8e8e8",fontFamily:MONO,flex:1}}>{kg(r.maxLoad)} kg</span>
+              {d!==null&&d!==0&&(
+                <span style={{color:d>0?"#5DCAA5":"#e0736d",flexShrink:0}}>{d>0?"+":""}{kg(d)}</span>
+              )}
+              {r.maxLoad===h.best.maxLoad&&<span title="rekord" style={{flexShrink:0}}>🏆</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PlanExercise({ex,accent,entry,last,onToggle,onLoad,isMobile}){
   const done=!!entry?.done;
+  const [hist,setHist]=useState(false);
   return(
     <div style={{background:"#0a0a0a",border:`1px solid ${done?"#232630":accent+"28"}`,borderLeft:`3px solid ${done?"#2f3a34":accent}`,
       borderRadius:10,padding:"11px 13px",marginBottom:9,display:"flex",gap:10,alignItems:"flex-start"}}>
@@ -211,7 +283,9 @@ function PlanExercise({ex,accent,entry,last,onToggle,onLoad}){
           {ex.load&&<span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{ex.load}</span>}
           {ex.rest&&<span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.04)",color:INK.soft,padding:"1px 8px",borderRadius:20}}>⏸ {ex.rest}</span>}
         </div>
-        <LoadField value={entry?.maxLoad??null} last={last} accent={accent} label={ex.name} onSave={onLoad}/>
+        <LoadField value={entry?.maxLoad??null} last={last} accent={accent} label={ex.name} onSave={onLoad}
+          historia={hist} onHistoria={()=>setHist(v=>!v)}/>
+        {hist&&<LoadHistory name={ex.name} accent={accent} isMobile={isMobile}/>}
         {ex.desc&&<div style={{fontSize:11.5,color:done?"#6a6a6a":"#9a9a9a",lineHeight:1.55,marginTop:7}}>{ex.desc}</div>}
       </div>
     </div>
@@ -220,6 +294,7 @@ function PlanExercise({ex,accent,entry,last,onToggle,onLoad}){
 
 function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
   const {exEntry,exLast,saveEx}=useApp();
+  const [histCardio,setHistCardio]=useState(null);
   const label=WEEKDAYS.find(d=>d.key===dayKey)?.label||"";
   // Akcent karty bierzemy z pierwszego mięśnia dnia, żeby kolor panelu zgadzał
   // się z tym, co świeci na sylwetce.
@@ -309,6 +384,13 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
                       <span style={{fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.06)",color:"#aaa",padding:"1px 8px",borderRadius:20}}>{v.hrFrom}–{v.hrTo}% HRmax</span>
                       {hr&&<span style={{fontSize:10,fontWeight:700,background:accent+"1e",color:accent,padding:"1px 8px",borderRadius:20}}>{Math.round(hr*v.hrFrom/100)}–{Math.round(hr*v.hrTo/100)} ud./min</span>}
                     </div>
+                    {/* Wariant cardio też ma co notować — opór na orbitreku czy
+                        poziom na bieżni działa jak ciężar: jest punktem odniesienia
+                        na następny tydzień. Ta sama ścieżka zapisu, inny „rodzaj". */}
+                    <LoadField value={entry("cardio",i)?.maxLoad??null} last={exLast(plan.id,"cardio",dayKey,i)}
+                      accent={accent} label={label} onSave={n=>save("cardio",i,label,{maxLoad:n})}
+                      historia={histCardio===i} onHistoria={()=>setHistCardio(x=>x===i?null:i)}/>
+                    {histCardio===i&&<LoadHistory name={label} accent={accent} isMobile={isMobile}/>}
                     {v.desc&&<div style={{fontSize:11.5,color:vdone?"#6a6a6a":"#9a9a9a",lineHeight:1.55,marginTop:6}}>{v.desc}</div>}
                   </div>
                 </div>
@@ -323,7 +405,7 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile}){
           </div>
         )}
         {day.exercises.map((ex,i)=>(
-          <PlanExercise key={i} ex={ex} accent={accent} entry={entry("ex",i)} last={exLast(plan.id,"ex",dayKey,i)}
+          <PlanExercise key={i} ex={ex} accent={accent} entry={entry("ex",i)} last={exLast(plan.id,"ex",dayKey,i)} isMobile={isMobile}
             onToggle={()=>save("ex",i,ex.name,{done:!entry("ex",i)?.done})}
             onLoad={n=>save("ex",i,ex.name,{maxLoad:n})}/>
         ))}

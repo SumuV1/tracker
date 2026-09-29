@@ -167,6 +167,7 @@ export const METRICS = {
   bodyFatPct: { label: "Tkanka tłuszczowa", unit: "%",  digits: 1 },
   waistCm:    { label: "Talia",             unit: "cm", digits: 1 },
   intensity:  { label: "Natężenie",         unit: "/5", digits: 0 },
+  maxLoad:    { label: "Maks. ciężar",      unit: "kg", digits: 1 },
 };
 
 // `domain` przypina oś Y do stałego zakresu (skala 1–5 nie ma się „dopasowywać"

@@ -102,6 +102,29 @@ planRoutes.get("/log", wrap(async (req, res) => {
   res.json({ today: today.rows, last: last.rows });
 }));
 
+// Historia ciężarów jednego ćwiczenia. Kluczem jest NAZWA, nie pozycja w dniu:
+// progres dotyczy ćwiczenia, a nie slotu w planie, więc przestawienie pozycji
+// albo przeniesienie ćwiczenia na inny dzień nie może uciąć historii. Skutek
+// uboczny jest zamierzony: to samo ćwiczenie w dwóch dniach tygodnia daje jedną
+// wspólną krzywą — bo i rekord w przysiadzie jest jeden.
+planRoutes.get("/history", wrap(async (req, res) => {
+  const exName = reqText(req.query.exName, "exName", { max: LIMITS.exName });
+  const limit = optNumber(req.query.limit, "limit", { min: 1, max: 400 }) ?? 90;
+  const { rows } = await query(
+    `SELECT to_char(log_date, 'YYYY-MM-DD') AS date, max_load::float8 AS "maxLoad", day_key AS "dayKey"
+       FROM plan_exercise_logs
+      WHERE user_id = $1 AND lower(btrim(ex_name)) = lower(btrim($2)) AND max_load IS NOT NULL
+      ORDER BY log_date DESC
+      LIMIT $3`,
+    [req.user.id, exName, limit]
+  );
+  // Do wykresu chronologicznie; rekord liczymy z tego, co przyszło.
+  rows.reverse();
+  let best = null;
+  for (const r of rows) if (!best || r.maxLoad > best.maxLoad) best = r;
+  res.json({ exName, rows, best });
+}));
+
 // Klient wysyła cały docelowy stan pozycji (odhaczenie + ciężar), a nie zmianę
 // jednego pola — inaczej „brak pola" i „wyczyść pole" byłyby nie do odróżnienia.
 planRoutes.post("/log", wrap(async (req, res) => {

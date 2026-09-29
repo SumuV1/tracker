@@ -288,3 +288,8 @@ CREATE INDEX IF NOT EXISTS plan_exercise_logs_user_date_idx ON plan_exercise_log
 CREATE INDEX IF NOT EXISTS plan_exercise_logs_load_idx
   ON plan_exercise_logs (user_id, plan_id, day_key, kind, ex_index, log_date DESC)
   WHERE max_load IS NOT NULL;
+-- Historia ciężarów pyta po nazwie ćwiczenia (progres dotyczy ćwiczenia, nie
+-- pozycji w planie), więc indeks musi być po tym samym wyrażeniu co WHERE.
+CREATE INDEX IF NOT EXISTS plan_exercise_logs_name_idx
+  ON plan_exercise_logs (user_id, lower(btrim(ex_name)), log_date DESC)
+  WHERE max_load IS NOT NULL;

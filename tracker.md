@@ -431,6 +431,18 @@ zostają ledwie widocznym tłem i **nie reagują na kliknięcia**. To rozwiązuj
 problem zasłaniania: zębaty przedni schowany pod piersiowym czy prostownik
 grzbietu pod najszerszym są dostępne bez walki z tym, co leży na wierzchu.
 
+**Kształty muszą mieścić się w sylwetce i jest to mierzone, nie oceniane
+okiem.** `miesnie-audyt.mjs` renderuje sylwetkę bez tła do maski pikseli,
+zwęża ją o 2 px (mięsień ma obrys do 1,8 px, więc samo „w środku" nie
+wystarcza), renderuje każdy kształt osobno i liczy piksele poza maską. Przy
+pierwszym uruchomieniu wyciekało 22 z 48 ścieżek — przedramię **55 %** swojej
+powierzchni miało poza ręką, przywodziciele 23 % w szparze między udami,
+łydka 11 % poza łydką. Poprawione współrzędne wzięły się z pomiaru krawędzi
+ciała (`obrys.mjs` wypisuje przedziały wypełnienia w danym wierszu), nie
+z prób na oko. Stan docelowy i utrzymywany przez regresję: **zero pikseli poza
+obrysem**. Poza sylwetkę wychodzi już tylko `drop-shadow` podświetlenia — to
+efekt świadomy, nie kształt.
+
 #### Plany treningowe
 
 Plan to tydzień: każdy dzień ma partię, listę ćwiczeń i mięśnie, które
@@ -509,8 +521,24 @@ wyboru, a nad listą stoi pasek postępu („ZROBIONE DZIŚ 3 / 6" — liczy jed
 i drugie). Przy ćwiczeniach jest dodatkowo pole **maks. … kg**: największy
 ciężar z tej serii. To notatka na następny trening, nie część planu — obok
 pola widać **„ostatnio 92,5 kg · 17.09"**, czyli ostatnią zanotowaną wartość
-tej pozycji sprzed dzisiaj. Warianty cardio pola ciężaru nie mają: na bieżni
-„maksymalne obciążenie" nic nie znaczy.
+tej pozycji sprzed dzisiaj. Wariant cardio ma to samo pole — opór na orbitreku
+czy poziom na bieżni działa dokładnie jak ciężar: jest punktem odniesienia na
+następny tydzień.
+
+**Progres.** Sam zapis to za mało, żeby zobaczyć postęp, więc przy każdej
+pozycji stoi przycisk **📈 progres**. Rozwija panel z rekordem, ostatnim
+zapisem, różnicą od pierwszego zapisu, wykresem (ta sama `MeasurementChart` co
+przy wadze, metryka `maxLoad`) i listą kolejnych wpisów z różnicą do
+poprzedniego; rekordowy wiersz jest oznaczony 🏆.
+
+Historia idzie po **nazwie ćwiczenia**, nie po pozycji w planie
+(`GET /api/plans/history?exName=`): progres dotyczy ćwiczenia, a nie slotu,
+więc przestawienie pozycji ani przeniesienie jej na inny dzień nie ucina
+krzywej. Skutek uboczny jest zamierzony — to samo ćwiczenie w dwóch dniach
+tygodnia daje jedną wspólną krzywą, bo i rekord w przysiadzie jest jeden.
+Dane wczytują się dopiero po rozwinięciu (na liście bywa kilkanaście pozycji,
+a interesuje zwykle jedna) i są trzymane pod nazwą; zapis nowego ciężaru
+wyrzuca tę nazwę z pamięci, żeby kolejne rozwinięcie pokazało świeże dane.
 
 Zapis leci od razu, optymistycznie — przy błędzie sieci stan wraca do
 poprzedniego. Ciężar zapisuje się przy wyjściu z pola albo Enterze, żeby
