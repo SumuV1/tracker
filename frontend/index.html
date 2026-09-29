@@ -63,7 +63,9 @@
       /* Duże płaszczyzny (wycinki sześciokąta, karty) uginają się mniej —
          ten sam procent na dużym elemencie wygląda jak skok. */
       svg [role="button"]:active { transform: scale(.985); transform-origin: center; }
-      svg [role="button"] polygon { transition: fill-opacity .22s ease, stroke-opacity .22s ease, stroke-width .15s ease; }
+      /* Celujemy w klasy, nie w nazwę elementu: podstawy wycinków są łukiem,
+         więc to <path>, a nie <polygon> jak w pierwszej wersji. */
+      svg [role="button"] .tor, svg [role="button"] .wypelnienie { transition: fill-opacity .22s ease, stroke-opacity .22s ease, stroke-width .15s ease; }
       /* Tylko TOR rozjaśnia się pod kursorem. Gdyby reguła łapała oba
          wielokąty, najechanie przygaszałoby wypełnienie wycinka do 20 % —
          czyli kasowałoby to, co wykres ma pokazywać.

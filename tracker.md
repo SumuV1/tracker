@@ -345,6 +345,21 @@ przy wysokości 1,73R — telefon ma więcej szerokości niż wysokości do odda
 Kolejność w `CATEGORIES` jest kolejnością wycinków od góry, zgodnie z ruchem
 wskazówek zegara.
 
+Dwie rzeczy w geometrii, które nie są oczywiste:
+
+- **Podstawa wycinka to łuk, nie cięciwa.** Cięciwa w najbliższym punkcie
+  schodzi do `r₀·cos 30° = 0,87·r₀`, więc koło ze statystyką wchodziło
+  w podstawy wycinków, mimo że jego promień był mniejszy od `r₀`. Łuk
+  współśrodkowy z kołem daje wszędzie ten sam odstęp (zmierzone: 6 px).
+  Dlatego wycinki są `<path>` z komendą `A`, a nie `<polygon>` — selektory CSS
+  celują w klasy `.tor` i `.wypelnienie`, nie w nazwę elementu.
+- **Kadr liczy się z faktycznego zasięgu, nie z `R·√3`.** Narożniki wycinków
+  leżą na okręgu o promieniu R, a nie na prostych bokach sześciokąta, więc przez
+  odstęp kątowy wypadają wyżej niż wierzchołki (`sin 118,4° = 0,880` wobec
+  `sin 120° = 0,866`). Przy wysokości `R·√3` zapas u góry schodził do 0,9 px
+  i obrys zaznaczonego wycinka (2 px) był obcinany przez kontener. Teraz zapas
+  wynosi 3 px z każdej strony — zmierzone przy 320, 390 i 1280 px.
+
 Układ na szerokim ekranie: **sześciokąt po lewej** (przyklejony przy
 przewijaniu), **nawyki w środku**, lista niewolnika po prawej. Kolumny boczne
 mają stałą szerokość, środek bierze resztę — przy 1000 px zostaje na nawyki

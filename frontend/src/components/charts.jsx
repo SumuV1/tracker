@@ -337,31 +337,52 @@ export function niceStep(raw) {
 // Sześciokąt jest PŁASKOSZCZYTOWY (wierzchołki po lewej i prawej, płaskie
 // krawędzie u góry i u dołu): szerokość to 2R, wysokość 1,73R, czyli figura
 // wykorzystuje szerokość telefonu, a nie jego wysokość.
-const HEX_R0 = 0.34;           // wewnętrzny promień — tu zaczynają się wycinki
+const HEX_R0 = 0.36;           // wewnętrzny promień — tu zaczynają się wycinki
 const HEX_GAP = 1.6;           // odstęp między wycinkami w stopniach
+const HEX_PAD = 3;             // zapas w viewBoxie na obrys wycinka
+const HEX_LUZ = 6;             // odstęp koła ze statystyką od podstaw wycinków
 
 export function HabitHex({ stats, selected, onSelect, size = 300 }) {
-  const R = size / 2, cx = R, cy = R * Math.sqrt(3) / 2 + 1;
+  // Figura mieści się w viewBoxie z zapasem HEX_PAD: przy R = size/2 skrajne
+  // wierzchołki leżały dokładnie na krawędzi, więc obrys (do 2 px) wychodził
+  // poza kadr i był obcinany przez kontener.
+  const R = size / 2 - HEX_PAD;
+  // Narożniki wycinków leżą na OKRĘGU o promieniu R, nie na prostych bokach
+  // sześciokąta — przez odstęp kątowy wypadają o kawałek wyżej niż wierzchołki
+  // (sin 118,4° = 0,880 wobec sin 120° = 0,866). Wysokość kadru liczymy więc
+  // z faktycznego zasięgu, inaczej zapas u góry i u dołu schodzi do 0,9 px
+  // i obrys zaznaczonego wycinka jest obcinany.
+  const SIN_MAX = Math.sin((120 - HEX_GAP) * Math.PI / 180);
+  const cx = size / 2, cy = HEX_PAD + R * SIN_MAX;
   const pt = (deg, r) => {
     const a = deg * Math.PI / 180;
     return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
   };
+  const f = ([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`;
   // Wycinek i: od kąta -120+i*60 do -60+i*60, czyli pierwszy siedzi na górnej
   // krawędzi, a kolejne idą zgodnie z ruchem wskazówek zegara.
+  //
+  // Podstawa wycinka jest ŁUKIEM współśrodkowym z kołem w środku, nie cięciwą.
+  // Cięciwa w najbliższym punkcie schodzi do r₀·cos30° = 0,87·r₀, więc koło
+  // ze statystyką wchodziło w podstawy wycinków, choć jego promień był mniejszy
+  // od r₀. Łuk daje wszędzie ten sam odstęp (HEX_LUZ).
+  //
   // Wypełnienie liczone po POLU, nie po promieniu: wycinek rozszerza się ku
-  // krawędzi, więc pole rośnie z kwadratem promienia. Przy prostym r0+(R-r0)·f
+  // krawędzi, więc pole rośnie z kwadratem promienia. Przy prostym r₀+(R−r₀)·f
   // połowa odhaczonych zajmowałaby trzy czwarte wycinka i rysunek kłamałby na
   // korzyść.
   const wedge = (i, frac) => {
     const a1 = -120 + i * 60 + HEX_GAP, a2 = -60 + i * 60 - HEX_GAP;
     const r0 = R * HEX_R0, r1 = Math.sqrt(r0 * r0 + (R * R - r0 * r0) * frac);
-    const p = [pt(a1, r0), pt(a1, r1), pt(a2, r1), pt(a2, r0)];
-    return p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-    };
+    return `M ${f(pt(a1, r0))} L ${f(pt(a1, r1))} L ${f(pt(a2, r1))} L ${f(pt(a2, r0))}`
+         + ` A ${r0.toFixed(1)} ${r0.toFixed(1)} 0 0 0 ${f(pt(a1, r0))} Z`;
+  };
   const suma = stats.reduce((a, s) => ({ done: a.done + s.done, total: a.total + s.total }), { done: 0, total: 0 });
   const rIkony = R * (HEX_R0 + 1) / 2;
+  const rKola = R * HEX_R0 - HEX_LUZ;
   return (
-    <svg viewBox={`0 0 ${size} ${R * Math.sqrt(3) + 2}`} width="100%" style={{ display: "block", maxWidth: size, margin: "0 auto" }}
+    <svg viewBox={`0 0 ${size} ${(2 * R * SIN_MAX + HEX_PAD * 2).toFixed(1)}`} width="100%"
+      style={{ display: "block", maxWidth: size, margin: "0 auto" }}
       role="group" aria-label="Sześć kategorii nawyków — dzisiejsze odhaczenia">
       {stats.map((s, i) => {
         const frac = s.total ? s.done / s.total : 0;
@@ -374,15 +395,15 @@ export function HabitHex({ stats, selected, onSelect, size = 300 }) {
             aria-pressed={selected === s.cat.label}
             aria-label={`${s.cat.label}: ${s.total ? `${s.done} z ${s.total} dziś` : "brak nawyków"}`}>
             {/* tor: cały wycinek, przygaszony */}
-            <polygon className="tor" points={wedge(i, 1)} fill={s.cat.color} fillOpacity={0.09}
+            <path className="tor" d={wedge(i, 1)} fill={s.cat.color} fillOpacity={0.09}
               stroke={s.cat.color} strokeOpacity={selected === s.cat.label ? 0.9 : 0.35} strokeWidth={selected === s.cat.label ? 2 : 1} />
-            {frac > 0 && <polygon className="wypelnienie" points={wedge(i, frac)} fill={s.cat.color} fillOpacity={0.92} />}
+            {frac > 0 && <path className="wypelnienie" d={wedge(i, frac)} fill={s.cat.color} fillOpacity={0.92} />}
             <text x={ix} y={iy + 6} textAnchor="middle" fontSize={17} style={{ pointerEvents: "none" }}>{s.cat.icon}</text>
           </g>
         );
       })}
       {/* środek: dzisiejsza suma ze wszystkich kategorii */}
-      <circle cx={cx} cy={cy} r={R * HEX_R0 - 5} fill="#0e0e0e" stroke="#232323" />
+      <circle cx={cx} cy={cy} r={rKola.toFixed(1)} fill="#0e0e0e" stroke="#232323" />
       <text x={cx} y={cy - 1} textAnchor="middle" fontSize={19} fontWeight="700" fill="#f1f1f1">{suma.done}/{suma.total}</text>
       <text x={cx} y={cy + 14} textAnchor="middle" fontSize={10} fill={INK.faint}>dziś</text>
     </svg>
