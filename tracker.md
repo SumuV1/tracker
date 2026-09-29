@@ -443,6 +443,34 @@ z prób na oko. Stan docelowy i utrzymywany przez regresję: **zero pikseli poza
 obrysem**. Poza sylwetkę wychodzi już tylko `drop-shadow` podświetlenia — to
 efekt świadomy, nie kształt.
 
+**Sylwetka jest szersza, niż była.** Postać poszerza funkcja zależna od
+wysokości: `x' = oś + (x − oś) · f(y)`, gdzie `f` idzie od 1,00 na głowie przez
+**1,23 w barkach**, **1,07 w talii** (to właśnie wąska talia przy szerokich
+barkach czyta się jako „umięśniony") do 1,15 w udach. Ta sama funkcja
+przekształca ciało **i** mięśnie, więc nie mogą się rozjechać. Kadry
+`BODY_VIEW` musiały się poszerzyć z 235 na 303 jednostki — postać zajmuje teraz
+x 55–344 i dawny wycinek obcinałby dłonie.
+
+**Rozmiary mięśni są dopasowane do kończyn liczbowo.** `dopasuj.mjs` mierzy dla
+każdego kształtu „wypełnienie": jego szerokość podzieloną przez szerokość
+*części sylwetki*, na której leży (sylwetka jest złożona z osobnych ścieżek —
+tors, ramię, noga — i to one są pojemnikami; wcześniejsza wersja brała cały
+przekrój ciała w wierszu i wychodziło, że biceps wypełnia 19 % zamiast 61 %).
+Potem każdy kształt jest powiększany zachłannie — szerokość, długość
+i przesunięcie na zewnątrz od osi — dopóki mieści się w sylwetce i nie wchodzi
+na sąsiada (budżet nachodzenia: 2 % własnej powierzchni, żeby mięśnie mogły się
+stykać bez czarnych szpar). Kurczenia nie ma: kształt, który już się mieści, nie
+ma powodu maleć, a deltoid „ponad 100 %" nie wystaje z ciała — leży na granicy
+ramienia i barku.
+
+Pokrycie części sylwetki mięśniami po dopasowaniu: tors z tyłu **91 %**, szyja
+z przodu 88 %, uda i łydki 74–78 %, tors z przodu 71–73 %, ramiona 58–59 %
+(było 34 %). Celowane 85 % osiąga to, co ma jednolitą płaszczyznę mięśniową;
+ramiona i nogi zatrzymują się niżej, bo w ich obrysie mieszczą się **dłoń,
+stopa i stawy**, dla których ta mapa nie ma żadnego mięśnia. Rastrowanie
+w pętli robi własny scanline (`raster.mjs`) — resvg wyczerpywał pamięć maszyny
+po kilkuset kształtach; pełnorozdzielczy audyt zostaje na resvg.
+
 #### Plany treningowe
 
 Plan to tydzień: każdy dzień ma partię, listę ćwiczeń i mięśnie, które
