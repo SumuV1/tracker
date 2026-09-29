@@ -326,3 +326,65 @@ export function niceStep(raw) {
   return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
 }
 
+
+// ── Sześciokąt kategorii nawyków ──────────────────────────────────────────
+// Sześć kategorii jako sześć wycinków jednego sześciokąta: wycinek rośnie od
+// środka do krawędzi w miarę odhaczania dzisiejszych nawyków, więc komplet na
+// dziś domyka pełną figurę. To zastąpiło sześć kafli obok siebie — na telefonie
+// zmieściłyby się tylko jeden pod drugim, a wtedy nie widać całości naraz.
+//
+// Sześciokąt jest PŁASKOSZCZYTOWY (wierzchołki po lewej i prawej, płaskie
+// krawędzie u góry i u dołu): szerokość to 2R, wysokość 1,73R, czyli figura
+// wykorzystuje szerokość telefonu, a nie jego wysokość.
+const HEX_R0 = 0.34;           // wewnętrzny promień — tu zaczynają się wycinki
+const HEX_GAP = 1.6;           // odstęp między wycinkami w stopniach
+
+export function HabitHex({ stats, selected, onSelect, size = 300 }) {
+  const R = size / 2, cx = R, cy = R * Math.sqrt(3) / 2 + 1;
+  const pt = (deg, r) => {
+    const a = deg * Math.PI / 180;
+    return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  };
+  // Wycinek i: od kąta -120+i*60 do -60+i*60, czyli pierwszy siedzi na górnej
+  // krawędzi, a kolejne idą zgodnie z ruchem wskazówek zegara.
+  // Wypełnienie liczone po POLU, nie po promieniu: wycinek rozszerza się ku
+  // krawędzi, więc pole rośnie z kwadratem promienia. Przy prostym r0+(R-r0)·f
+  // połowa odhaczonych zajmowałaby trzy czwarte wycinka i rysunek kłamałby na
+  // korzyść.
+  const wedge = (i, frac) => {
+    const a1 = -120 + i * 60 + HEX_GAP, a2 = -60 + i * 60 - HEX_GAP;
+    const r0 = R * HEX_R0, r1 = Math.sqrt(r0 * r0 + (R * R - r0 * r0) * frac);
+    const p = [pt(a1, r0), pt(a1, r1), pt(a2, r1), pt(a2, r0)];
+    return p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+    };
+  const suma = stats.reduce((a, s) => ({ done: a.done + s.done, total: a.total + s.total }), { done: 0, total: 0 });
+  const rIkony = R * (HEX_R0 + 1) / 2;
+  return (
+    <svg viewBox={`0 0 ${size} ${R * Math.sqrt(3) + 2}`} width="100%" style={{ display: "block", maxWidth: size, margin: "0 auto" }}
+      role="group" aria-label="Sześć kategorii nawyków — dzisiejsze odhaczenia">
+      {stats.map((s, i) => {
+        const frac = s.total ? s.done / s.total : 0;
+        const dim = selected && selected !== s.cat.label;
+        const [ix, iy] = pt(-90 + i * 60, rIkony);
+        return (
+          <g key={s.cat.label} onClick={() => onSelect(selected === s.cat.label ? null : s.cat.label)}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(selected === s.cat.label ? null : s.cat.label); } }}
+            role="button" tabIndex={0} style={{ cursor: "pointer", opacity: dim ? 0.4 : 1 }}
+            aria-pressed={selected === s.cat.label}
+            aria-label={`${s.cat.label}: ${s.total ? `${s.done} z ${s.total} dziś` : "brak nawyków"}`}>
+            <title>{`${s.cat.label} — ${s.total ? `${s.done}/${s.total} dziś` : "brak nawyków"}`}</title>
+            {/* tor: cały wycinek, przygaszony */}
+            <polygon points={wedge(i, 1)} fill={s.cat.color} fillOpacity={0.09}
+              stroke={s.cat.color} strokeOpacity={selected === s.cat.label ? 0.9 : 0.35} strokeWidth={selected === s.cat.label ? 2 : 1} />
+            {frac > 0 && <polygon points={wedge(i, frac)} fill={s.cat.color} fillOpacity={0.92} />}
+            <text x={ix} y={iy + 6} textAnchor="middle" fontSize={17} style={{ pointerEvents: "none" }}>{s.cat.icon}</text>
+          </g>
+        );
+      })}
+      {/* środek: dzisiejsza suma ze wszystkich kategorii */}
+      <circle cx={cx} cy={cy} r={R * HEX_R0 - 5} fill="#0e0e0e" stroke="#232323" />
+      <text x={cx} y={cy - 1} textAnchor="middle" fontSize={19} fontWeight="700" fill="#f1f1f1">{suma.done}/{suma.total}</text>
+      <text x={cx} y={cy + 14} textAnchor="middle" fontSize={10} fill={INK.faint}>dziś</text>
+    </svg>
+  );
+}

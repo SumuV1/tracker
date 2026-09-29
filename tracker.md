@@ -326,10 +326,48 @@ co już zapisano.
 
 #### Zakładka nawyków
 
-Nawyki nie są jedną listą, tylko czterema kaflami — po jednym na kategorię
-(`CATEGORIES`), zajmującymi dwie trzecie szerokości. Kafel pokazuje w nagłówku
-dzisiejsze odhaczenia w obrębie swojej kategorii. Nawyk z nieznaną kategorią
-trafia do pierwszego kafla, tak samo jak `CAT_MAP` domyśla się dla niego koloru.
+Nawyki dzielą się na **sześć kategorii** (`CATEGORIES` w `lib/ui.js`): zdrowie,
+praca, finanse osobiste, rozwój osobisty, relacje, czas dla siebie. Wcześniej
+były cztery kafle obok siebie; przy sześciu na telefonie zmieściłyby się tylko
+jeden pod drugim, a wtedy nie widać całości naraz — dlatego na górze stoi
+**sześciokąt** (`HabitHex` w `components/charts.jsx`), po jednym wycinku na
+kategorię.
+
+Wycinek rośnie od środka ku krawędzi w miarę odhaczania dzisiejszych nawyków,
+więc komplet domyka pełną figurę, a w środku stoi dzisiejsza suma ze wszystkich
+kategorii. Promień wypełnienia liczy się **po polu**, nie po ułamku promienia
+(`r = √(r₀² + (R² − r₀²)·f)`): wycinek rozszerza się ku krawędzi, więc przy
+prostym proporcjonalnym promieniu połowa odhaczonych zajmowałaby trzy czwarte
+wycinka i rysunek kłamałby na korzyść.
+
+Figura jest płaskoszczytowa (wierzchołki po bokach), bo szerokość to wtedy 2R
+przy wysokości 1,73R — telefon ma więcej szerokości niż wysokości do oddania.
+Kolejność w `CATEGORIES` jest kolejnością wycinków od góry, zgodnie z ruchem
+wskazówek zegara.
+
+Tapnięcie wycinka **albo** pozycji legendy zawęża listę pod spodem do jednej
+kategorii; bez filtra pokazują się tylko kategorie, w których coś jest (puste
+i tak widać w sześciokącie). Legenda nie jest ozdobą: niesie nazwy, bo na samym
+rysunku nazwy się nie mieszczą, i jest pełnoprawnym celem dotyku. Dodawanie
+nawyku przy włączonym filtrze dziedziczy wybraną kategorię.
+
+Nawyk z nieznaną kategorią trafia do pierwszej — stąd migracja
+`db/init/03_habit_categories.sql`, która przy przejściu z czterech kategorii na
+sześć przepisała stare nazwy („Mindfulness" → „Czas dla siebie", „Osobiste" →
+„Finanse osobiste" dla nawyków o inwestycjach i pieniądzach, reszta → „Rozwój
+osobisty"). Bez niej wszystkie stare nawyki wylądowałyby w Zdrowiu.
+
+**Kolory kategorii nie są dobrane okiem.** Przy sześciu stykających się
+wycinkach kolor niesie tożsamość, więc paleta przeszła walidator dostępności
+(tryb ciemny, tło kafla, wszystkie pary): najgorsza para przy protanopii
+i deuteranopii ma ΔE 9,5 przy progu 8, przy zwykłym widzeniu 16,9 przy progu 15,
+a każdy kolor ma ≥ 4:1 kontrastu do tła — czyli czarny tekst na kolorze
+(aktywna zakładka postępu, znacznik odhaczenia) też zostaje czytelny. Poprzednia
+paleta czterech kategorii tego nie przechodziła: fiolet `#c084fc` i błękit
+`#60a5fa` miały przy deuteranopii ΔE **1,3**, czyli były tym samym kolorem.
+Nazwy kategorii noszą kolory tekstu, a nie kolor serii — identyfikuje kropka
+obok, bo przy sześciu barwach etykieta w barwie serii jest i nieczytelna, i tak
+nie odróżnia dwóch sąsiednich.
 
 **Postęp przeniósł się z osobnej podzakładki do rozwinięcia pod nawykiem.**
 Strzałka na dole karty odsłania te same trzy horyzonty (tydzień, miesiąc, rok)

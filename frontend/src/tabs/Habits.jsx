@@ -1,10 +1,11 @@
 import { CATEGORIES, DAY_LABELS, INK , kb } from "../lib/ui.js";
 import { IconBtn, DeleteBtn, TimePicker, TimePickerForm } from "../components/buttons.jsx";
 import { MonthView, YearView } from "../components/calendar.jsx";
+import { HabitHex } from "../components/charts.jsx";
 import { useApp } from "../lib/appContext.js";
 
 export default function HabitsTab(){
-  const { addAvoid, addHabit, avoidItems, avoidName, avoidNote, days7, deleteAvoid, deleteHabit, editAvoidId, editAvoidNote, editAvoidVal, editNameId, editNameVal, editTimeId, ensureYear, expandedHabit, getStreak, getView, getWeeklyRate, habitLogs, habits, habitsByCat, isChecked, isMobile, isWide, isXWide, newCat, newName, newTime, saveAvoid, setAvoidName, setAvoidNote, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditNameId, setEditNameVal, setEditTimeId, setExpandedHabit, setNewCat, setNewName, setNewTime, setShowAvoidForm, setShowForm, setView, showAvoidForm, showForm, startEditAvoid, todayStr, toggleHabit, updateName, updateTime }=useApp();
+  const { addAvoid, addHabit, avoidItems, avoidName, avoidNote, days7, deleteAvoid, deleteHabit, editAvoidId, editAvoidNote, editAvoidVal, editNameId, editNameVal, editTimeId, ensureYear, expandedHabit, getStreak, habCat, setHabCat, getView, getWeeklyRate, habitLogs, habits, habitsByCat, isChecked, isMobile, isWide, isXWide, newCat, newName, newTime, saveAvoid, setAvoidName, setAvoidNote, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditNameId, setEditNameVal, setEditTimeId, setExpandedHabit, setNewCat, setNewName, setNewTime, setShowAvoidForm, setShowForm, setView, showAvoidForm, showForm, startEditAvoid, todayStr, toggleHabit, updateName, updateTime }=useApp();
   const renderHabitCard=(habit,cat)=>{
     const checked=isChecked(habit.id,todayStr);
     const streak=getStreak(habit.id);
@@ -104,6 +105,14 @@ export default function HabitsTab(){
       </div>
     );
   };
+  const statyKat=CATEGORIES.map(cat=>{
+    const list=habitsByCat[cat.label]||[];
+    return {cat,done:list.filter(h=>isChecked(h.id,todayStr)).length,total:list.length};
+  });
+  // Bez filtra pokazujemy tylko kategorie, w których coś jest — puste i tak
+  // widać w sześciokącie i w legendzie, a tu robiłyby sześć pustych nagłówków.
+  const widoczneKat=habCat?CATEGORIES.filter(c=>c.label===habCat):CATEGORIES.filter(c=>(habitsByCat[c.label]||[]).length);
+
   return(
     <div style={{display:"grid",gap:16,alignItems:"start",gridTemplateColumns:isWide?"2fr 1fr":"1fr"}}>
 
@@ -116,33 +125,59 @@ export default function HabitsTab(){
           </div>
         )}
         {habits.length>0&&(
-          <div style={{display:"grid",gap:12,
-            gridTemplateColumns:isMobile?"1fr":isXWide?"repeat(4,1fr)":"repeat(2,1fr)"}}>
-            {CATEGORIES.map(cat=>{
-              const list=habitsByCat[cat.label];
-              const doneToday=list.filter(h=>isChecked(h.id,todayStr)).length;
-              return(
-                <div key={cat.label} style={{background:"#121317",border:`1px solid ${cat.color}2e`,
-                  borderRadius:14,padding:12,minWidth:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
-                    <span style={{width:9,height:9,borderRadius:3,background:cat.color,flexShrink:0}}/>
-                    <span style={{fontSize:13,fontWeight:700,color:cat.color,flex:1,minWidth:0,
-                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cat.label}</span>
-                    <span style={{fontSize:11,color:INK.soft,flexShrink:0}}>{doneToday}/{list.length}</span>
+          <>
+            {/* Sześciokąt: jedna figura na sześć kategorii. Wycinek rośnie od
+                środka, więc komplet na dziś domyka całość. Tapnięcie wycinka
+                albo pozycji legendy zawęża listę pod spodem do tej kategorii. */}
+            <div style={{background:"#121317",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?12:16,marginBottom:12}}>
+              <HabitHex stats={statyKat} selected={habCat} onSelect={setHabCat} size={isMobile?320:340}/>
+              {/* Legenda niesie nazwy (kolor zostaje plamą na rysunku) i jest
+                  jednocześnie filtrem — stąd pełny cel dotyku, nie sam tekst. */}
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(3,1fr)",gap:6,marginTop:14}}>
+                {statyKat.map(s=>{
+                  const on=habCat===s.cat.label;
+                  return(
+                    <button key={s.cat.label} onClick={()=>setHabCat(on?null:s.cat.label)} aria-pressed={on}
+                      style={{display:"flex",alignItems:"center",gap:8,minHeight:44,padding:"6px 10px",borderRadius:10,cursor:"pointer",
+                        background:on?s.cat.color+"1f":"#0f0f0f",border:`1px solid ${on?s.cat.color:"#242424"}`,textAlign:"left"}}>
+                      <span style={{width:10,height:10,borderRadius:3,background:s.cat.color,flexShrink:0}}/>
+                      <span style={{flex:1,minWidth:0,fontSize:12.5,fontWeight:600,color:on?"#f1f1f1":INK.soft,
+                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{isMobile?s.cat.short:s.cat.label}</span>
+                      <span style={{fontSize:11,color:INK.faint,flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{s.total?`${s.done}/${s.total}`:"—"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {habCat&&(
+                <button onClick={()=>setHabCat(null)} style={{width:"100%",marginTop:8,minHeight:44,background:"#0f0f0f",
+                  border:"1px solid #242424",borderRadius:10,color:INK.soft,fontSize:12,cursor:"pointer"}}>
+                  Pokaż wszystkie kategorie ×
+                </button>
+              )}
+            </div>
+
+            <div style={{display:"grid",gap:12,alignItems:"start",
+              gridTemplateColumns:isMobile||habCat?"1fr":isXWide?"repeat(3,1fr)":"repeat(2,1fr)"}}>
+              {widoczneKat.map(cat=>{
+                const list=habitsByCat[cat.label];
+                const doneToday=list.filter(h=>isChecked(h.id,todayStr)).length;
+                return(
+                  <div key={cat.label} style={{minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}>
+                      <span style={{width:9,height:9,borderRadius:3,background:cat.color,flexShrink:0}}/>
+                      <span style={{fontSize:13,fontWeight:700,color:"#e8e8e8",flex:1,minWidth:0,
+                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cat.label}</span>
+                      <span style={{fontSize:11,color:INK.soft,flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{doneToday}/{list.length}</span>
+                    </div>
+                    {list.length===0&&(
+                      <div style={{fontSize:11.5,color:INK.faint,fontStyle:"italic",padding:"4px 0 10px"}}>Nic tu jeszcze nie ma.</div>
+                    )}
+                    {list.map(h=>renderHabitCard(h,cat))}
                   </div>
-                  {/* pasek pokazuje dzisiejsze odhaczenia w obrębie kategorii */}
-                  <div style={{background:"#232323",borderRadius:99,height:4,overflow:"hidden",marginBottom:10}}>
-                    <div style={{width:list.length?`${(doneToday/list.length)*100}%`:"0%",height:"100%",
-                      background:cat.color,borderRadius:99,transition:"width 0.3s"}}/>
-                  </div>
-                  {list.length===0&&(
-                    <div style={{fontSize:11.5,color:INK.faint,fontStyle:"italic",padding:"4px 0 8px"}}>Nic tu jeszcze nie ma.</div>
-                  )}
-                  {list.map(h=>renderHabitCard(h,cat))}
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </>
         )}
 
         {showForm&&(
@@ -150,7 +185,21 @@ export default function HabitsTab(){
             <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addHabit()} placeholder="Nazwa nawyku…"
               style={{width:"100%",background:"#0a0a0a",border:"1px solid #333",borderRadius:8,padding:"10px 12px",color:"#fff",fontSize:14,boxSizing:"border-box",marginBottom:10,outline:"none"}} autoFocus/>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
-              {CATEGORIES.map(c=><button key={c.label} onClick={()=>setNewCat(c.label)} style={{border:`2px solid ${newCat===c.label?c.color:INK.faint}`,background:newCat===c.label?c.bg:"transparent",color:c.color,borderRadius:20,padding:"4px 12px",cursor:"pointer",fontSize:13,fontWeight:600}}>{c.label}</button>)}
+              {/* Nazwa kategorii w kolorze tekstu, tożsamość niesie kropka —
+                  przy sześciu kolorach etykieta w barwie serii robi się
+                  nieczytelna, a i tak nie odróżnia dwóch sąsiednich. */}
+              {CATEGORIES.map(c=>{
+                const on=newCat===c.label;
+                return(
+                  <button key={c.label} onClick={()=>setNewCat(c.label)} aria-pressed={on}
+                    style={{display:"flex",alignItems:"center",gap:7,minHeight:44,border:`1px solid ${on?c.color:"#333"}`,
+                      background:on?c.bg:"transparent",color:on?"#f1f1f1":INK.soft,borderRadius:22,padding:"4px 14px",
+                      cursor:"pointer",fontSize:13,fontWeight:600}}>
+                    <span style={{width:10,height:10,borderRadius:3,background:c.color,flexShrink:0}}/>
+                    {c.label}
+                  </button>
+                );
+              })}
             </div>
             <div style={{marginBottom:14}}>
               <label style={{fontSize:12,color:"#888",display:"block",marginBottom:8}}>Godzina przypomnienia (opcjonalnie)</label>
@@ -164,7 +213,7 @@ export default function HabitsTab(){
           </div>
         )}
         {!showForm&&(
-          <button onClick={()=>setShowForm(true)} style={{width:"100%",marginTop:12,padding:"13px",
+          <button onClick={()=>{if(habCat)setNewCat(habCat);setShowForm(true);}} style={{width:"100%",marginTop:12,padding:"13px",
             borderRadius:12,border:"2px dashed #333",background:"transparent",color:"#888",
             fontWeight:600,fontSize:14,cursor:"pointer"}}>
             + Dodaj nawyk

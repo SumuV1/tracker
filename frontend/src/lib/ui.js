@@ -24,12 +24,28 @@ export function useMedia(query) {
   return matches;
 }
 
+// Sześć kategorii nawyków — kolejność jest też kolejnością wycinków w
+// sześciokącie zakładki (od góry, zgodnie z ruchem wskazówek zegara), więc jej
+// zmiana obraca cały rysunek. `short` wchodzi na wąskim ekranie.
+//
+// Kolory NIE są dobrane okiem. Przy sześciu stykających się wycinkach kolor
+// niesie tożsamość, więc paleta przeszła walidator dostępności (tryb ciemny,
+// tło kafla #121317, wszystkie pary): najgorsza para przy protanopii
+// i deuteranopii ma ΔE 9,5 przy progu 8, przy zwykłym widzeniu 16,9 przy progu
+// 15, a każdy kolor ma co najmniej 4:1 kontrastu do tła. Poprzednia paleta
+// czterech kategorii tego nie przechodziła: fiolet #c084fc i błękit #60a5fa
+// miały przy deuteranopii ΔE 1,3, czyli były tym samym kolorem.
+// Kolor jest tu wyłącznie plamą (wycinek, kółko, pasek) — nazwy kategorii noszą
+// kolory tekstu, nigdy kolor serii.
 export const CATEGORIES = [
-  { label: "Zdrowie", color: "#4ade80", bg: "#052e16" },
-  { label: "Praca", color: "#60a5fa", bg: "#0c1a3a" },
-  { label: "Mindfulness", color: "#c084fc", bg: "#1a0a2e" },
-  { label: "Osobiste", color: "#fb923c", bg: "#2e1200" },
-];
+  { label: "Zdrowie",          short: "Zdrowie",  icon: "🌿", color: "#01b078" },
+  { label: "Praca",            short: "Praca",    icon: "💼", color: "#007ebb" },
+  { label: "Finanse osobiste", short: "Finanse",  icon: "💰", color: "#b78f10" },
+  { label: "Rozwój osobisty",  short: "Rozwój",   icon: "📈", color: "#c74c3b" },
+  { label: "Relacje",          short: "Relacje",  icon: "🤝", color: "#dd069f" },
+  { label: "Czas dla siebie",  short: "Dla siebie", icon: "🧘", color: "#a94cff" },
+].map(c => ({ ...c, bg: c.color + "26" }));
+export const CAT_BY_LABEL = Object.fromEntries(CATEGORIES.map(c => [c.label, c]));
 export const DAY_LABELS = ["N","P","W","Ś","C","P","S"];
 export const MONTHS_PL = ["Sty","Lut","Mar","Kwi","Maj","Cze","Lip","Sie","Wrz","Paź","Lis","Gru"];
 // Kolory tekstu wtórnego — jedyne dozwolone szarości na tekst, który niesie
