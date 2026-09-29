@@ -664,8 +664,12 @@ export default function App() {
       </div>
 
       {/* mapa mięśni i licznik kalorii potrzebują więcej szerokości; nawyki
-          jeszcze więcej, bo mieszczą cztery kafle kategorii obok listy niewolnika */}
-      <div style={{maxWidth:mainTab==="nawyki"?1400:mainTab==="miesnie"||mainTab==="kalorie"?1180:680,margin:"0 auto"}}>
+          jeszcze więcej, bo stawiają obok siebie sześciokąt, listy kategorii
+          i listę niewolnika */}
+      {/* `key` na zakładce jest po to, żeby animacja wejścia (.wejscie)
+          odpalała się przy każdej zmianie zakładki, a nie raz na starcie. */}
+      <div key={mainTab} className="wejscie"
+        style={{maxWidth:mainTab==="nawyki"?1400:mainTab==="miesnie"||mainTab==="kalorie"?1180:680,margin:"0 auto"}}>
         {mainTab==="nawyki"&&<HabitsTab/>}
         {mainTab==="kalorie"&&<CaloriesTab/>}
         {mainTab==="miesnie"&&<MuscleMap profile={serverProfile}/>}

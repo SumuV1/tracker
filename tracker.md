@@ -345,11 +345,28 @@ przy wysokości 1,73R — telefon ma więcej szerokości niż wysokości do odda
 Kolejność w `CATEGORIES` jest kolejnością wycinków od góry, zgodnie z ruchem
 wskazówek zegara.
 
-Tapnięcie wycinka **albo** pozycji legendy zawęża listę pod spodem do jednej
-kategorii; bez filtra pokazują się tylko kategorie, w których coś jest (puste
-i tak widać w sześciokącie). Legenda nie jest ozdobą: niesie nazwy, bo na samym
-rysunku nazwy się nie mieszczą, i jest pełnoprawnym celem dotyku. Dodawanie
-nawyku przy włączonym filtrze dziedziczy wybraną kategorię.
+Układ na szerokim ekranie: **sześciokąt po lewej** (przyklejony przy
+przewijaniu), **nawyki w środku**, lista niewolnika po prawej. Kolumny boczne
+mają stałą szerokość, środek bierze resztę — przy 1000 px zostaje na nawyki
+około 370 px, czyli tyle, ile karta nawyku ma na telefonie. Poniżej tego progu
+wszystko idzie jedno pod drugim.
+
+Każda kategoria jest **listą rozwijaną**: nagłówek z kropką koloru, nazwą,
+paskiem postępu i licznikiem, pod nim nawyki. Rozwinięta jest zawsze co najwyżej
+jedna — ten sam stan (`habCat`) trzyma otwartą sekcję i podświetlony wycinek,
+więc rysunek i lista nie mogą się rozjechać. Tapnięcie wycinka rozwija jego
+kategorię i przewija do niej, nagłówek działa tak samo. Zwinięta sekcja nie jest
+niema: pasek postępu zostaje widoczny. Dodawanie nawyku dziedziczy rozwiniętą
+kategorię. Nazwy niesie nagłówek sekcji, więc osobna legenda pod rysunkiem
+byłaby trzecią kopią tej samej informacji — jej nie ma.
+
+Wycinek **nie ma** elementu `<title>`: rysowałby natywną dymkę, czyli biały
+prostokąt pod kursorem na ciemnym tle. Ta sama treść stoi w `aria-label`
+(czytniki ekranu) i w nagłówku sekcji obok (oczy). Z tego samego powodu fokus na
+wycinku nie może być domyślnym obrysem przeglądarki — na SVG rysuje się jako
+biały prostokąt wokół całego wycinka, widoczny także po kliknięciu myszą.
+Zamiast niego `:focus-visible` pogrubia obrys samego kształtu: widać to
+z klawiatury i nie widać przy tapnięciu.
 
 Nawyk z nieznaną kategorią trafia do pierwszej — stąd migracja
 `db/init/03_habit_categories.sql`, która przy przejściu z czterech kategorii na
@@ -382,6 +399,23 @@ Ostatnia trzecia część szerokości to **lista niewolnika**: rzeczy, od który
 użytkownik trzyma się z daleka. To odwrotność nawyku, więc świadomie nie ma tam
 odhaczania ani dziennika — tabela `avoid_items` trzyma samą nazwę, opcjonalne
 uzasadnienie i kolejność.
+
+#### Animacje i reakcja na dotyk
+
+Wszystko siedzi w `<style>` w `frontend/index.html`, bo layout stoi na stylach
+inline i nie ma arkusza komponentów:
+
+| Reguła | Co robi |
+|---|---|
+| `button, [role="button"]` + `:active` | element ugina się pod palcem (`scale(.96)`) i wraca; skala, nie kolor, bo działa na każdym tle |
+| `svg [role="button"]:active` | duże płaszczyzny uginają się mniej (`.985`) — ten sam procent na dużym elemencie wygląda jak skok |
+| `svg [role="button"]:hover polygon.tor` | pod kursorem rozjaśnia się **tor** wycinka; reguła celuje w klasę, bo gdyby łapała oba wielokąty, najechanie przygaszałoby wypełnienie i kasowało to, co wykres pokazuje |
+| `.rozwin` | treść sekcji wjeżdża spod nagłówka zamiast pojawiać się skokiem |
+| `.wejscie` | zawartość zakładki wchodzi po kliknięciu w pasek nawigacji (`key={mainTab}` wymusza powtórzenie animacji) |
+| `.fajka` | znacznik odhaczenia wskakuje, zamiast po prostu być |
+
+Całość wyłącza `@media (prefers-reduced-motion: reduce)`, które już wcześniej
+zerowało `transition` i `animation` dla wszystkiego.
 
 #### Mapa mięśni
 

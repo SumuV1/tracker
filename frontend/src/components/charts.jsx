@@ -372,11 +372,10 @@ export function HabitHex({ stats, selected, onSelect, size = 300 }) {
             role="button" tabIndex={0} style={{ cursor: "pointer", opacity: dim ? 0.4 : 1 }}
             aria-pressed={selected === s.cat.label}
             aria-label={`${s.cat.label}: ${s.total ? `${s.done} z ${s.total} dziś` : "brak nawyków"}`}>
-            <title>{`${s.cat.label} — ${s.total ? `${s.done}/${s.total} dziś` : "brak nawyków"}`}</title>
             {/* tor: cały wycinek, przygaszony */}
-            <polygon points={wedge(i, 1)} fill={s.cat.color} fillOpacity={0.09}
+            <polygon className="tor" points={wedge(i, 1)} fill={s.cat.color} fillOpacity={0.09}
               stroke={s.cat.color} strokeOpacity={selected === s.cat.label ? 0.9 : 0.35} strokeWidth={selected === s.cat.label ? 2 : 1} />
-            {frac > 0 && <polygon points={wedge(i, frac)} fill={s.cat.color} fillOpacity={0.92} />}
+            {frac > 0 && <polygon className="wypelnienie" points={wedge(i, frac)} fill={s.cat.color} fillOpacity={0.92} />}
             <text x={ix} y={iy + 6} textAnchor="middle" fontSize={17} style={{ pointerEvents: "none" }}>{s.cat.icon}</text>
           </g>
         );

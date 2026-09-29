@@ -50,6 +50,49 @@
         input, select, textarea { font-size: 16px !important; }
       }
 
+      /* ── Reakcja na dotyk ────────────────────────────────────────────
+         Kliknięcie ma być odczuwalne: element ugina się pod palcem i wraca.
+         Skala zamiast zmiany koloru, bo działa na każdym tle i nie wchodzi
+         w drogę kolorom kategorii. Krzywa jest szybka na starcie i miękka na
+         końcu — tak zachowuje się fizyczny przycisk. */
+      button, [role="button"] {
+        transition: transform .13s cubic-bezier(.2,.8,.3,1), background-color .18s ease,
+                    border-color .18s ease, color .18s ease, opacity .18s ease;
+      }
+      button:active, [role="button"]:active { transform: scale(.96); }
+      /* Duże płaszczyzny (wycinki sześciokąta, karty) uginają się mniej —
+         ten sam procent na dużym elemencie wygląda jak skok. */
+      svg [role="button"]:active { transform: scale(.985); transform-origin: center; }
+      svg [role="button"] polygon { transition: fill-opacity .22s ease, stroke-opacity .22s ease, stroke-width .15s ease; }
+      /* Tylko TOR rozjaśnia się pod kursorem. Gdyby reguła łapała oba
+         wielokąty, najechanie przygaszałoby wypełnienie wycinka do 20 % —
+         czyli kasowałoby to, co wykres ma pokazywać.
+         Bez @media (hover: hover): to czysta dekoracja, na dotyku mignie przy
+         tapnięciu i tyle, a opakowana w to zapytanie nie da się sprawdzić
+         w przeglądarce bez myszy (headless raportuje `hover: none`). */
+      svg [role="button"]:hover polygon.tor { fill-opacity: .2; stroke-opacity: .8; }
+
+      /* Rozwinięcie sekcji: treść wjeżdża spod nagłówka, zamiast pojawiać się
+         skokiem — bez tego przy sześciu działach nie widać, który się otworzył. */
+      @keyframes rozwin { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+      .rozwin { animation: rozwin .22s cubic-bezier(.2,.8,.3,1) both; }
+
+      /* Wejście zawartości zakładki po kliknięciu w pasek nawigacji. */
+      @keyframes wejscie { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      .wejscie { animation: wejscie .2s ease both; }
+
+      /* Odhaczenie nawyku: znacznik wskakuje, a nie po prostu jest. */
+      @keyframes fajka { from { transform: scale(0); opacity: 0; } 60% { transform: scale(1.15); } to { transform: scale(1); opacity: 1; } }
+      .fajka { animation: fajka .24s cubic-bezier(.2,.8,.3,1) both; }
+
+      /* Fokus na wycinku sześciokąta NIE może być domyślnym prostokątem
+         przeglądarki: na SVG rysuje się jako biały kwadrat wokół całego
+         wycinka, widoczny też po kliknięciu myszą. Zamiast niego pogrubiony
+         obrys samego kształtu — widać to z klawiatury i nie widać przy
+         tapnięciu. */
+      svg [role="button"]:focus { outline: none; box-shadow: none !important; }
+      svg [role="button"]:focus-visible polygon.tor { stroke-width: 3; stroke-opacity: 1; }
+
       /* Dyskretny pasek przewijania w ciemnym motywie */
       * { scrollbar-width: thin; scrollbar-color: #333 transparent; }
       *::-webkit-scrollbar { width: 8px; height: 8px; }

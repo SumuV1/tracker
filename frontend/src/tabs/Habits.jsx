@@ -24,7 +24,7 @@ export default function HabitsTab(){
               cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <span style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${cat.color}`,background:checked?cat.color:"transparent",
               display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.2s"}}>
-              {checked&&<span style={{color:"#000",fontSize:12,fontWeight:700}}>✓</span>}
+              {checked&&<span className="fajka" style={{color:"#000",fontSize:12,fontWeight:700}}>✓</span>}
             </span>
           </button>
           <div style={{flex:1,minWidth:0}}>
@@ -109,14 +109,36 @@ export default function HabitsTab(){
     const list=habitsByCat[cat.label]||[];
     return {cat,done:list.filter(h=>isChecked(h.id,todayStr)).length,total:list.length};
   });
-  // Bez filtra pokazujemy tylko kategorie, w których coś jest — puste i tak
-  // widać w sześciokącie i w legendzie, a tu robiłyby sześć pustych nagłówków.
-  const widoczneKat=habCat?CATEGORIES.filter(c=>c.label===habCat):CATEGORIES.filter(c=>(habitsByCat[c.label]||[]).length);
+  // Wybrana kategoria to jednocześnie rozwinięta sekcja i podświetlony wycinek
+  // — jeden stan zamiast dwóch, więc rysunek i lista nie mogą się rozjechać.
+  const wybierz=label=>{
+    const nowy=habCat===label?null:label;
+    setHabCat(nowy);
+    if(nowy)requestAnimationFrame(()=>document.getElementById("kat-"+CATEGORIES.findIndex(c=>c.label===nowy))
+      ?.scrollIntoView?.({behavior:"smooth",block:"nearest"}));
+  };
 
   return(
-    <div style={{display:"grid",gap:16,alignItems:"start",gridTemplateColumns:isWide?"2fr 1fr":"1fr"}}>
+    // Sześciokąt po lewej, nawyki w środku, lista niewolnika po prawej.
+    // Kolumny boczne mają stałą szerokość, środek bierze resztę: przy 1000 px
+    // zostaje na nawyki ~370 px, czyli tyle, ile karta nawyku ma na telefonie.
+    // Poniżej tego progu wszystko idzie jedno pod drugim.
+    <div style={{display:"grid",gap:16,alignItems:"start",
+      gridTemplateColumns:isXWide?"340px minmax(0,1fr) 340px":isWide?"300px minmax(0,1fr) 300px":"1fr"}}>
 
-      {/* dwie trzecie szerokości: nawyki rozłożone na kafle kategorii */}
+      {/* ── lewa kolumna: sześciokąt ── */}
+      <div style={{minWidth:0,position:isWide?"sticky":"static",top:16}}>
+        {habits.length>0&&(
+          <div style={{background:"#121317",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?12:16}}>
+            <HabitHex stats={statyKat} selected={habCat} onSelect={wybierz} size={isMobile?320:300}/>
+            <div style={{fontSize:11,color:INK.faint,textAlign:"center",marginTop:10,lineHeight:1.5}}>
+              {habCat?"Tapnij ponownie, żeby zwinąć.":"Tapnij wycinek, żeby rozwinąć kategorię."}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── środek: nawyki, każda kategoria jako lista rozwijana ── */}
       <div style={{minWidth:0}}>
         {habits.length===0&&(
           <div style={{textAlign:"center",padding:"60px 0",color:INK.muted}}>
@@ -124,61 +146,39 @@ export default function HabitsTab(){
             <p>Brak nawyków. Dodaj swój pierwszy!</p>
           </div>
         )}
-        {habits.length>0&&(
-          <>
-            {/* Sześciokąt: jedna figura na sześć kategorii. Wycinek rośnie od
-                środka, więc komplet na dziś domyka całość. Tapnięcie wycinka
-                albo pozycji legendy zawęża listę pod spodem do tej kategorii. */}
-            <div style={{background:"#121317",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?12:16,marginBottom:12}}>
-              <HabitHex stats={statyKat} selected={habCat} onSelect={setHabCat} size={isMobile?320:340}/>
-              {/* Legenda niesie nazwy (kolor zostaje plamą na rysunku) i jest
-                  jednocześnie filtrem — stąd pełny cel dotyku, nie sam tekst. */}
-              <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(3,1fr)",gap:6,marginTop:14}}>
-                {statyKat.map(s=>{
-                  const on=habCat===s.cat.label;
-                  return(
-                    <button key={s.cat.label} onClick={()=>setHabCat(on?null:s.cat.label)} aria-pressed={on}
-                      style={{display:"flex",alignItems:"center",gap:8,minHeight:44,padding:"6px 10px",borderRadius:10,cursor:"pointer",
-                        background:on?s.cat.color+"1f":"#0f0f0f",border:`1px solid ${on?s.cat.color:"#242424"}`,textAlign:"left"}}>
-                      <span style={{width:10,height:10,borderRadius:3,background:s.cat.color,flexShrink:0}}/>
-                      <span style={{flex:1,minWidth:0,fontSize:12.5,fontWeight:600,color:on?"#f1f1f1":INK.soft,
-                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{isMobile?s.cat.short:s.cat.label}</span>
-                      <span style={{fontSize:11,color:INK.faint,flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{s.total?`${s.done}/${s.total}`:"—"}</span>
-                    </button>
-                  );
-                })}
+        {habits.length>0&&statyKat.map(({cat,done,total},i)=>{
+          const open=habCat===cat.label;
+          return(
+            <div key={cat.label} id={"kat-"+i} style={{background:"#121317",border:`1px solid ${open?cat.color+"55":"#1e1e1e"}`,
+              borderRadius:14,marginBottom:8,overflow:"hidden"}}>
+              <div {...kb(()=>wybierz(cat.label))} aria-expanded={open}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",cursor:"pointer",minHeight:56}}>
+                <span style={{width:11,height:11,borderRadius:3,background:cat.color,flexShrink:0}}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:700,color:"#f0f0f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cat.label}</div>
+                  {/* Pasek zostaje widoczny po zwinięciu — bez niego zwinięta
+                      sekcja nie mówi nic poza nazwą. */}
+                  <div style={{background:"#232323",borderRadius:99,height:4,overflow:"hidden",marginTop:6,maxWidth:220}}>
+                    <div style={{width:total?`${(done/total)*100}%`:"0%",height:"100%",background:cat.color,borderRadius:99,transition:"width .35s cubic-bezier(.2,.8,.3,1)"}}/>
+                  </div>
+                </div>
+                <span style={{fontSize:12,color:INK.soft,flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{total?`${done}/${total}`:"—"}</span>
+                <span aria-hidden="true" style={{color:INK.muted,fontSize:11,flexShrink:0,display:"inline-block",
+                  transition:"transform .22s cubic-bezier(.2,.8,.3,1)",transform:open?"rotate(180deg)":"none"}}>▼</span>
               </div>
-              {habCat&&(
-                <button onClick={()=>setHabCat(null)} style={{width:"100%",marginTop:8,minHeight:44,background:"#0f0f0f",
-                  border:"1px solid #242424",borderRadius:10,color:INK.soft,fontSize:12,cursor:"pointer"}}>
-                  Pokaż wszystkie kategorie ×
-                </button>
+              {open&&(
+                <div className="rozwin" style={{padding:"0 12px 12px"}}>
+                  {total===0&&(
+                    <div style={{fontSize:12,color:INK.faint,fontStyle:"italic",padding:"2px 2px 10px"}}>
+                      Nic tu jeszcze nie ma — dodaj pierwszy nawyk w tej kategorii.
+                    </div>
+                  )}
+                  {(habitsByCat[cat.label]||[]).map(h=>renderHabitCard(h,cat))}
+                </div>
               )}
             </div>
-
-            <div style={{display:"grid",gap:12,alignItems:"start",
-              gridTemplateColumns:isMobile||habCat?"1fr":isXWide?"repeat(3,1fr)":"repeat(2,1fr)"}}>
-              {widoczneKat.map(cat=>{
-                const list=habitsByCat[cat.label];
-                const doneToday=list.filter(h=>isChecked(h.id,todayStr)).length;
-                return(
-                  <div key={cat.label} style={{minWidth:0}}>
-                    <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}>
-                      <span style={{width:9,height:9,borderRadius:3,background:cat.color,flexShrink:0}}/>
-                      <span style={{fontSize:13,fontWeight:700,color:"#e8e8e8",flex:1,minWidth:0,
-                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cat.label}</span>
-                      <span style={{fontSize:11,color:INK.soft,flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{doneToday}/{list.length}</span>
-                    </div>
-                    {list.length===0&&(
-                      <div style={{fontSize:11.5,color:INK.faint,fontStyle:"italic",padding:"4px 0 10px"}}>Nic tu jeszcze nie ma.</div>
-                    )}
-                    {list.map(h=>renderHabitCard(h,cat))}
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
+          );
+        })}
 
         {showForm&&(
           <div style={{background:"#161616",border:"1px solid #2a2a2a",borderRadius:14,padding:16,marginTop:12}}>
@@ -221,8 +221,9 @@ export default function HabitsTab(){
         )}
       </div>
 
-      {/* jedna trzecia szerokości: lista niewolnika */}
-      <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,minWidth:0}}>
+      {/* prawa kolumna (albo pod nawykami, gdy nie ma na nią miejsca) */}
+      <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,minWidth:0,
+        position:isWide?"sticky":"static",top:16}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <span style={{fontSize:17}}>⛓️</span>
           <div style={{fontWeight:700,fontSize:15,color:"#f1f1f1"}}>Lista niewolnika</div>
