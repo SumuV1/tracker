@@ -411,11 +411,29 @@ inline i nie ma arkusza komponentów:
 | `svg [role="button"]:active` | duże płaszczyzny uginają się mniej (`.985`) — ten sam procent na dużym elemencie wygląda jak skok |
 | `svg [role="button"]:hover polygon.tor` | pod kursorem rozjaśnia się **tor** wycinka; reguła celuje w klasę, bo gdyby łapała oba wielokąty, najechanie przygaszałoby wypełnienie i kasowało to, co wykres pokazuje |
 | `.rozwin` | treść sekcji wjeżdża spod nagłówka zamiast pojawiać się skokiem |
-| `.wejscie` | zawartość zakładki wchodzi po kliknięciu w pasek nawigacji (`key={mainTab}` wymusza powtórzenie animacji) |
+| `.wejscie` | zawartość zakładki wchodzi po kliknięciu w pasek nawigacji (`key={mainTab}` wymusza powtórzenie animacji) — **wyłącznie przezroczystość**, patrz niżej |
 | `.fajka` | znacznik odhaczenia wskakuje, zamiast po prostu być |
 
 Całość wyłącza `@media (prefers-reduced-motion: reduce)`, które już wcześniej
 zerowało `transition` i `animation` dla wszystkiego.
+
+**Element opakowujący zakładkę nie może mieć transformacji.** Pierwsza wersja
+`.wejscie` przesuwała treść o 6 px (`transform: translateY`) z
+`animation-fill-mode: both`. Wypełnianie zostawia ostatnią klatkę na stałe,
+a `transform: none` z klatki liczy się jako `matrix(1,0,0,1,0,0)` — to **nie**
+jest brak transformacji, więc element stawał się blokiem zawierającym dla
+`position: fixed` w środku. Okno dodawania produktu, kotwiczone do `inset: 0`,
+dostawało ramkę kontenera zakładki (1501 px wysokości) i przy układzie „od dołu"
+lądowało ~800 px poniżej ekranu. Objawy były dwa i wyglądały na niezwiązane:
+okno „nie otwierało się", a strona przestawała się przewijać — bo otwarte okno
+ustawia `body { overflow: hidden }`, a przycisku zamknięcia też nie było widać.
+
+Dlatego `.wejscie` animuje dziś wyłącznie `opacity`, a `.rozwin` (małe bloki bez
+elementów `fixed` w środku) zachowuje przesunięcie, ale bez `both`. Pilnuje tego
+`css-check.mjs` w regresji: animacja opakowania zakładki nie może ruszać
+`transform`, żadna z tych dwóch reguł nie może używać `both`, a skalowanie przy
+wciśnięciu ma dotyczyć przycisków, nie kontenerów. jsdom tego nie złapie — nie
+liczy układu — więc to sprawdzenie idzie po źródle CSS.
 
 #### Mapa mięśni
 

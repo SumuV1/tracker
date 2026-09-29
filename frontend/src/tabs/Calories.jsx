@@ -355,7 +355,10 @@ export default function CaloriesTab(){
         <div style={{background:"#161616",borderRadius:isMobile?"20px 20px 0 0":16,padding:isMobile?"20px 16px calc(20px + env(safe-area-inset-bottom))":24,width:"100%",maxWidth:600,maxHeight:isMobile?"88vh":"85vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.4)"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
             <h3 style={{margin:0,fontSize:17,fontWeight:700}}>Dodaj produkt</h3>
-            <button onClick={closeModal} aria-label="Zamknij" style={{background:"#222",border:"none",borderRadius:8,color:"#aaa",fontSize:18,cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            {/* Jedyne wyjście z okna na telefonie — pełny cel dotyku, nie 32 px.
+                Przy zablokowanym przewijaniu strony nietrafienie w ✕ zostawia
+                użytkownika w oknie, z którego nie ma jak wyjść. */}
+            <button onClick={closeModal} aria-label="Zamknij" style={{background:"#222",border:"none",borderRadius:10,color:"#aaa",fontSize:18,cursor:"pointer",width:44,height:44,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
           </div>
           {/* Baner błędu strony leży pod przyciemnionym tłem — tu musi być własny,
               inaczej nieudany import z OFF czy zapis produktu wyglądają na „nic". */}

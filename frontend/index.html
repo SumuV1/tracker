@@ -73,13 +73,22 @@
       svg [role="button"]:hover polygon.tor { fill-opacity: .2; stroke-opacity: .8; }
 
       /* Rozwinięcie sekcji: treść wjeżdża spod nagłówka, zamiast pojawiać się
-         skokiem — bez tego przy sześciu działach nie widać, który się otworzył. */
+         skokiem — bez tego przy sześciu działach nie widać, który się otworzył.
+         Bez `both`: stan końcowy klatki jest identyczny ze stanem domyślnym,
+         a wypełnianie po zakończeniu zostawiało na elemencie `transform:
+         matrix(1,0,0,1,0,0)`. To nie jest `none`, więc element stawał się
+         blokiem zawierającym dla `position: fixed` w środku. */
       @keyframes rozwin { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-      .rozwin { animation: rozwin .22s cubic-bezier(.2,.8,.3,1) both; }
+      .rozwin { animation: rozwin .22s cubic-bezier(.2,.8,.3,1); }
 
-      /* Wejście zawartości zakładki po kliknięciu w pasek nawigacji. */
-      @keyframes wejscie { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-      .wejscie { animation: wejscie .2s ease both; }
+      /* Wejście zawartości zakładki po kliknięciu w pasek nawigacji.
+         TU ANIMUJEMY WYŁĄCZNIE PRZEZROCZYSTOŚĆ — ten element opakowuje całą
+         zakładkę razem z oknami modalnymi, a każdy `transform` (nawet
+         tożsamościowy, nawet tylko na czas animacji) sprawia, że `position:
+         fixed` w środku liczy się względem niego, a nie względem ekranu.
+         Okno dodawania produktu lądowało wtedy 800 px poniżej widoku. */
+      @keyframes wejscie { from { opacity: 0; } to { opacity: 1; } }
+      .wejscie { animation: wejscie .2s ease; }
 
       /* Odhaczenie nawyku: znacznik wskakuje, a nie po prostu jest. */
       @keyframes fajka { from { transform: scale(0); opacity: 0; } 60% { transform: scale(1.15); } to { transform: scale(1); opacity: 1; } }
