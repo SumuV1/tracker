@@ -178,16 +178,11 @@ export function MeasurementChart({ rows, metric, isMobile, color = SERIES, domai
   const m = METRICS[metric];
   const pts = rows.filter(r => r[metric] != null).map(r => ({ day: r.day, v: r[metric], row: r }));
 
-  if (pts.length < 2) {
-    return (
-      <div style={{ padding: "34px 16px", textAlign: "center", color: INK.muted, fontSize: 12.5, lineHeight: 1.6 }}>
-        {pts.length === 0
-          ? <>Brak danych tej wielkości.</>
-          : <>Jeden {noun} to jeszcze nie trend.<br />Wykres pojawi się przy drugim.</>}
-      </div>
-    );
-  }
-
+  // Hooki PRZED wczesnym wyjściem: stały za nim wywracały Reacta („Rendered
+  // more hooks than during the previous render"), gdy drugi pomiar zamieniał
+  // napis „to jeszcze nie trend" w wykres. Efekt zależy od `enough`, bo
+  // kontener do zmierzenia pojawia się dopiero razem z wykresem.
+  const enough = pts.length >= 2;
   // Szerokość z pomiaru kontenera. Sztywne 380 na karcie mającej 306 px w środku
   // skalowało podpisy osi do 8 px — czcionki w viewBoxie są w pikselach tylko
   // wtedy, gdy viewBox ma tyle jednostek, ile kontener pikseli.
@@ -199,7 +194,18 @@ export function MeasurementChart({ rows, metric, isMobile, color = SERIES, domai
     const ro = new ResizeObserver(en => setMeasured(Math.round(en[0].contentRect.width)));
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [enough]);
+
+  if (pts.length < 2) {
+    return (
+      <div style={{ padding: "34px 16px", textAlign: "center", color: INK.muted, fontSize: 12.5, lineHeight: 1.6 }}>
+        {pts.length === 0
+          ? <>Brak danych tej wielkości.</>
+          : <>Jeden {noun} to jeszcze nie trend.<br />Wykres pojawi się przy drugim.</>}
+      </div>
+    );
+  }
+
   const W = measured || (isMobile ? 306 : 720), H = isMobile ? 240 : 300;
   const PAD = { t: 18, r: 16, b: 34, l: isMobile ? 38 : 46 };
   const iw = W - PAD.l - PAD.r, ih = H - PAD.t - PAD.b;
