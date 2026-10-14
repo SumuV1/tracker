@@ -37,6 +37,8 @@ export const api = {
   me: () => request("/auth/me"),
   login: (login, password) => request("/auth/login", { method: "POST", body: { login, password } }),
   logout: () => request("/auth/logout", { method: "POST" }),
+  // null = domyślna (stabilizacja)
+  setStartTab: startTab => request("/auth/start-tab", { method: "PUT", body: { startTab } }),
 
   habits: () => request("/habits"),
   addHabit: body => request("/habits", { method: "POST", body }),
@@ -44,6 +46,13 @@ export const api = {
   deleteHabit: id => request(`/habits/${id}`, { method: "DELETE" }),
   logs: (from, to) => request(`/habits/logs?${qs({ from, to })}`),
   setLog: (id, day, done) => request(`/habits/${id}/logs/${day}`, { method: done ? "PUT" : "DELETE" }),
+
+  // Cele ogólne; każdy wiersz niesie `habitIds` podpiętych nawyków.
+  goals: () => request("/goals"),
+  addGoal: body => request("/goals", { method: "POST", body }),
+  patchGoal: (id, body) => request(`/goals/${id}`, { method: "PATCH", body }),
+  deleteGoal: id => request(`/goals/${id}`, { method: "DELETE" }),
+  linkHabit: (goalId, habitId, on) => request(`/goals/${goalId}/habits/${habitId}`, { method: on ? "PUT" : "DELETE" }),
 
   profile: () => request("/profile"),
   saveProfile: body => request("/profile", { method: "PUT", body }),

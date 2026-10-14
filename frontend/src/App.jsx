@@ -4,7 +4,7 @@ import { STATE_MAP } from "./stability.js";
 import { MOBILE, NARROW, WIDE, XWIDE, useMedia, CATEGORIES, FONT, INK, toISO, today, getLast7, getBMILabel, bfColor, plDate } from "./lib/ui.js";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { AppContext } from "./lib/appContext.js";
-import { TABS, useRoute, calPath } from "./lib/router.js";
+import { TABS, HOME, START_OPTIONS, useRoute, calPath, habPath } from "./lib/router.js";
 import HabitsTab from "./tabs/Habits.jsx";
 import CaloriesTab from "./tabs/Calories.jsx";
 import StabilityTab from "./tabs/Stability.jsx";
@@ -28,6 +28,12 @@ export default function App() {
   const [progressView,setProgressView]=useState({});
   // Kategoria wybrana w sześciokącie nawyków; null = wszystkie.
   const [habCat,setHabCat]=useState(null);
+  // Cele ogólne: { id, name, category, note, deadline, achievedAt, habitIds }.
+  // Kategoria wybrana w sześciokącie celów jest osobna od tej z nawyków —
+  // przełączanie widoków nie ma przestawiać rozwiniętej sekcji w drugim.
+  const [goals,setGoals]=useState([]);
+  const [goalCat,setGoalCat]=useState(null);
+  const [showSettings,setShowSettings]=useState(false);
 
   const [user,setUser]=useState(null);
   const [loginNotice,setLoginNotice]=useState("");
@@ -73,9 +79,19 @@ export default function App() {
 
   // Zakładka i podzakładka wynikają z adresu; "/" idzie na stabilizację —
   // aplikacja pyta „jak jest", zanim pokaże listy.
-  const { navigate, route }=useRoute();
+  // Goły "/" prowadzi na zakładkę startową z konta — znaną dopiero po
+  // sprawdzeniu sesji, stąd null do tego czasu.
+  const { navigate, route }=useRoute(user?(user.startTab||HOME):null);
   const mainTab=route.tab||"stabilizacja";
   const setMainTab=k=>navigate(TABS.find(t=>t.key===k)?.path||"/stabilizacja");
+  // Nawyki mają dwa widoki — lista nawyków i cele — rozróżniane adresem,
+  // żeby wstecz wracało z celów do nawyków, a cele dało się ustawić jako start.
+  const habView=route.tab==="nawyki"&&route.sub==="cele"?"cele":"nawyki";
+  const setHabView=v=>navigate(habPath(v));
+  const saveStartTab=path=>run(async()=>{
+    const r=await api.setStartTab(path);
+    setUser(u=>({...u,startTab:r.startTab}));
+  });
 
   // ── STABILIZACJA ──
   const [principles,setPrinciples]=useState([]);
@@ -289,7 +305,7 @@ export default function App() {
 
   const logout=async()=>{
     await api.logout().catch(()=>{});
-    setUser(null);setHabits([]);setHabitLogs({});setServerProfile(null);
+    setUser(null);setHabits([]);setHabitLogs({});setGoals([]);setServerProfile(null);setShowSettings(false);
     setFoods([]);setDayEntries([]);setDailyTotals({});setKotwice([]);setLoading(true);
     loadedYears.current=new Set([year-1,year]);
   };
@@ -340,12 +356,12 @@ export default function App() {
     if(!user)return;
     (async()=>{
       try{
-        const [h,p,f,c,a,av,ms,pr,ci,tu,pl,xl,dsh]=await Promise.all([
+        const [h,p,f,c,a,av,ms,pr,ci,tu,pl,xl,dsh,gl]=await Promise.all([
           api.habits(),api.profile(),api.foods({}),api.foodCategories(),api.anchors(),api.avoid(),
           api.measurements(),api.principles(),api.checkins(14),api.techniqueUses(30),api.plans(),
-          api.planLog(today()),api.dishes(),
+          api.planLog(today()),api.dishes(),api.goals(),
         ]);
-        setHabits(h);setServerProfile(p);setFoods(f.items);setFoodsTruncated(f.truncated);setFoodCats(c);setKotwice(a);setAvoidItems(av);setPlans(pl);
+        setHabits(h);setGoals(gl);setServerProfile(p);setFoods(f.items);setFoodsTruncated(f.truncated);setFoodCats(c);setKotwice(a);setAvoidItems(av);setPlans(pl);
         setExLog({today:exToMap(xl.today),last:exToMap(xl.last)});setDishes(dsh);
         setMeasurements(ms);setPrinciples(pr);setCheckins(ci);
         setTechUses(Object.fromEntries(tu.map(r=>[r.technique,r])));
@@ -394,6 +410,9 @@ export default function App() {
   const deleteHabit=id=>run(async()=>{
     await api.deleteHabit(id);
     setHabits(x=>x.filter(h=>h.id!==id));
+    // Baza zdejmuje powiązania kaskadą; tutaj trzeba to samo zrobić ręcznie,
+    // inaczej cel liczyłby postęp z nawyku, którego już nie ma.
+    setGoals(g=>g.map(x=>x.habitIds.includes(id)?{...x,habitIds:x.habitIds.filter(i=>i!==id)}:x));
     await reloadLogs();
   });
   const updateTime=(id,time)=>run(async()=>{
@@ -438,6 +457,28 @@ export default function App() {
     if(!at&&!bt)return 0;if(!at)return 1;if(!bt)return-1;return at.localeCompare(bt);
   });
   for(const h of sortedHabits)(habitsByCat[h.category]||habitsByCat[CATEGORIES[0].label]).push(h);
+
+  // ── Cele ──
+  // Każda akcja oddaje cały wiersz celu (z `habitIds`), więc stan podmieniamy
+  // tym, co wróciło, zamiast składać go po swojej stronie.
+  const putGoal=g=>setGoals(l=>l.some(x=>x.id===g.id)?l.map(x=>x.id===g.id?g:x):[...l,g]);
+  const addGoal=body=>run(async()=>putGoal(await api.addGoal(body)));
+  const patchGoal=(id,body)=>run(async()=>putGoal(await api.patchGoal(id,body)));
+  const deleteGoal=id=>run(async()=>{
+    await api.deleteGoal(id);
+    setGoals(l=>l.filter(x=>x.id!==id));
+  });
+  const linkHabit=(goalId,habitId,on)=>run(async()=>putGoal(await api.linkHabit(goalId,habitId,on)));
+  // Nowy nawyk prosto z karty celu: ląduje w kategorii celu i od razu jest
+  // podpięty — bez tego trzeba by przejść do nawyków, dodać, wrócić i podpiąć.
+  const addHabitToGoal=(goal,name)=>run(async()=>{
+    const h=await api.addHabit({name,category:goal.category,reminderTime:null});
+    setHabits(x=>[...x,h]);
+    putGoal(await api.linkHabit(goal.id,h.id,true));
+  });
+  // Cele, którym służy nawyk — do podpisu na karcie nawyku.
+  const goalsByHabit={};
+  for(const g of goals)for(const hid of g.habitIds)(goalsByHabit[hid]||=[]).push(g);
 
   // ── Profil ──
   const calcAll=()=>run(async()=>{
@@ -640,7 +681,7 @@ export default function App() {
   if(!user)return <LoginScreen notice={loginNotice} onLogged={u=>{setLoginNotice("");setUser(u);setLoading(true);}}/>;
   if(loading)return splash("Ładowanie…");
 
-  const ctx={ addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteRecipe, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, dishes, editTimeId, ensureYear, error, exEntry, exHistory, exLast, expandedHabit, filtered, foodCats, foodTab, foods, foodsTruncated, getStreak, getView, getWeeklyRate, grams, gramsNum, habCat, setHabCat, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, offInfo, offLoading, offQuery, offResults, openGroups, philOpen, philRule, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, openExHistory, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, saveEx, savePlan, saveRecipe, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setFoodTab, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffInfo, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPhilOpen, setPhilRule, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleDish, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
+  const ctx={ goals, goalCat, setGoalCat, goalsByHabit, addGoal, patchGoal, deleteGoal, linkHabit, addHabitToGoal, habView, setHabView, addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteRecipe, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, dishes, editTimeId, ensureYear, error, exEntry, exHistory, exLast, expandedHabit, filtered, foodCats, foodTab, foods, foodsTruncated, getStreak, getView, getWeeklyRate, grams, gramsNum, habCat, setHabCat, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, offInfo, offLoading, offQuery, offResults, openGroups, philOpen, philRule, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, openExHistory, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, saveEx, savePlan, saveRecipe, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setFoodTab, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffInfo, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPhilOpen, setPhilRule, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleDish, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
   return(
     <AppContext.Provider value={ctx}>
     <div style={{background:"#0a0a0a",minHeight:"100vh",fontFamily:FONT,color:"#f1f1f1",padding:isMobile?"16px 12px 32px":"24px 16px"}}>
@@ -657,12 +698,36 @@ export default function App() {
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
             {saving&&<span style={{fontSize:12,color:"#888"}}>Zapisywanie…</span>}
+            <button onClick={()=>setShowSettings(v=>!v)} aria-expanded={showSettings} aria-label="Ustawienia" title="Ustawienia"
+              style={{background:showSettings?"#2a2a2a":"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,minWidth:44,minHeight:isMobile?44:36,
+                padding:"0 10px",color:showSettings?"#fff":"#888",fontSize:16,cursor:"pointer"}}>⚙</button>
             <button onClick={logout} title={`Zalogowany jako ${user.login}`}
               style={{background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,padding:"8px 12px",color:"#888",fontSize:13,cursor:"pointer"}}>
               {isMobile?"⏻":`${user.login} · Wyloguj`}
             </button>
           </div>
         </div>
+
+        {showSettings&&(
+          <div className="rozwin" style={{background:"#161616",border:"1px solid #2a2a2a",borderRadius:12,padding:14,marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#f1f1f1"}}>Zakładka startowa</div>
+            <div style={{fontSize:11.5,color:INK.soft,margin:"4px 0 10px",lineHeight:1.5}}>
+              Tu otwiera się aplikacja ze skrótu na ekranie głównym. Zapisuje się na koncie — działa tak samo na każdym urządzeniu.
+            </div>
+            <div role="radiogroup" aria-label="Zakładka startowa" style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {START_OPTIONS.map(o=>{
+                const on=(user.startTab||HOME)===o.path;
+                return(
+                  <button key={o.path} role="radio" aria-checked={on} onClick={()=>{if(!on)saveStartTab(o.path===HOME?null:o.path);}}
+                    style={{minHeight:44,padding:"4px 14px",borderRadius:22,cursor:on?"default":"pointer",fontSize:13,fontWeight:600,
+                      border:`1px solid ${on?"#f1f1f1":"#333"}`,background:on?"#f1f1f1":"transparent",color:on?"#000":INK.soft}}>
+                    {on&&"✓ "}{o.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {error&&(
           <div style={{background:"#2a0f0f",border:"1px solid #6b2020",borderRadius:12,padding:"10px 14px",

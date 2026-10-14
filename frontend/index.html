@@ -72,7 +72,7 @@
          Bez @media (hover: hover): to czysta dekoracja, na dotyku mignie przy
          tapnięciu i tyle, a opakowana w to zapytanie nie da się sprawdzić
          w przeglądarce bez myszy (headless raportuje `hover: none`). */
-      svg [role="button"]:hover polygon.tor { fill-opacity: .2; stroke-opacity: .8; }
+      svg [role="button"]:hover .tor { fill-opacity: .2; stroke-opacity: .8; }
 
       /* Rozwinięcie sekcji: treść wjeżdża spod nagłówka, zamiast pojawiać się
          skokiem — bez tego przy sześciu działach nie widać, który się otworzył.
@@ -102,7 +102,7 @@
          obrys samego kształtu — widać to z klawiatury i nie widać przy
          tapnięciu. */
       svg [role="button"]:focus { outline: none; box-shadow: none !important; }
-      svg [role="button"]:focus-visible polygon.tor { stroke-width: 3; stroke-opacity: 1; }
+      svg [role="button"]:focus-visible .tor { stroke-width: 3; stroke-opacity: 1; }
 
       /* Dyskretny pasek przewijania w ciemnym motywie */
       * { scrollbar-width: thin; scrollbar-color: #333 transparent; }

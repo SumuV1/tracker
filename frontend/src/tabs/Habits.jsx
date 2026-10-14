@@ -3,9 +3,40 @@ import { IconBtn, DeleteBtn, TimePicker, TimePickerForm } from "../components/bu
 import { MonthView, YearView } from "../components/calendar.jsx";
 import { HabitHex } from "../components/charts.jsx";
 import { useApp } from "../lib/appContext.js";
+import GoalsView from "./Goals.jsx";
+
+// Dwa widoki zakładki: nawyki (codzienne kroki) i cele (kierunek, pod który
+// się je podpina). Widok wynika z adresu — /nawyki albo /nawyki/cele.
+function ViewSwitch(){
+  const { habView, setHabView, isMobile }=useApp();
+  const opts=[["nawyki","🌱 Nawyki"],["cele","🎯 Cele"]];
+  return(
+    <div role="tablist" aria-label="Widok zakładki" style={{display:"flex",gap:4,background:"#121317",border:"1px solid #1e1e1e",
+      borderRadius:12,padding:4,marginBottom:16,maxWidth:isMobile?"none":360}}>
+      {opts.map(([k,label])=>{
+        const on=habView===k;
+        return(
+          <button key={k} role="tab" aria-selected={on} onClick={()=>setHabView(k)}
+            style={{flex:1,minHeight:isMobile?44:38,border:"none",borderRadius:9,cursor:"pointer",fontSize:14,fontWeight:700,
+              background:on?"#2a2a2a":"transparent",color:on?"#fff":INK.soft,transition:"background .15s"}}>{label}</button>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function HabitsTab(){
-  const { addAvoid, addHabit, avoidItems, avoidName, avoidNote, days7, deleteAvoid, deleteHabit, editAvoidId, editAvoidNote, editAvoidVal, editNameId, editNameVal, editTimeId, ensureYear, expandedHabit, getStreak, habCat, setHabCat, getView, getWeeklyRate, habitLogs, habits, habitsByCat, isChecked, isMobile, isWide, isXWide, newCat, newName, newTime, saveAvoid, setAvoidName, setAvoidNote, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditNameId, setEditNameVal, setEditTimeId, setExpandedHabit, setNewCat, setNewName, setNewTime, setShowAvoidForm, setShowForm, setView, showAvoidForm, showForm, startEditAvoid, todayStr, toggleHabit, updateName, updateTime }=useApp();
+  const { habView }=useApp();
+  return(
+    <div>
+      <ViewSwitch/>
+      {habView==="cele"?<GoalsView/>:<HabitsView/>}
+    </div>
+  );
+}
+
+function HabitsView(){
+  const { goalsByHabit, addAvoid, addHabit, avoidItems, avoidName, avoidNote, days7, deleteAvoid, deleteHabit, editAvoidId, editAvoidNote, editAvoidVal, editNameId, editNameVal, editTimeId, ensureYear, expandedHabit, getStreak, habCat, setHabCat, getView, getWeeklyRate, habitLogs, habits, habitsByCat, isChecked, isMobile, isWide, isXWide, newCat, newName, newTime, saveAvoid, setAvoidName, setAvoidNote, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditNameId, setEditNameVal, setEditTimeId, setExpandedHabit, setNewCat, setNewName, setNewTime, setShowAvoidForm, setShowForm, setView, showAvoidForm, showForm, startEditAvoid, todayStr, toggleHabit, updateName, updateTime }=useApp();
   const renderHabitCard=(habit,cat)=>{
     const checked=isChecked(habit.id,todayStr);
     const streak=getStreak(habit.id);
@@ -43,6 +74,11 @@ export default function HabitsTab(){
                   opacity:checked?0.5:1,textDecoration:checked?"line-through":"none"}}>{habit.name} <span aria-hidden="true" style={{fontSize:10,color:INK.faint,opacity:0.8}}>✎</span></div>
             )}
             <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:3}}>
+              {/* Cele, którym służy nawyk — sam podpis; podpina się w widoku celów. */}
+              {(goalsByHabit[habit.id]||[]).filter(g=>!g.achievedAt).map(g=>(
+                <span key={g.id} title={`Służy celowi: ${g.name}`} style={{fontSize:11,color:INK.soft,background:"#1f1f1f",borderRadius:6,
+                  padding:"1px 6px",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🎯 {g.name}</span>
+              ))}
               {streak>0&&<span style={{fontSize:11,color:checked?"#888":INK.faint}} title={checked?`${streak} dni z rzędu`:`${streak} dni z rzędu — dziś jeszcze nie`}>🔥 {streak}{!checked&&<span style={{color:INK.faint}}> · dziś jeszcze nie</span>}</span>}
               <button onClick={()=>setEditTimeId(isEditingTime?null:habit.id)} title="Godzina przypomnienia"
                 style={{background:habit.reminderTime?"#222":"none",border:"none",borderRadius:6,

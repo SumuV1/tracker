@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { waitForDb, pool } from "./db.js";
 import { authRoutes, requireAuth } from "./auth.js";
 import { habitRoutes } from "./routes/habits.js";
+import { goalRoutes } from "./routes/goals.js";
 import { profileRoutes } from "./routes/profile.js";
 import { foodRoutes } from "./routes/foods.js";
 import { mealRoutes } from "./routes/meals.js";
@@ -31,6 +32,7 @@ app.use("/api/auth", authRoutes);
 
 // Wszystko poniżej wymaga zalogowania.
 app.use("/api/habits", requireAuth, habitRoutes);
+app.use("/api/goals", requireAuth, goalRoutes);
 app.use("/api/profile", requireAuth, profileRoutes);
 app.use("/api/foods", requireAuth, foodRoutes);
 app.use("/api/meals", requireAuth, mealRoutes);

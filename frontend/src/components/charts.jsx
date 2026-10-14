@@ -348,7 +348,11 @@ const HEX_GAP = 1.6;           // odstęp między wycinkami w stopniach
 const HEX_PAD = 3;             // zapas w viewBoxie na obrys wycinka
 const HEX_LUZ = 6;             // odstęp koła ze statystyką od podstaw wycinków
 
-export function HabitHex({ stats, selected, onSelect, size = 300 }) {
+// Ten sam rysunek służy nawykom (dzisiejsze odhaczenia) i celom (regularność
+// podpiętych nawyków z tygodnia). Różnią się tylko podpisami — `center` to
+// { value, label } dla koła w środku, `describe(s)` opis wycinka dla czytnika
+// ekranu, `ariaLabel` opis całości. Bez nich zachowanie jest nawykowe.
+export function HabitHex({ stats, selected, onSelect, size = 300, center, describe, ariaLabel }) {
   // Figura mieści się w viewBoxie z zapasem HEX_PAD: przy R = size/2 skrajne
   // wierzchołki leżały dokładnie na krawędzi, więc obrys (do 2 px) wychodził
   // poza kadr i był obcinany przez kontener.
@@ -389,7 +393,7 @@ export function HabitHex({ stats, selected, onSelect, size = 300 }) {
   return (
     <svg viewBox={`0 0 ${size} ${(2 * R * SIN_MAX + HEX_PAD * 2).toFixed(1)}`} width="100%"
       style={{ display: "block", maxWidth: size, margin: "0 auto" }}
-      role="group" aria-label="Sześć kategorii nawyków — dzisiejsze odhaczenia">
+      role="group" aria-label={ariaLabel || "Sześć kategorii nawyków — dzisiejsze odhaczenia"}>
       {stats.map((s, i) => {
         const frac = s.total ? s.done / s.total : 0;
         const dim = selected && selected !== s.cat.label;
@@ -399,7 +403,7 @@ export function HabitHex({ stats, selected, onSelect, size = 300 }) {
             onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(selected === s.cat.label ? null : s.cat.label); } }}
             role="button" tabIndex={0} style={{ cursor: "pointer", opacity: dim ? 0.4 : 1 }}
             aria-pressed={selected === s.cat.label}
-            aria-label={`${s.cat.label}: ${s.total ? `${s.done} z ${s.total} dziś` : "brak nawyków"}`}>
+            aria-label={`${s.cat.label}: ${describe ? describe(s) : s.total ? `${s.done} z ${s.total} dziś` : "brak nawyków"}`}>
             {/* tor: cały wycinek, przygaszony */}
             <path className="tor" d={wedge(i, 1)} fill={s.cat.color} fillOpacity={0.09}
               stroke={s.cat.color} strokeOpacity={selected === s.cat.label ? 0.9 : 0.35} strokeWidth={selected === s.cat.label ? 2 : 1} />
@@ -408,10 +412,10 @@ export function HabitHex({ stats, selected, onSelect, size = 300 }) {
           </g>
         );
       })}
-      {/* środek: dzisiejsza suma ze wszystkich kategorii */}
+      {/* środek: suma ze wszystkich kategorii */}
       <circle cx={cx} cy={cy} r={rKola.toFixed(1)} fill="#0e0e0e" stroke="#232323" />
-      <text x={cx} y={cy - 1} textAnchor="middle" fontSize={19} fontWeight="700" fill="#f1f1f1">{suma.done}/{suma.total}</text>
-      <text x={cx} y={cy + 14} textAnchor="middle" fontSize={10} fill={INK.faint}>dziś</text>
+      <text x={cx} y={cy - 1} textAnchor="middle" fontSize={19} fontWeight="700" fill="#f1f1f1">{center ? center.value : `${suma.done}/${suma.total}`}</text>
+      <text x={cx} y={cy + 14} textAnchor="middle" fontSize={10} fill={INK.faint}>{center ? center.label : "dziś"}</text>
     </svg>
   );
 }

@@ -92,7 +92,7 @@ export async function requireAuth(req, res, next) {
     const token = readCookie(req, COOKIE);
     if (!token) return res.status(401).json({ error: "unauthorized" });
     const { rows } = await query(
-      `SELECT u.id, u.login
+      `SELECT u.id, u.login, u.start_tab AS "startTab"
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token = $1 AND s.expires_at > now()`,
       [hashToken(token)]
@@ -123,7 +123,7 @@ authRoutes.post("/login", async (req, res, next) => {
     }
 
     const { rows } = await query(
-      "SELECT id, login, password_hash FROM users WHERE lower(login) = lower($1)",
+      `SELECT id, login, password_hash, start_tab AS "startTab" FROM users WHERE lower(login) = lower($1)`,
       [login]
     );
     const user = rows[0];
@@ -143,7 +143,7 @@ authRoutes.post("/login", async (req, res, next) => {
     );
     await clearAttempts(ip);
     setSessionCookie(res, token, maxAgeMs);
-    res.json({ user: { id: user.id, login: user.login } });
+    res.json({ user: { id: user.id, login: user.login, startTab: user.startTab } });
   } catch (e) {
     next(e);
   }
@@ -161,3 +161,21 @@ authRoutes.post("/logout", async (req, res, next) => {
 });
 
 authRoutes.get("/me", requireAuth, (req, res) => res.json({ user: req.user }));
+
+// Zakładka startowa. Biała lista zamiast dowolnej ścieżki: wartość trafia
+// prosto do `history.replaceState`, więc nie może być niczym spoza aplikacji.
+// Musi się zgadzać z TABS i podstronami w frontend/src/lib/router.js.
+const START_TABS = new Set(["/stabilizacja", "/nawyki", "/nawyki/cele", "/kalorie", "/miesnie"]);
+
+authRoutes.put("/start-tab", requireAuth, async (req, res, next) => {
+  try {
+    const tab = req.body?.startTab ?? null;
+    if (tab !== null && !START_TABS.has(tab)) {
+      return res.status(400).json({ error: "Nie ma takiej zakładki." });
+    }
+    await query("UPDATE users SET start_tab = $2 WHERE id = $1", [req.user.id, tab]);
+    res.json({ startTab: tab });
+  } catch (e) {
+    next(e);
+  }
+});

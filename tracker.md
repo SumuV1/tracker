@@ -73,7 +73,7 @@ tracker/
 │       │   ├── muscleGuess.js # podpowiedź mięśni z nazw dnia i ćwiczeń
 │       │   └── appContext.js # kontekst: stan i akcje z App dla zakładek
 │       ├── components/       # buttons, charts, calendar, FormulaPanel, LoginScreen
-│       └── tabs/             # Stability, Habits, Calories, Muscles (+ PlanEditor, RecipeEditor)
+│       └── tabs/             # Stability, Habits (+ Goals), Calories, Muscles (+ PlanEditor, RecipeEditor)
 ├── shared/
 │   ├── planSchema.mjs            # format sledzik-plan/1: walidator wspólny dla przeglądarki i API
 │   └── plans/tyler-durden.json   # przykładowy plan = wzór pliku do importu
@@ -184,16 +184,26 @@ kilkudziesięciu propsów: sięgają po stan i akcje przez `useApp()` z
 **bez zmiany zachowania**; przeniesienie stanu do zakładek to osobna decyzja.
 
 **Każda zakładka ma własny adres** (`lib/router.js`, bez zależności, na
-`history.pushState`): `/stabilizacja`, `/nawyki`, `/kalorie` (z podstronami
-`/kalorie/profil` i `/kalorie/licznik`), `/miesnie`. Konsekwencje:
+`history.pushState`): `/stabilizacja`, `/nawyki` (z widokiem `/nawyki/cele`),
+`/kalorie` (z podstronami `/kalorie/profil` i `/kalorie/licznik`), `/miesnie`.
+Konsekwencje:
 
 - przycisk wstecz na telefonie cofa do poprzedniej zakładki, zamiast zamykać
   aplikację;
 - link do zakładki da się wysłać albo dodać do ekranu głównego, a odświeżenie
   na `/kalorie/licznik` zostaje tam — serwer oddaje `index.html` dla każdej
   ścieżki poza `/api`;
-- `/` i nieznana ścieżka lądują na stabilizacji przez `replaceState`, więc
-  wstecz nie wraca na pustkę; `/kalorie` bez podstrony to licznik, gdy BMI jest
+- `/` i nieznana ścieżka lądują na **zakładce startowej** przez `replaceState`,
+  więc wstecz nie wraca na pustkę. Zakładkę startową wybiera się w ustawieniach
+  (⚙ w nagłówku) spośród `START_OPTIONS` w `router.js`; domyślnie to
+  stabilizacja. Siedzi na koncie (`users.start_tab`), nie w `localStorage`,
+  więc telefon i komputer otwierają się tak samo, a przyjeżdża razem z
+  `/api/auth/me` — `useRoute(home)` czeka z przekierowaniem, aż ją zna, zamiast
+  skakać najpierw na stabilizację, a chwilę później dalej. Przekierowanie
+  dotyczy tylko `/`: wejście wprost na `/kalorie` zostaje na kaloriach. Serwer
+  przyjmuje wyłącznie ścieżki z białej listy (`START_TABS` w `server/auth.js`,
+  musi się zgadzać z `START_OPTIONS`), bo wartość trafia prosto do
+  `history.replaceState`; `/kalorie` bez podstrony to licznik, gdy BMI jest
   już policzone, w przeciwnym razie profil.
 
 Warstwa danych trzyma się kilku zasad:
@@ -274,7 +284,7 @@ dymek niczego nie zamyka na wyłączność.
 
 #### Stabilizacja emocjonalna — `frontend/src/stability.js`
 
-Zakładka startowa. Wyrosła z „Z dołka", ale nazwa zmieniła sens: problemem
+Domyślna zakładka startowa (zmienia się w ⚙). Wyrosła z „Z dołka", ale nazwa zmieniła sens: problemem
 nie jest kierunek emocji, tylko jej **amplituda** — złość, lęk, nakręcenie
 i dołek to ta sama nieumiejętność w różnych strojach. Treść już wcześniej
 pasowała do nowej nazwy: oddech, zimna woda, uziemienie i defuzja to techniki
@@ -414,6 +424,46 @@ Ostatnia trzecia część szerokości to **lista niewolnika**: rzeczy, od który
 użytkownik trzyma się z daleka. To odwrotność nawyku, więc świadomie nie ma tam
 odhaczania ani dziennika — tabela `avoid_items` trzyma samą nazwę, opcjonalne
 uzasadnienie i kolejność.
+
+#### Cele — `frontend/src/tabs/Goals.jsx`
+
+Drugi widok zakładki nawyków (przełącznik „🌱 Nawyki | 🎯 Cele" nad treścią,
+adres `/nawyki/cele`, więc wstecz wraca do nawyków). Cel ogólny — „przebiec
+półmaraton", „poduszka na pół roku" — siedzi w jednej z tych samych sześciu
+kategorii i sam niczego nie odhacza: postęp bierze się z **nawyków podpiętych
+pod cel**. Powiązanie jest wiele do wielu (`goal_habits`), bo jeden nawyk
+potrafi służyć dwóm celom (bieganie → półmaraton i spokojna głowa). Usunięcie
+celu zdejmuje same powiązania, nawyki zostają; usunięcie nawyku znika z celów.
+
+Układ jest ten sam co w nawykach: sześciokąt po lewej, kategorie jako listy
+rozwijane w środku, prawa kolumna. `HabitHex` przyjmuje `center`, `describe`
+i `ariaLabel`, więc ten sam rysunek mówi co innego:
+
+- **wycinek** = suma odhaczeń nawyków podpiętych pod cele w toku z tej
+  kategorii przez sumę możliwych, **z ostatnich 7 dni**. Dzień nie ma tu
+  sensu — cel jest odległy, a rano każdy wycinek byłby pusty. Każdy cel waży
+  tyle, ile ma nawyków;
+- **środek** = to samo ze wszystkich kategorii, w procentach.
+
+Karta celu: nazwa (tapnięcie → edycja; tam też kasowanie, z dala od
+odhaczania), opcjonalnie „po czym poznasz, że osiągnięty" i termin z licznikiem
+dni (po terminie na czerwono), procent z 7 dni, pasek tygodnia (dzień tym
+pełniejszy, im więcej podpiętych nawyków tego dnia odhaczono; liczba w
+`aria-label`), a pod nim podpięte nawyki **z odhaczaniem na dziś** — z celu
+robi się krok bez przechodzenia do listy nawyków. „＋ Podepnij nawyk" otwiera
+listę wolnych nawyków (najpierw z kategorii celu) i pole na nowy nawyk, który
+trafia do kategorii celu i od razu jest podpięty. „🏆 Osiągnięty" przenosi cel
+na półkę „Osiągnięte" w prawej kolumnie (z datą, do przywrócenia); ponowne
+oznaczenie nie przesuwa daty pierwszego osiągnięcia. Pod półką stoją **nawyki
+bez celu** — te, które nie służą żadnemu celowi w toku.
+
+W widoku nawyków karta nawyku ma podpis „🎯 nazwa celu" dla każdego celu
+w toku, któremu służy — sam podpis, bez akcji; podpina się w widoku celów.
+
+`habitIds` przychodzą z serwera jako `array_agg` z `bigint[]`, a tego parser
+liczb w `db.js` nie obejmuje — sterownik oddaje `["12","15"]`. Trasa zamienia
+je na liczby (`norm` w `routes/goals.js`); bez tego `habitIds.includes(id)`
+we froncie zawsze dawało `false` i żaden nawyk nie wyglądał na podpięty.
 
 #### Animacje i reakcja na dotyk
 
@@ -683,11 +733,15 @@ w ogóle istnieje.
 |---|---|---|
 | POST | `/api/auth/login` | logowanie, ustawia ciasteczko sesji |
 | POST | `/api/auth/logout` | kasuje bieżącą sesję (pozostałe zostają) |
-| GET | `/api/auth/me` | kim jestem |
+| GET | `/api/auth/me` | kim jestem (z `startTab`) |
+| PUT | `/api/auth/start-tab` | zakładka startowa `{startTab}` — ścieżka z białej listy albo `null` (domyślna) |
 | GET/POST | `/api/habits` | lista / dodanie nawyku |
 | PATCH/DELETE | `/api/habits/:id` | zmiana / usunięcie |
 | GET | `/api/habits/logs?from=&to=` | odhaczenia w zakresie dat |
 | PUT/DELETE | `/api/habits/:id/logs/:day` | odhaczenie / cofnięcie |
+| GET/POST | `/api/goals` | cele (każdy z `habitIds`) / dodanie `{name, category, note?, deadline?}` |
+| PATCH/DELETE | `/api/goals/:id` | zmiana (`note` i `deadline` czyszczone przez `""`/`null`, `achieved: bool`) / usunięcie — nawyki zostają |
+| PUT/DELETE | `/api/goals/:id/habits/:habitId` | podpięcie / odpięcie nawyku; obie strony muszą należeć do konta |
 | GET/PUT | `/api/profile` | profil wraz z BMI, PPM i CPM |
 | GET | `/api/foods?q=&category=&limit=` | katalog: wspólne + własne. Zwraca `{items, truncated, limit}` — filtruje **baza**, nie przeglądarka, a `truncated` mówi, że lista jest ucięta |
 | GET | `/api/foods/categories` | kategorie z licznikami |
@@ -910,10 +964,12 @@ dwóch równoległych kliknięć.
 
 | Tabela | Zawartość |
 |---|---|
-| `users` | konta: login, hash hasła (scrypt). Rejestracja zamknięta — patrz `create-user.sh` |
+| `users` | konta: login, hash hasła (scrypt), zakładka startowa (`start_tab`, NULL = stabilizacja). Rejestracja zamknięta — patrz `create-user.sh` |
 | `sessions` | tokeny sesji z datą wygaśnięcia, kasowalne (wylogowanie działa naprawdę) |
 | `habits` | nawyki: nazwa, kategoria, godzina przypomnienia, kolejność |
 | `habit_logs` | odhaczenia, klucz `(habit_id, day)` — obecność wiersza znaczy „zrobione" |
+| `goals` | cele ogólne: nazwa, kategoria, „po czym poznasz", termin, `achieved_at` (NULL = w toku) |
+| `goal_habits` | które nawyki służą któremu celowi — wiele do wielu, kaskada z obu stron |
 | `profiles` | waga, wzrost, wiek, płeć, poziom aktywności, obwody szyi / talii / bioder — jeden wiersz na konto |
 | `foods` | katalog produktów: `builtin` (wspólne), `custom` (prywatne), `off` (cache OpenFoodFacts), `recipe` (własne przepisy). `is_dish` = to gotowe danie, nie składnik |
 | `recipe_items` | skład przepisu: które produkty i po ile gramów |

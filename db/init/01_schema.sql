@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS users (
 );
 -- unikalność bez względu na wielkość liter
 CREATE UNIQUE INDEX IF NOT EXISTS users_login_key ON users (lower(login));
+-- Ścieżka zakładki, na której aplikacja otwiera się z gołego "/" (skrót na
+-- ekranie głównym). NULL = stabilizacja. Dozwolone wartości pilnuje API —
+-- lista zakładek żyje w kodzie, nie w bazie.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS start_tab text;
 
 CREATE TABLE IF NOT EXISTS sessions (
   token      text PRIMARY KEY,
@@ -52,6 +56,34 @@ CREATE TABLE IF NOT EXISTS habit_logs (
   PRIMARY KEY (habit_id, day)
 );
 CREATE INDEX IF NOT EXISTS habit_logs_day_idx ON habit_logs (day);
+
+-- ── Cele ──────────────────────────────────────────────────────────────────
+-- Cel ogólny w jednej z sześciu kategorii nawyków („Przebiec półmaraton",
+-- „Poduszka finansowa"). Sam niczego nie odhacza — postęp bierze się
+-- z nawyków, które pod niego podpięto. Osiągnięcie to data, nie flaga,
+-- żeby lista osiągniętych mogła mówić „kiedy".
+CREATE TABLE IF NOT EXISTS goals (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id     bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name        text NOT NULL CHECK (length(btrim(name)) > 0),
+  category    text NOT NULL,
+  note        text,                       -- po czym poznasz, że osiągnięty
+  deadline    date,                       -- NULL = bez terminu
+  achieved_at timestamptz,                -- NULL = w toku
+  position    int NOT NULL DEFAULT 0,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS goals_user_idx ON goals (user_id);
+
+-- Wiele do wielu: jeden nawyk może służyć kilku celom (bieganie → zdrowie
+-- i czas dla siebie). Usunięcie celu albo nawyku zabiera samo powiązanie,
+-- nigdy drugą stronę. Właściciela obu stron sprawdza API.
+CREATE TABLE IF NOT EXISTS goal_habits (
+  goal_id  bigint NOT NULL REFERENCES goals(id)  ON DELETE CASCADE,
+  habit_id bigint NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+  PRIMARY KEY (goal_id, habit_id)
+);
+CREATE INDEX IF NOT EXISTS goal_habits_habit_idx ON goal_habits (habit_id);
 
 -- ── Profil ────────────────────────────────────────────────────────────────
 -- Trzymamy wyłącznie dane wejściowe. BMI oraz przemiana materii są funkcjami
