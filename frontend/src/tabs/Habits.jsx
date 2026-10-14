@@ -1,4 +1,4 @@
-import { CATEGORIES, DAY_LABELS, INK , kb } from "../lib/ui.js";
+import { CATEGORIES, DAY_LABELS, INK , kb, habLayout } from "../lib/ui.js";
 import { IconBtn, DeleteBtn, TimePicker, TimePickerForm } from "../components/buttons.jsx";
 import { MonthView, YearView } from "../components/calendar.jsx";
 import { HabitHex } from "../components/charts.jsx";
@@ -7,17 +7,19 @@ import GoalsView from "./Goals.jsx";
 
 // Dwa widoki zakładki: nawyki (codzienne kroki) i cele (kierunek, pod który
 // się je podpina). Widok wynika z adresu — /nawyki albo /nawyki/cele.
+// Pasek wygląda i stoi tak jak główna nawigacja (680 px, wyśrodkowany) —
+// wcześniej siedział przyklejony do lewej krawędzi szerokiej zakładki.
 function ViewSwitch(){
   const { habView, setHabView, isMobile }=useApp();
   const opts=[["nawyki","🌱 Nawyki"],["cele","🎯 Cele"]];
   return(
-    <div role="tablist" aria-label="Widok zakładki" style={{display:"flex",gap:4,background:"#121317",border:"1px solid #1e1e1e",
-      borderRadius:12,padding:4,marginBottom:16,maxWidth:isMobile?"none":360}}>
+    <div role="tablist" aria-label="Widok zakładki" style={{display:"flex",gap:4,background:"#161616",
+      borderRadius:10,padding:4,margin:"0 auto 16px",maxWidth:680}}>
       {opts.map(([k,label])=>{
         const on=habView===k;
         return(
           <button key={k} role="tab" aria-selected={on} onClick={()=>setHabView(k)}
-            style={{flex:1,minHeight:isMobile?44:38,border:"none",borderRadius:9,cursor:"pointer",fontSize:14,fontWeight:700,
+            style={{flex:1,minHeight:isMobile?44:36,border:"none",borderRadius:8,cursor:"pointer",fontSize:isMobile?13:14,fontWeight:600,
               background:on?"#2a2a2a":"transparent",color:on?"#fff":INK.soft,transition:"background .15s"}}>{label}</button>
         );
       })}
@@ -154,19 +156,16 @@ function HabitsView(){
       ?.scrollIntoView?.({behavior:"smooth",block:"nearest"}));
   };
 
+  // Sześciokąt, nawyki, lista niewolnika — szerokości i progi w habLayout.
+  const L=habLayout({isMobile,isWide,isXWide});
   return(
-    // Sześciokąt po lewej, nawyki w środku, lista niewolnika po prawej.
-    // Kolumny boczne mają stałą szerokość, środek bierze resztę: przy 1000 px
-    // zostaje na nawyki ~370 px, czyli tyle, ile karta nawyku ma na telefonie.
-    // Poniżej tego progu wszystko idzie jedno pod drugim.
-    <div style={{display:"grid",gap:16,alignItems:"start",
-      gridTemplateColumns:isXWide?"340px minmax(0,1fr) 340px":isWide?"300px minmax(0,1fr) 300px":"1fr"}}>
+    <div style={L.grid}>
 
       {/* ── lewa kolumna: sześciokąt ── */}
       <div style={{minWidth:0,position:isWide?"sticky":"static",top:16}}>
         {habits.length>0&&(
-          <div style={{background:"#121317",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?12:16}}>
-            <HabitHex stats={statyKat} selected={habCat} onSelect={wybierz} size={isMobile?320:300}/>
+          <div style={{background:"#121317",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?8:16}}>
+            <HabitHex stats={statyKat} selected={habCat} onSelect={wybierz} size={L.hexSize}/>
             <div style={{fontSize:11,color:INK.faint,textAlign:"center",marginTop:10,lineHeight:1.5}}>
               {habCat?"Tapnij ponownie, żeby zwinąć.":"Tapnij wycinek, żeby rozwinąć kategorię."}
             </div>
@@ -174,6 +173,7 @@ function HabitsView(){
         )}
       </div>
 
+      <div style={L.rest}>
       {/* ── środek: nawyki, każda kategoria jako lista rozwijana ── */}
       <div style={{minWidth:0}}>
         {habits.length===0&&(
@@ -259,7 +259,7 @@ function HabitsView(){
 
       {/* prawa kolumna (albo pod nawykami, gdy nie ma na nią miejsca) */}
       <div style={{background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:16,minWidth:0,
-        position:isWide?"sticky":"static",top:16}}>
+        position:L.sideSticky?"sticky":"static",top:16}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <span style={{fontSize:17}}>⛓️</span>
           <div style={{fontWeight:700,fontSize:15,color:"#f1f1f1"}}>Lista niewolnika</div>
@@ -331,6 +331,7 @@ function HabitsView(){
             + Dodaj do listy
           </button>
         )}
+      </div>
       </div>
     </div>
   );

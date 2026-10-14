@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CATEGORIES, CAT_BY_LABEL, DAY_LABELS, INK, kb, plDate } from "../lib/ui.js";
+import { CATEGORIES, CAT_BY_LABEL, DAY_LABELS, INK, kb, plDate, habLayout } from "../lib/ui.js";
 import { IconBtn, DeleteBtn } from "../components/buttons.jsx";
 import { HabitHex } from "../components/charts.jsx";
 import { useApp } from "../lib/appContext.js";
@@ -293,15 +293,16 @@ export default function GoalsView() {
       ?.scrollIntoView?.({ behavior: "smooth", block: "nearest" }));
   };
 
+  // Ten sam układ co widok nawyków — przełączenie nie przestawia kolumn.
+  const L = habLayout({ isMobile, isWide, isXWide });
   return (
-    <div style={{ display: "grid", gap: 16, alignItems: "start",
-      gridTemplateColumns: isXWide ? "340px minmax(0,1fr) 340px" : isWide ? "300px minmax(0,1fr) 300px" : "1fr" }}>
+    <div style={L.grid}>
 
       {/* ── lewa kolumna: sześciokąt celów ── */}
       <div style={{ minWidth: 0, position: isWide ? "sticky" : "static", top: 16 }}>
         {active.length > 0 && (
-          <div style={{ background: "#121317", border: "1px solid #1e1e1e", borderRadius: 14, padding: isMobile ? 12 : 16 }}>
-            <HabitHex stats={statyKat} selected={goalCat} onSelect={wybierz} size={isMobile ? 320 : 300}
+          <div style={{ background: "#121317", border: "1px solid #1e1e1e", borderRadius: 14, padding: isMobile ? 8 : 16 }}>
+            <HabitHex stats={statyKat} selected={goalCat} onSelect={wybierz} size={L.hexSize}
               center={{ value: suma.total ? `${pct(suma.done, suma.total)}%` : "—", label: "7 dni" }}
               ariaLabel="Sześć kategorii celów — regularność podpiętych nawyków z 7 dni"
               describe={s => s.goals
@@ -314,6 +315,7 @@ export default function GoalsView() {
         )}
       </div>
 
+      <div style={L.rest}>
       {/* ── środek: cele w kategoriach ── */}
       <div style={{ minWidth: 0 }}>
         {active.length === 0 && !adding && (
@@ -380,7 +382,7 @@ export default function GoalsView() {
       </div>
 
       {/* ── prawa kolumna: osiągnięte i nawyki bez celu ── */}
-      <div style={{ minWidth: 0, position: isWide ? "sticky" : "static", top: 16, display: "grid", gap: 12 }}>
+      <div style={{ minWidth: 0, position: L.sideSticky ? "sticky" : "static", top: 16, display: "grid", gap: 12 }}>
         {achieved.length > 0 && (
           <div style={{ background: "#161616", border: "1px solid #1e1e1e", borderRadius: 14, padding: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -427,6 +429,7 @@ export default function GoalsView() {
             );
           })}
         </div>
+      </div>
       </div>
     </div>
   );

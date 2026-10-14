@@ -389,6 +389,9 @@ export function HabitHex({ stats, selected, onSelect, size = 300, center, descri
   };
   const suma = stats.reduce((a, s) => ({ done: a.done + s.done, total: a.total + s.total }), { done: 0, total: 0 });
   const rIkony = R * (HEX_R0 + 1) / 2;
+  // Ikony i liczba w środku rosną razem z figurą (od 300 px w górę) — przy
+  // 420 px stałe 17 px zostawiało drobne kropki na dużych wycinkach.
+  const k = Math.max(1, size / 300);
   const rKola = R * HEX_R0 - HEX_LUZ;
   return (
     <svg viewBox={`0 0 ${size} ${(2 * R * SIN_MAX + HEX_PAD * 2).toFixed(1)}`} width="100%"
@@ -408,14 +411,14 @@ export function HabitHex({ stats, selected, onSelect, size = 300, center, descri
             <path className="tor" d={wedge(i, 1)} fill={s.cat.color} fillOpacity={0.09}
               stroke={s.cat.color} strokeOpacity={selected === s.cat.label ? 0.9 : 0.35} strokeWidth={selected === s.cat.label ? 2 : 1} />
             {frac > 0 && <path className="wypelnienie" d={wedge(i, frac)} fill={s.cat.color} fillOpacity={0.92} />}
-            <text x={ix} y={iy + 6} textAnchor="middle" fontSize={17} style={{ pointerEvents: "none" }}>{s.cat.icon}</text>
+            <text x={ix} y={iy + 6 * k} textAnchor="middle" fontSize={17 * k} style={{ pointerEvents: "none" }}>{s.cat.icon}</text>
           </g>
         );
       })}
       {/* środek: suma ze wszystkich kategorii */}
       <circle cx={cx} cy={cy} r={rKola.toFixed(1)} fill="#0e0e0e" stroke="#232323" />
-      <text x={cx} y={cy - 1} textAnchor="middle" fontSize={19} fontWeight="700" fill="#f1f1f1">{center ? center.value : `${suma.done}/${suma.total}`}</text>
-      <text x={cx} y={cy + 14} textAnchor="middle" fontSize={10} fill={INK.faint}>{center ? center.label : "dziś"}</text>
+      <text x={cx} y={cy - 1 * k} textAnchor="middle" fontSize={19 * k} fontWeight="700" fill="#f1f1f1">{center ? center.value : `${suma.done}/${suma.total}`}</text>
+      <text x={cx} y={cy + 14 * k} textAnchor="middle" fontSize={10 * k} fill={INK.faint}>{center ? center.label : "dziś"}</text>
     </svg>
   );
 }

@@ -370,11 +370,27 @@ Dwie rzeczy w geometrii, które nie są oczywiste:
   i obrys zaznaczonego wycinka (2 px) był obcinany przez kontener. Teraz zapas
   wynosi 3 px z każdej strony — zmierzone przy 320, 390 i 1280 px.
 
-Układ na szerokim ekranie: **sześciokąt po lewej** (przyklejony przy
-przewijaniu), **nawyki w środku**, lista niewolnika po prawej. Kolumny boczne
-mają stałą szerokość, środek bierze resztę — przy 1000 px zostaje na nawyki
-około 370 px, czyli tyle, ile karta nawyku ma na telefonie. Poniżej tego progu
-wszystko idzie jedno pod drugim.
+Układ (`habLayout` w `lib/ui.js`, wspólny dla nawyków i celów, żeby
+przełączenie widoku nie przestawiało kolumn):
+
+| Szerokość | Kolumny | Sześciokąt |
+|---|---|---|
+| ≥ 1360 px | sześciokąt 460 \| lista 500 \| boczna 340, wyśrodkowane | 424 px |
+| 1000–1359 px | sześciokąt 420 \| lista 500, kolumna boczna pod listą | 386 px |
+| < 1000 px | jedna kolumna, najwyżej 560 px, wyśrodkowana | do 440 px (telefon 360 px: 318) |
+
+Lista ma stałą szerokość, bo rozciągnięta do ~690 px robiła z karty nawyku
+pasek, przez który oko przechodzi pół ekranu od kółka do kosza. Trzy kolumny
+między 1000 a 1360 px zostawiały na środek 326 px albo ściskały sześciokąt do
+266 px — stąd przejście na dwie. Lista i kolumna boczna siedzą we wspólnym
+opakowaniu, które w układzie trzy- i jednokolumnowym ma `display: contents`
+(jego dzieci są zwykłymi komórkami siatki), a w dwukolumnowym jest własną
+kolumną. `hexSize` to faktycznie dostępna szerokość — viewBox większy od
+miejsca skalowałby podpisy w dół — a ikony i liczba w środku rosną razem
+z figurą od 300 px w górę.
+
+Przełącznik „Nawyki | Cele" stoi jak główna nawigacja: 680 px, wyśrodkowany,
+ten sam wygląd przycisków.
 
 Każda kategoria jest **listą rozwijaną**: nagłówek z kropką koloru, nazwą,
 paskiem postępu i licznikiem, pod nim nawyki. Rozwinięta jest zawsze co najwyżej

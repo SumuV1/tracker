@@ -7,7 +7,7 @@ export const MOBILE = "(max-width: 640px)";
 export const NARROW = "(max-width: 380px)";
 // poniżej tej szerokości kolumny obok siebie robią się za ciasne
 export const WIDE = "(min-width: 1000px)";
-// cztery kafle kategorii obok siebie mają sens dopiero przy takiej szerokości
+// od tej szerokości zakładka nawyków ma trzy kolumny (habLayout niżej)
 export const XWIDE = "(min-width: 1360px)";
 
 export function useMedia(query) {
@@ -46,6 +46,37 @@ export const CATEGORIES = [
   { label: "Czas dla siebie",  short: "Dla siebie", icon: "🧘", color: "#a94cff" },
 ].map(c => ({ ...c, bg: c.color + "26" }));
 export const CAT_BY_LABEL = Object.fromEntries(CATEGORIES.map(c => [c.label, c]));
+
+// Układ zakładki nawyków — wspólny dla widoku nawyków i celów, żeby
+// przełączenie nie przestawiało kolumn. Trzy pudełka: sześciokąt, lista
+// (kategorie) i kolumna boczna; lista i boczna siedzą we wspólnym `rest`.
+//  • ≥ 1360 px: trzy kolumny 460 | 500 | 340, wyśrodkowane. Środek ma stałą
+//    szerokość, bo rozciągnięty do 690 px robił z karty nawyku pasek, przez
+//    który oko przechodzi pół ekranu od kółka do kosza.
+//  • 1000–1359 px: dwie kolumny, kolumna boczna schodzi pod listę. Trzy
+//    kolumny w tym zakresie zostawiały na środek 326 px albo ściskały
+//    sześciokąt do 266 px — jedno z dwóch zawsze było za małe.
+//  • poniżej: jedna kolumna, najwyżej 560 px, żeby na tablecie karty nie
+//    rozjeżdżały się na całą szerokość.
+// `rest` ma `display: contents` wszędzie poza układem dwukolumnowym — jego
+// dzieci są wtedy zwykłymi komórkami siatki. `hexSize` to szerokość
+// sześciokąta w px, równa temu, co faktycznie ma do dyspozycji: viewBox
+// większy od miejsca skalowałby podpisy w dół.
+export function habLayout({ isMobile, isWide, isXWide }) {
+  const base = { display: "grid", gap: 16, alignItems: "start" };
+  if (isXWide) return {
+    grid: { ...base, gridTemplateColumns: "460px minmax(0,500px) 340px", justifyContent: "center" },
+    rest: { display: "contents" }, sideSticky: true, hexSize: 424,
+  };
+  if (isWide) return {
+    grid: { ...base, gridTemplateColumns: "420px minmax(0,500px)", justifyContent: "center" },
+    rest: { display: "grid", gap: 16, alignContent: "start", minWidth: 0 }, sideSticky: false, hexSize: 386,
+  };
+  return {
+    grid: { ...base, gridTemplateColumns: "minmax(0,1fr)", maxWidth: 560, margin: "0 auto" },
+    rest: { display: "contents" }, sideSticky: false, hexSize: isMobile ? 326 : 440,
+  };
+}
 export const DAY_LABELS = ["N","P","W","Ś","C","P","S"];
 export const MONTHS_PL = ["Sty","Lut","Mar","Kwi","Maj","Cze","Lip","Sie","Wrz","Paź","Lis","Gru"];
 // Kolory tekstu wtórnego — jedyne dozwolone szarości na tekst, który niesie
