@@ -8,3 +8,11 @@ in whole or in part, for commercial or noncommercial purposes, without
 the prior written consent of the copyright owner.
 
 All rights reserved.
+
+Third-party components
+
+The body and muscle illustration in frontend/src/lib/bodyArt.js is derived
+from react-muscle-highlighter 1.2.0 (https://github.com/soroojshehryar/react-muscle-highlighter),
+Copyright (c) 2024 My Muscle Contributors, used under the MIT License.
+The full MIT License text is reproduced in that file. The restrictions above
+do not apply to that component.

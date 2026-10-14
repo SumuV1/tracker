@@ -70,6 +70,7 @@ tracker/
 │       │   ├── ui.js         # breakpointy, tokeny kolorów i czcionek, daty, kb()
 │       │   ├── router.js     # zakładki jako ścieżki (history.pushState)
 │       │   ├── muscles.js    # słownik mięśni sylwetki (MUSCLES, warstwy)
+│       │   ├── bodyArt.js    # ścieżki sylwetki i mięśni (generowane, MIT)
 │       │   ├── muscleGuess.js # podpowiedź mięśni z nazw dnia i ćwiczeń
 │       │   └── appContext.js # kontekst: stan i akcje z App dla zakładek
 │       ├── components/       # buttons, charts, calendar, FormulaPanel, LoginScreen
@@ -83,6 +84,7 @@ tracker/
     ├── db-init.sh               # schemat na już działającej bazie
     ├── create-user.sh           # zakłada konto (rejestracja jest zamknięta)
     ├── migrate-kv.sh            # kv_store → tabele, dla wskazanego konta
+    ├── gen-body-art.mjs         # frontend/src/lib/bodyArt.js z grafiki MIT (ręcznie)
     └── gen-self-signed-cert.sh
 ```
 
@@ -518,57 +520,54 @@ liczy układu — więc to sprawdzenie idzie po źródle CSS.
 
 #### Mapa mięśni
 
-Sylwetka jest rysowana wyłącznie dla prawej połowy ciała, lewa powstaje przez
-odbicie względem osi — symetria wynika więc z konstrukcji, nie z pilnowania
-współrzędnych. Kształt mięśnia jest **jednocześnie grafiką i obszarem
-klikalnym**; wcześniej były to dwie niezależne warstwy, które do siebie nie
-pasowały, przez co klikało się obok tego, co widać.
+**Grafika pochodzi z `react-muscle-highlighter` 1.2.0 (licencja MIT).** Wcześniej
+sylwetka i kształty były rysowane ręcznie (z poszerzaniem sylwetki i audytem
+pikselowym, że nic nie wystaje); anatomiczne kształty z otwartej biblioteki
+wyglądają lepiej przy mniejszym koszcie utrzymania. Grafiki z MuscleWiki,
+która była punktem odniesienia, **nie wolno** użyć — regulamin serwisu
+zabrania kopiowania i publikowania treści bez pisemnej zgody.
+
+Z biblioteki bierzemy wyłącznie dane ścieżek, nie komponent. Leżą w
+`frontend/src/lib/bodyArt.js`, generowanym skryptem `scripts/gen-body-art.mjs`
+(instrukcja uruchomienia w nagłówku skryptu). Generator przypisuje kształty do
+**naszych** identyfikatorów z `MUSCLES`, więc słownik, ćwiczenia, plany
+i walidacja planów (`shared/planSchema.mjs`) nie zmieniły się ani o klucz.
+Dwie rzeczy, których nie widać z samego wyniku:
+
+- **Zbiorcze grupy biblioteki są rozdzielone na nasze mięśnie** — po
+  geometrii: „neck" to szeroki szyi (środek), mostkowo-obojczykowo-sutkowy
+  (ukośny pas od ucha do mostka) i pochyłe (wąski pas z boku); „obliques" to
+  zębaty przedni (trzy palce pod pachą) i skośne; „adductors" to krawiecki
+  (najdłuższy ukośny pas do przyśrodkowej strony kolana) i przywodziciele;
+  „upper-back" to najszerszy grzbietu i podgrzebieniowy (z obłym — słownik nie
+  ma go osobno). Dzięki temu wszystkie 24 mięśnie mają kształt z tej samej
+  grafiki i nic nie trzeba było dorysowywać.
+- **Przypisanie idzie po lustrzanej ramce kształtu, nie po indeksie.** Po
+  prawej stronie biblioteki ścieżki „upper-back" i „lower-back" leżą w innej
+  kolejności niż po lewej — przypisanie po numerze dawało po jednej stronie
+  najszerszy w miejscu podgrzebieniowego.
+
+**Licencja MIT wymaga zachowania noty w kopiach**, a minifikator usuwa zwykłe
+komentarze. Nota jest więc komentarzem „prawnym" `/*! … */`, który przechodzi do
+zbudowanego bundla — sprawdzone grepem po `public/assets/*.js` w obrazie.
+Wzmianka o komponencie jest też w `LICENCE`.
+
+Układ współrzędnych: 1448 × 1448, przód x 0–724 (oś 364), tył x 724–1448
+(oś 1084). Kadry `BODY_VIEW`: obie sylwetki albo jedna (telefon, przełącznik
+PRZÓD / TYŁ). Kształt mięśnia jest **jednocześnie grafiką i obszarem
+klikalnym**; pod nim leży wypełniony kontur sylwetki i części ciała bez mięśni
+w słowniku (głowa, dłonie, stopy, kolana, kostki).
 
 Mięśnie mają przypisaną warstwę anatomiczną (`MUSCLE_LAYER`): 18 powierzchownych
-i 6 głębokich. Przełącznik pokazuje jedną naraz — mięśnie spoza wybranej warstwy
-zostają ledwie widocznym tłem i **nie reagują na kliknięcia**. To rozwiązuje
-problem zasłaniania: zębaty przedni schowany pod piersiowym czy prostownik
-grzbietu pod najszerszym są dostępne bez walki z tym, co leży na wierzchu.
+i 6 głębokich. Przełącznik pokazuje jedną naraz — mięśnie spoza wybranej
+warstwy są przygaszone i **nie reagują na kliknięcia**. W tej grafice kształty
+na siebie nie zachodzą, więc przygaszenie wynosi 0,18, a nie dawne 0,06
+(kiedy głęboki leżał pod powierzchownym i musiał zniknąć): inaczej w miejscu
+łopatek, lędźwi i boków szyi zostawały w sylwetce dziury.
 
-**Kształty muszą mieścić się w sylwetce i jest to mierzone, nie oceniane
-okiem.** `miesnie-audyt.mjs` renderuje sylwetkę bez tła do maski pikseli,
-zwęża ją o 2 px (mięsień ma obrys do 1,8 px, więc samo „w środku" nie
-wystarcza), renderuje każdy kształt osobno i liczy piksele poza maską. Przy
-pierwszym uruchomieniu wyciekało 22 z 48 ścieżek — przedramię **55 %** swojej
-powierzchni miało poza ręką, przywodziciele 23 % w szparze między udami,
-łydka 11 % poza łydką. Poprawione współrzędne wzięły się z pomiaru krawędzi
-ciała (`obrys.mjs` wypisuje przedziały wypełnienia w danym wierszu), nie
-z prób na oko. Stan docelowy i utrzymywany przez regresję: **zero pikseli poza
-obrysem**. Poza sylwetkę wychodzi już tylko `drop-shadow` podświetlenia — to
-efekt świadomy, nie kształt.
-
-**Sylwetka jest szersza, niż była.** Postać poszerza funkcja zależna od
-wysokości: `x' = oś + (x − oś) · f(y)`, gdzie `f` idzie od 1,00 na głowie przez
-**1,23 w barkach**, **1,07 w talii** (to właśnie wąska talia przy szerokich
-barkach czyta się jako „umięśniony") do 1,15 w udach. Ta sama funkcja
-przekształca ciało **i** mięśnie, więc nie mogą się rozjechać. Kadry
-`BODY_VIEW` musiały się poszerzyć z 235 na 303 jednostki — postać zajmuje teraz
-x 55–344 i dawny wycinek obcinałby dłonie.
-
-**Rozmiary mięśni są dopasowane do kończyn liczbowo.** `dopasuj.mjs` mierzy dla
-każdego kształtu „wypełnienie": jego szerokość podzieloną przez szerokość
-*części sylwetki*, na której leży (sylwetka jest złożona z osobnych ścieżek —
-tors, ramię, noga — i to one są pojemnikami; wcześniejsza wersja brała cały
-przekrój ciała w wierszu i wychodziło, że biceps wypełnia 19 % zamiast 61 %).
-Potem każdy kształt jest powiększany zachłannie — szerokość, długość
-i przesunięcie na zewnątrz od osi — dopóki mieści się w sylwetce i nie wchodzi
-na sąsiada (budżet nachodzenia: 2 % własnej powierzchni, żeby mięśnie mogły się
-stykać bez czarnych szpar). Kurczenia nie ma: kształt, który już się mieści, nie
-ma powodu maleć, a deltoid „ponad 100 %" nie wystaje z ciała — leży na granicy
-ramienia i barku.
-
-Pokrycie części sylwetki mięśniami po dopasowaniu: tors z tyłu **91 %**, szyja
-z przodu 88 %, uda i łydki 74–78 %, tors z przodu 71–73 %, ramiona 58–59 %
-(było 34 %). Celowane 85 % osiąga to, co ma jednolitą płaszczyznę mięśniową;
-ramiona i nogi zatrzymują się niżej, bo w ich obrysie mieszczą się **dłoń,
-stopa i stawy**, dla których ta mapa nie ma żadnego mięśnia. Rastrowanie
-w pętli robi własny scanline (`raster.mjs`) — resvg wyczerpywał pamięć maszyny
-po kilkuset kształtach; pełnorozdzielczy audyt zostaje na resvg.
+Sprawdzone w Chrome: każda ze 115 ścieżek ma punkt, w który da się trafić
+(nic jej nie przykrywa), klik otwiera panel ćwiczeń dla każdego z 24 mięśni,
+na telefonie 360 px mapa ma 334 × 645 px bez poziomego przewijania.
 
 #### Plany treningowe
 
