@@ -1,5 +1,5 @@
-import { useRef, useState, useLayoutEffect } from "react";
-import { MONO, INK, today, plDate, plTime } from "../lib/ui.js";
+import { useRef } from "react";
+import { MONO, INK, today, plDate, plTime, useFitHeight } from "../lib/ui.js";
 import { kb } from "../lib/ui.js";
 import { IconBtn, DeleteBtn } from "../components/buttons.jsx";
 import { TabIntro } from "../components/TabIntro.jsx";
@@ -43,22 +43,7 @@ export default function StabilityTab(){
   // — flex-shrink zabiera najwięcej największym.
   const wide=isWide;
   const gridRef=useRef(null);
-  const [fitH,setFitH]=useState(null);
-  useLayoutEffect(()=>{
-    if(!wide){setFitH(null);return;}
-    // Górna krawędź siatki zależy od nagłówka i panelu ustawień w App, więc
-    // liczymy ją na żywo: przy zmianie okna i każdej zmianie wysokości strony.
-    // Nie zapętla się — wysokość siatki nie wpływa na jej własną górę.
-    const fit=()=>{
-      const el=gridRef.current;if(!el)return;
-      const top=el.getBoundingClientRect().top+window.scrollY;
-      setFitH(Math.max(STAB_MIN_H,Math.floor(window.innerHeight-top-STAB_BOTTOM)));
-    };
-    fit();
-    const ro=new ResizeObserver(fit);ro.observe(document.body);
-    window.addEventListener("resize",fit);
-    return()=>{ro.disconnect();window.removeEventListener("resize",fit);};
-  },[wide]);
+  const fitH=useFitHeight(gridRef,wide,{min:STAB_MIN_H,bottom:STAB_BOTTOM});
   const card={background:"#161616",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?14:18,marginBottom:14,
     ...(wide&&{marginBottom:0,flex:"0 1 auto",minHeight:120,overflowY:"auto"})};
   const chip=(on,color)=>({background:on?color+"22":"#0f0f0f",border:`1px solid ${on?color:"#2a2a2a"}`,borderRadius:20,

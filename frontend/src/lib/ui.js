@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect } from "react";
 
 // ── RESPONSYWNOŚĆ ─────────────────────────────────────────────────────────
 // Layout jest budowany na stylach inline, więc breakpointy bierzemy z JS
@@ -22,6 +22,30 @@ export function useMedia(query) {
     return () => mq.removeEventListener("change", onChange);
   }, [query]);
   return matches;
+}
+
+// Wysokość od górnej krawędzi elementu do dołu okna — dla zakładek, które na
+// szerokim ekranie mają się zmieścić bez przewijania strony (Stabilizacja,
+// Mięśnie). Górna krawędź zależy od nagłówka i panelu ustawień w App, więc
+// liczymy ją na żywo: przy zmianie okna i każdej zmianie wysokości strony.
+// Nie zapętla się — wysokość elementu nie wpływa na jego własną górę.
+// `bottom` to dolny padding kontenera w App; poniżej `min` strona zwyczajnie
+// się przewija. Wyłączone (`enabled` = false) zwraca null.
+export function useFitHeight(ref, enabled, { min = 480, bottom = 24 } = {}) {
+  const [h, setH] = useState(null);
+  useLayoutEffect(() => {
+    if (!enabled) { setH(null); return; }
+    const fit = () => {
+      const el = ref.current; if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      setH(Math.max(min, Math.floor(window.innerHeight - top - bottom)));
+    };
+    fit();
+    const ro = new ResizeObserver(fit); ro.observe(document.body);
+    window.addEventListener("resize", fit);
+    return () => { ro.disconnect(); window.removeEventListener("resize", fit); };
+  }, [ref, enabled, min, bottom]);
+  return h;
 }
 
 // Sześć kategorii nawyków — kolejność jest też kolejnością wycinków w

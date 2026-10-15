@@ -768,9 +768,11 @@ export default function App() {
       {/* `key` na zakładce jest po to, żeby animacja wejścia (.wejscie)
           odpalała się przy każdej zmianie zakładki, a nie raz na starcie. */}
       <div key={mainTab} className="wejscie"
-        style={{maxWidth:mainTab==="nawyki"?1400:mainTab==="miesnie"||mainTab==="kalorie"?1180:
-          // Stabilizacja od 1000 px sama bierze 90% szerokości (kafle w kolumnach).
-          mainTab==="stabilizacja"&&isWide?"none":680,margin:"0 auto"}}>
+        style={{maxWidth:mainTab==="nawyki"?1400:
+          // Mięśnie od 1000 px zajmują cały ekran (trzy kolumny dopasowane do
+          // okna); Stabilizacja sama bierze 90% szerokości (kafle w kolumnach).
+          (mainTab==="miesnie"||mainTab==="stabilizacja")&&isWide?"none":
+          mainTab==="miesnie"||mainTab==="kalorie"?1180:680,margin:"0 auto"}}>
         {mainTab==="nawyki"&&<HabitsTab/>}
         {mainTab==="kalorie"&&<CaloriesTab/>}
         {mainTab==="miesnie"&&<MuscleMap profile={serverProfile}/>}

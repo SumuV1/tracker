@@ -548,6 +548,15 @@ Dwie rzeczy, których nie widać z samego wyniku:
   kolejności niż po lewej — przypisanie po numerze dawało po jednej stronie
   najszerszy w miejscu podgrzebieniowego.
 
+**Układ.** Od 1000 px zakładka zajmuje cały ekran w trzech kolumnach
+dopasowanych do wysokości okna (`useFitHeight` w `lib/ui.js`, to samo co
+w Stabilizacji): wąska kolumna wyboru planu (pole tekstu na słowo z 8 liter,
+dłuższe nazwy łamią się), w środku przełącznik warstw, rząd dni planu
+i sylwetka, po prawej panel dnia, ćwiczeń albo „O planie" (opis i zasady
+wspólne). Środkowa kolumna jest dokładnie tak szeroka, jak wynika z wysokości
+sylwetki i proporcji grafiki — resztę ekranu dostaje prawy panel. Na węższym
+ekranie wszystko stoi jedno pod drugim, jak wcześniej.
+
 **Ćwiczenia.** Panel mięśnia pokazuje sześć ćwiczeń z `MUSCLES` plus
 dodatkowe z `frontend/src/lib/exerciseDb.js` — 66 popularnych ćwiczeń
 wybranych z [free-exercise-db](https://github.com/yuhonas/free-exercise-db)
