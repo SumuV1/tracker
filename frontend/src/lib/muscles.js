@@ -1,5 +1,5 @@
-// Słownik mięśni sylwetki: nazwa, funkcja, kolor, ćwiczenia na dany mięsień
-// i warstwa anatomiczna. Osobny moduł, bo poza mapą korzysta z niego edytor
+// Słownik mięśni sylwetki: nazwa, funkcja, kolor i ćwiczenia na dany mięsień.
+// Osobny moduł, bo poza mapą korzysta z niego edytor
 // planów (chipy mięśni) — a klucze muszą zgadzać się z MUSCLE_IDS
 // w shared/planSchema.mjs.
 export const MUSCLES = {
@@ -27,33 +27,4 @@ export const MUSCLES = {
   sternocleidomastoid:{name:"Mostkowo-obojczykowo-sutkowy",latin:"Sternocleidomastoideus",function:"Obrót głowy, zginanie szyi, unoszenie mostka przy wdechu",location:"Szyja – od wyrostka sutkowatego do mostka i obojczyka",side:"front",color:"#E040FB",exercises:[{name:"Zginanie szyi na maszynie",sets:"3 × 12–15",tip:"Bardzo lekki ciężar, powolny pełen zakres.",icon:"⚙️"},{name:"Rotacja szyi z linką",sets:"3 × 12",tip:"Minimalny opór, kontrola.",icon:"⚙️"},{name:"Zginanie boczne w uprzęży",sets:"3 × 12",tip:"Unikaj gwałtownych szarpnięć.",icon:"⚙️"},{name:"Zginanie szyi z oporem dłoni",sets:"3 × 15",tip:"Dłoń na czole, opór ręki.",icon:"🤲"},{name:"Unoszenie głowy leżąc",sets:"3 × 12",tip:"Unoś brodę ku klatce, kontrolowany powrót.",icon:"⬆️"},{name:"Rotacja głowy z oporem",sets:"3 × 15",tip:"Dłoń na policzku, obracaj przeciw oporowi.",icon:"🔄"}]},
   scalenes:{name:"Mięśnie pochyłe szyi",latin:"Musculi scaleni",function:"Zginanie boczne szyi, stabilizacja, unoszenie żeber (wdech)",location:"Boczna część szyi – do dwóch górnych żeber",side:"front",color:"#CE93D8",exercises:[{name:"Zginanie boczne w maszynie",sets:"3 × 12",tip:"Minimalne obciążenie, priorytet techniki.",icon:"⚙️"},{name:"Boczne zginanie z linką",sets:"3 × 12",tip:"Powolne pochylanie ku barkowi.",icon:"⚙️"},{name:"Trening oddechowy z oporem",sets:"3 × 2 min",tip:"Aktywuje pochyłe jako mięśnie oddechu.",icon:"⚙️"},{name:"Boczne zginanie z oporem dłoni",sets:"3 × 12",tip:"Ruch powolny, bez kompensacji barkiem.",icon:"🤲"},{name:"Rozciąganie boczne szyi",sets:"3 × 30 s",tip:"Opuść bark, delikatnie pociągnij głowę.",icon:"↔️"},{name:"Oddychanie przeponowe",sets:"3 × 2 min",tip:"Świadome rozluźnienie mięśni szyi.",icon:"🧘"}]},
   platysma:{name:"Mięsień szeroki szyi (Platysma)",latin:"Platysma",function:"Napinanie skóry szyi, opuszczanie żuchwy, mimika",location:"Powierzchowna szyja – od obojczyka do żuchwy",side:"front",color:"#F48FB1",exercises:[{name:"Ćwiczenie oporowe żuchwy",sets:"3 × 12",tip:"Bardzo lekkie obciążenie, kontrola.",icon:"⚙️"},{name:"Elektrostymulacja (EMS)",sets:"2 × 15 min",tip:"Uzupełnienie, nie zastępstwo ćwiczeń.",icon:"⚙️"},{name:"Oporowy uchwyt podbródka",sets:"3 × 12",tip:"Poprawia napięcie powierzchowne szyi.",icon:"⚙️"},{name:"Cofanie żuchwy (Chin Tuck)",sets:"3 × 15",tip:"'Podwójny podbródek', pauza 3 s.",icon:"↩️"},{name:"Opór przy otwieraniu ust",sets:"3 × 12",tip:"Dłoń pod żuchwą, otwieraj przeciw oporowi.",icon:"🤲"},{name:"Grymas platysma",sets:"3 × 15",tip:"Ściągnij kąciki ust w dół, trzymaj 5 s.",icon:"😬"}]},
-};
-
-// Warstwa anatomiczna: "deep" leży pod "surface". Przełącznik w interfejsie
-// pokazuje jedną naraz, dzięki czemu mięśnie głębokie przestają być zasłonięte.
-export const MUSCLE_LAYER = {
-  platysma:"surface",
-  sternocleidomastoid:"deep",
-  scalenes:"deep",
-  deltoid_front:"surface",
-  pectoralis:"surface",
-  serratus:"deep",
-  rectus_abdominis:"surface",
-  obliques:"surface",
-  biceps:"surface",
-  forearm_front:"surface",
-  quadriceps:"surface",
-  sartorius:"surface",
-  adductors:"deep",
-  tibialis:"surface",
-  trapezius:"surface",
-  deltoid_back:"surface",
-  infraspinatus:"deep",
-  latissimus:"surface",
-  erector_spinae:"deep",
-  triceps:"surface",
-  forearm_back:"surface",
-  gluteus:"surface",
-  hamstrings:"surface",
-  gastrocnemius:"surface",
 };

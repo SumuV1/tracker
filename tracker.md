@@ -69,7 +69,7 @@ tracker/
 │       ├── lib/
 │       │   ├── ui.js         # breakpointy, tokeny kolorów i czcionek, daty, kb()
 │       │   ├── router.js     # zakładki jako ścieżki (history.pushState)
-│       │   ├── muscles.js    # słownik mięśni sylwetki (MUSCLES, warstwy)
+│       │   ├── muscles.js    # słownik mięśni sylwetki (MUSCLES)
 │       │   ├── bodyArt.js    # ścieżki sylwetki i mięśni (generowane, MIT)
 │       │   ├── muscleGuess.js # podpowiedź mięśni z nazw dnia i ćwiczeń
 │       │   ├── exerciseDb.js # ćwiczenia dodatkowe z free-exercise-db (domena publiczna)
@@ -551,11 +551,11 @@ Dwie rzeczy, których nie widać z samego wyniku:
 **Układ.** Od 1000 px zakładka zajmuje cały ekran w trzech kolumnach
 dopasowanych do wysokości okna (`useFitHeight` w `lib/ui.js`, to samo co
 w Stabilizacji): wąska kolumna wyboru planu (pole tekstu na słowo z 8 liter,
-dłuższe nazwy łamią się), w środku przełącznik warstw, rząd dni planu
-i sylwetka, po prawej panel dnia, ćwiczeń albo „O planie" (opis i zasady
-wspólne). Środkowa kolumna jest dokładnie tak szeroka, jak wynika z wysokości
-sylwetki i proporcji grafiki — resztę ekranu dostaje prawy panel. Na węższym
-ekranie wszystko stoi jedno pod drugim, jak wcześniej.
+dłuższe nazwy łamią się), w środku sylwetka, po prawej panel dnia, ćwiczeń
+albo „O planie" (opis i zasady wspólne). Rząd dni planu stoi nad sylwetką
+i panelem, a te dwa dzielą wiersz i równe kolumny — są tej samej wielkości.
+Całość zajmuje 90% szerokości. Na węższym ekranie wszystko stoi jedno pod
+drugim.
 
 **Ćwiczenia.** Panel mięśnia pokazuje sześć ćwiczeń z `MUSCLES` plus
 dodatkowe z `frontend/src/lib/exerciseDb.js` — 66 popularnych ćwiczeń
@@ -579,12 +579,11 @@ PRZÓD / TYŁ). Kształt mięśnia jest **jednocześnie grafiką i obszarem
 klikalnym**; pod nim leży wypełniony kontur sylwetki i części ciała bez mięśni
 w słowniku (głowa, dłonie, stopy, kolana, kostki).
 
-Mięśnie mają przypisaną warstwę anatomiczną (`MUSCLE_LAYER`): 18 powierzchownych
-i 6 głębokich. Przełącznik pokazuje jedną naraz — mięśnie spoza wybranej
-warstwy są przygaszone i **nie reagują na kliknięcia**. W tej grafice kształty
-na siebie nie zachodzą, więc przygaszenie wynosi 0,18, a nie dawne 0,06
-(kiedy głęboki leżał pod powierzchownym i musiał zniknąć): inaczej w miejscu
-łopatek, lędźwi i boków szyi zostawały w sylwetce dziury.
+Wszystkie 24 mięśnie są aktywne naraz — **nie ma podziału na warstwy**.
+Dawny przełącznik „powierzchowne / głębokie" istniał dla starej grafiki,
+w której głęboki mięsień leżał pod powierzchownym; w tej kształty na siebie
+nie zachodzą, więc przełącznik niczego nie odsłaniał, a chował połowę dnia
+planu (plecy: najszerszy powierzchowny, prostownik głęboki).
 
 Sprawdzone w Chrome: każda ze 115 ścieżek ma punkt, w który da się trafić
 (nic jej nie przykrywa), klik otwiera panel ćwiczeń dla każdego z 24 mięśni,
@@ -654,11 +653,8 @@ Każdy dzień rozdziela mięśnie na dwie role:
 | `primary` | partia, pod którą ułożony jest dzień | pełny kolor, biały obrys, poświata |
 | `support` | mięśnie wspomagające i stabilizujące w tych ćwiczeniach | kolor przygaszony, bez obrysu |
 
-Partia dnia potrafi leżeć w obu warstwach naraz (plecy: najszerszy jest
-powierzchowny, prostownik grzbietu głęboki), więc mięśnie dnia **prześwitują
-też spod nieaktywnej warstwy** — widać, że coś tam jest, a nad sylwetką
-pojawia się skrót do przełączenia warstwy. Kliknięcie etykiety mięśnia
-w karcie dnia przełącza warstwę samo.
+Kliknięcie etykiety mięśnia w karcie dnia otwiera jego ćwiczenia, tak samo
+jak kliknięcie kształtu na sylwetce.
 
 Dzień cardio liczy zakres tętna ze wzoru Tanaki (`208 − 0,7 × wiek`), biorąc
 wiek z profilu. Bez uzupełnionego profilu pokazuje sam wzór i odsyła do

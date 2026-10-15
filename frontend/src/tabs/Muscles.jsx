@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { MOBILE, useMedia, INK, MONO, plDate, useFitHeight } from "../lib/ui.js";
 import { WEEKDAYS, todayKey, maxHeartRate } from "../plans.js";
-import { MUSCLES, MUSCLE_LAYER } from "../lib/muscles.js";
+import { MUSCLES } from "../lib/muscles.js";
 import { exercisesFor } from "../lib/exerciseDb.js";
 import { BODY_VIEW, BODY_OUTLINE, BODY_PARTS, BODY_HAIR, MUSCLE_PATHS } from "../lib/bodyArt.js";
 import { useApp } from "../lib/appContext.js";
@@ -20,7 +20,7 @@ import PlanEditor, { downloadPlan, EXAMPLE, ACC } from "./PlanEditor.jsx";
 
 // `fill`: na szerokim ekranie sylwetka wypełnia ramkę o wysokości dopasowanej
 // do okna (proporcje zostają — viewBox wpisuje się w środek).
-function BodySVG({selected,hovered,onHover,onClick,layer,viewBox=BODY_VIEW.both,plan=null,fill=false}){
+function BodySVG({selected,hovered,onHover,onClick,viewBox=BODY_VIEW.both,plan=null,fill=false}){
   return(
     <svg viewBox={viewBox} style={{display:"block",width:"100%",height:fill?"100%":"auto"}} role="group" aria-label="Mapa mięśni">
       <rect x="0" y="0" width="1448" height="1448" fill="#121215"/>
@@ -31,36 +31,30 @@ function BodySVG({selected,hovered,onHover,onClick,layer,viewBox=BODY_VIEW.both,
       {BODY_HAIR.map((d,i)=><path key={"h"+i} d={d} fill="#18181d" stroke="#0e0e10" strokeWidth={1.5}/>)}
       {Object.entries(MUSCLE_PATHS).map(([id,dArr])=>{
         const m=MUSCLES[id];
-        const onLayer=MUSCLE_LAYER[id]===layer;
         const isHov=hovered===id, isSel=selected===id;
         // Rola w wybranym dniu planu: główna partia, mięsień wspomagający
         // albo nic. Bez planu wszystkie mięśnie są równorzędne.
         const role=plan?(plan.primary.has(id)?"primary":plan.support.has(id)?"support":"off"):null;
-        // Mięsień spoza wybranej warstwy jest przygaszony i nie reaguje na
-        // kliknięcia. W tej grafice kształty na siebie nie zachodzą, więc nie
-        // musi znikać jak dawniej (0,06 — leżał POD powierzchownym): przy
-        // 0,18 zostaje kształtem mięśnia zamiast dziury w sylwetce. Przy
-        // aktywnym planie mięśnie dnia prześwitują spod warstwy mocniej —
-        // kliknąć da się po zmianie warstwy.
+        // Wszystkie mięśnie są aktywne naraz: w tej grafice kształty na siebie
+        // nie zachodzą, więc podział na warstwy (powierzchowna/głęboka)
+        // niczego nie odsłaniał — tylko chował połowę dnia planu.
         const fill=role
-          ?(onLayer
-            ?(role==="primary"?(isSel?0.95:isHov?0.9:0.82):role==="support"?(isSel||isHov?0.6:0.42):isHov?0.22:0.1)
-            :(role==="primary"?0.3:role==="support"?0.16:0.05))
-          :(!onLayer?0.18:isSel?0.95:isHov?0.8:0.62);
-        const outlined=onLayer&&(isSel||isHov||role==="primary");
-        const glow=isSel||(onLayer&&role==="primary");
+          ?(role==="primary"?(isSel?0.95:isHov?0.9:0.82):role==="support"?(isSel||isHov?0.6:0.42):isHov?0.22:0.1)
+          :(isSel?0.95:isHov?0.8:0.62);
+        const outlined=isSel||isHov||role==="primary";
+        const glow=isSel||role==="primary";
         // Grubości w jednostkach viewBoxu 1448 — ok. 1,5 raza więcej niż
         // w dawnym układzie 900, żeby na ekranie wyglądały tak samo.
         return dArr.map((d,i)=>(
           <path key={id+i} d={d} fill={m?.color||"#fff"} fillOpacity={fill}
             stroke={outlined?"#fff":"#0e0e10"}
-            strokeWidth={isSel?2.8:role==="primary"&&onLayer?2.3:isHov?2.1:1.5}
-            strokeOpacity={onLayer?(outlined?0.9:0.7):0.45}
-            style={{cursor:onLayer?"pointer":"default",pointerEvents:onLayer?"all":"none",
+            strokeWidth={isSel?2.8:role==="primary"?2.3:isHov?2.1:1.5}
+            strokeOpacity={outlined?0.9:0.7}
+            style={{cursor:"pointer",pointerEvents:"all",
               filter:glow?`drop-shadow(0 0 10px ${m?.color}bb)`:"none",
               transition:"fill-opacity 0.14s, filter 0.14s"}}
-            onMouseEnter={()=>onLayer&&onHover(id)} onMouseLeave={()=>onHover(null)}
-            onClick={()=>onLayer&&onClick(id)}/>
+            onMouseEnter={()=>onHover(id)} onMouseLeave={()=>onHover(null)}
+            onClick={()=>onClick(id)}/>
         ));
       })}
     </svg>
@@ -305,7 +299,7 @@ function PlanDayPanel({plan,dayKey,day,age,hovered,onPickMuscle,isMobile,fill=fa
     const m=MUSCLES[id];
     if(!m)return null;
     return(
-      <button key={id} onClick={()=>onPickMuscle(id)} title={`${m.name} — ${MUSCLE_LAYER[id]==="deep"?"warstwa głęboka":"warstwa powierzchowna"}`}
+      <button key={id} onClick={()=>onPickMuscle(id)} title={`${m.name} — pokaż ćwiczenia`}
         style={{background:primary?m.color+"33":"transparent",border:`1px solid ${m.color}${primary?"88":"44"}`,
           borderRadius:20,padding:"3px 10px",color:primary?"#f0f0f0":"#9a9a9a",fontSize:11,fontWeight:primary?600:500,cursor:"pointer"}}>
         <span style={{color:m.color,marginRight:5}}>●</span>{m.name}
@@ -423,7 +417,6 @@ export function MuscleMap({profile}){
   const [hovered,setHovered]=useState(null);
   const [selected,setSelected]=useState(null);
   const [side,setSide]=useState("front");
-  const [layer,setLayer]=useState("surface");
   const {plans,savePlan,deletePlan,isWide}=useApp();
   const wide=isWide;
   const [planId,setPlanId]=useState(null);
@@ -439,10 +432,6 @@ export function MuscleMap({profile}){
   const day=plan?plan.days[dayKey]:null;
   // Zbiory zamiast tablic — BodySVG pyta o przynależność raz na mięsień.
   const planHl=day?{primary:new Set(day.primary),support:new Set(day.support)}:null;
-  // Partia dnia potrafi leżeć w obu warstwach (np. plecy: najszerszy jest
-  // powierzchowny, prostownik głęboki). Podpowiadamy przełączenie zamiast
-  // ukrywać połowę dnia.
-  const hiddenPrimary=day?day.primary.filter(id=>MUSCLE_LAYER[id]!==layer):[];
   const pickPlan=id=>{
     setPlanId(prev=>prev===id?null:id);
     setDayKey(todayKey());setShowRules(false);
@@ -471,21 +460,14 @@ export function MuscleMap({profile}){
     return()=>{document.removeEventListener("keydown",onKey);document.body.style.overflow=prev;};
   },[isMobile,selected]);
   const pickMuscle=id=>{
-    setLayer(MUSCLE_LAYER[id]);
     setSelected(id);setHovered(null);
   };
   // na desktopie pokazujemy obie sylwetki naraz, na telefonie jedną wybraną
   const viewBox=isMobile?BODY_VIEW[side]:BODY_VIEW.both;
-  const switchLayer=l=>{
-    setLayer(l);
-    if(selected&&MUSCLE_LAYER[selected]!==l)setSelected(null);
-    setHovered(null);
-  };
-  const countIn=l=>Object.values(MUSCLE_LAYER).filter(x=>x===l).length;
 
   // ── Szeroki ekran: trzy kolumny dopasowane do okna ──
-  // Wysokość siatki to reszta okna pod opisem zakładki. Przełącznik warstw
-  // i dni planu stoją nad sylwetką i panelem razem, a sylwetka i panel
+  // Wysokość siatki to reszta okna pod opisem zakładki. Dni planu stoją nad
+  // sylwetką i panelem razem, a sylwetka i panel
   // ćwiczeń dzielą jeden wiersz i dwie równe kolumny — są tej samej wielkości.
   const gridRef=useRef(null);
   const fitH=useFitHeight(gridRef,wide,{min:520});
@@ -649,33 +631,6 @@ export function MuscleMap({profile}){
       })}
     </div>
   );
-  const layerSwitch=(
-    <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:14,maxWidth:420,marginLeft:"auto",marginRight:"auto"}}>
-      {[["surface","Powierzchowne"],["deep","Głębokie"]].map(([k,l])=>(
-        <button key={k} onClick={()=>switchLayer(k)} style={{flex:1,background:layer===k?"#2a2a2a":"transparent",
-          border:"none",borderRadius:8,padding:"9px 6px",color:layer===k?"#fff":INK.soft,fontWeight:600,
-          cursor:"pointer",fontSize:12.5,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-          {l}<span style={{fontSize:10,color:layer===k?INK.soft:INK.faint}}>{countIn(k)}</span>
-        </button>
-      ))}
-    </div>
-  );
-  const layerNote=(
-    <div style={{fontSize:11,color:INK.muted,textAlign:"center",marginBottom:14,lineHeight:1.5}}>
-      {layer==="surface"
-        ? "Warstwa powierzchowna — mięśnie widoczne bezpośrednio pod skórą."
-        : "Warstwa głęboka — mięśnie leżące pod powierzchownymi, te przygaszone są nad nimi."}
-      {hiddenPrimary.length>0&&(
-        <div style={{marginTop:6,color:"#c8a24a"}}>
-          {hiddenPrimary.length===1?"Jeden mięsień":`${hiddenPrimary.length} mięśnie`} z tego dnia leży w drugiej warstwie —{" "}
-          <button onClick={()=>switchLayer(layer==="surface"?"deep":"surface")}
-            style={{background:"none",border:"none",padding:"6px 2px",color:"#c8a24a",textDecoration:"underline",cursor:"pointer",font:"inherit"}}>
-            przełącz warstwę
-          </button>.
-        </div>
-      )}
-    </div>
-  );
   const sideLabels=(
     isMobile?(
       <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:8}}>
@@ -690,7 +645,7 @@ export function MuscleMap({profile}){
       </div>
     )
   );
-  const body=<BodySVG viewBox={viewBox} layer={layer} plan={planHl} selected={selected} hovered={hovered} onHover={setHovered} onClick={id=>setSelected(p=>p===id?null:id)} fill={wide}/>;
+  const body=<BodySVG viewBox={viewBox} plan={planHl} selected={selected} hovered={hovered} onHover={setHovered} onClick={id=>setSelected(p=>p===id?null:id)} fill={wide}/>;
   const detail=(
     <div style={{...(wide?{minHeight:0,flex:1}:{flex:"1 1 260px",minHeight:isMobile?0:460}),minWidth:0,background:"#13161f",border:`1px solid ${selected?MUSCLES[selected]?.color+"55":day?(MUSCLES[day.primary[0]]?.color||"#5DCAA5")+"44":"#1e2130"}`,borderRadius:14,position:"relative",overflow:"hidden"}}>
       {!selected&&wide&&showRules&&plan&&<PlanInfoPanel plan={plan} onClose={()=>setShowRules(false)}/>}
@@ -735,21 +690,18 @@ export function MuscleMap({profile}){
       </TabIntro>
       {wide?(
         <div ref={gridRef} style={{display:"grid",columnGap:16,height:fitH??undefined,
-          gridTemplateColumns:"auto minmax(0,1fr) minmax(0,1fr)",gridTemplateRows:"auto auto auto minmax(0,1fr)"}}>
+          gridTemplateColumns:"auto minmax(0,1fr) minmax(0,1fr)",gridTemplateRows:"auto auto minmax(0,1fr)"}}>
           <div style={{gridColumn:1,gridRow:"1 / -1",display:"flex",minHeight:0}}>{planColumn}</div>
-          <div style={{gridColumn:"2 / 4",gridRow:1}}>{layerSwitch}{layerNote}</div>
-          <div style={{gridColumn:"2 / 4",gridRow:2}}>{planDays}</div>
-          <div style={{gridColumn:2,gridRow:3}}>{sideLabels}</div>
-          <div style={{gridColumn:2,gridRow:4,minHeight:0,borderRadius:12,border:"1px solid #1e2130",overflow:"hidden",background:"#121215"}}>
+          <div style={{gridColumn:"2 / 4",gridRow:1}}>{planDays}</div>
+          <div style={{gridColumn:2,gridRow:2}}>{sideLabels}</div>
+          <div style={{gridColumn:2,gridRow:3,minHeight:0,borderRadius:12,border:"1px solid #1e2130",overflow:"hidden",background:"#121215"}}>
             {body}
           </div>
-          <div style={{gridColumn:3,gridRow:4,minHeight:0,display:"flex"}}>{detail}</div>
+          <div style={{gridColumn:3,gridRow:3,minHeight:0,display:"flex"}}>{detail}</div>
         </div>
       ):(
         <>
           {planCard}
-          {layerSwitch}
-          {layerNote}
           <div style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
             <div style={{flex:"1 1 340px",minWidth:0}}>
               {sideLabels}
