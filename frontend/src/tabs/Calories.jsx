@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { INK, NUTRIENT, toISO, today, BF_SCALE, ACTIVITY, plDate , kb, DECIMAL_RE, parseDecimal } from "../lib/ui.js";
 import { IconBtn, DeleteBtn } from "../components/buttons.jsx";
+import { TabIntro } from "../components/TabIntro.jsx";
 import { FormulaPanel } from "../components/FormulaPanel.jsx";
 import { NutrientRings, MeasurementChart } from "../components/charts.jsx";
 import { CalYearView } from "../components/calendar.jsx";
@@ -37,6 +38,9 @@ export default function CaloriesTab(){
   );
   return(<>
     <div>
+      <TabIntro eyebrow="KALORIE I SYLWETKA" color="#667eea">
+        Licz, co jesz, i zapisuj pomiary. Dzienne zapotrzebowanie wylicza się z profilu w części „BMI & Profil".
+      </TabIntro>
       <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:20}}>
         {[["bmi","BMI & Profil"],["tracker","Licznik kalorii"]].map(([k,l])=>(
           <button key={k} onClick={()=>setBmiTab(k)} style={{flex:1,background:bmiTab===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"9px 8px",color:bmiTab===k?"#fff":INK.soft,fontWeight:600,cursor:"pointer",fontSize:isMobile?13:14}}>{l}</button>

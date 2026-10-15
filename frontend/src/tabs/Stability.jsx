@@ -2,6 +2,7 @@ import { useRef, useState, useLayoutEffect } from "react";
 import { MONO, INK, today, plDate, plTime } from "../lib/ui.js";
 import { kb } from "../lib/ui.js";
 import { IconBtn, DeleteBtn } from "../components/buttons.jsx";
+import { TabIntro } from "../components/TabIntro.jsx";
 import { MeasurementChart } from "../components/charts.jsx";
 import { STATES, STATE_MAP, GROUPS, TECHNIQUES, dailyPick } from "../stability.js";
 import { PILLARS, CANON, CANON_PRINCIPLES, canonAsPrinciple } from "../philosophy.js";
@@ -372,12 +373,9 @@ export default function StabilityTab(){
   const col=kids=><div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0,minHeight:0,overflowY:"auto"}}>{kids}</div>;
   return(
     <div style={wide?{maxWidth:"90%",margin:"0 auto"}:undefined}>
-      <div style={{textAlign:"center",marginBottom:16}}>
-        <div style={{fontSize:11,letterSpacing:"0.2em",color:ACC,fontWeight:600,fontFamily:MONO,marginBottom:6}}>STABILIZACJA EMOCJONALNA</div>
-        <div style={{fontSize:12,color:INK.soft,lineHeight:1.6,maxWidth:wide?900:520,margin:"0 auto"}}>
-          Nie chodzi o kierunek emocji, tylko o jej amplitudę. Nie da się regulować czegoś, czego się nie mierzy.
-        </div>
-      </div>
+      <TabIntro eyebrow="STABILIZACJA EMOCJONALNA" color={ACC}>
+        Nie chodzi o kierunek emocji, tylko o jej amplitudę. Nie da się regulować czegoś, czego się nie mierzy.
+      </TabIntro>
 
       {wide?(
         <div ref={gridRef} style={{display:"grid",gap:14,height:fitH??undefined,gridTemplateRows:"minmax(0,1fr)",

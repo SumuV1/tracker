@@ -3,6 +3,7 @@ import { IconBtn, DeleteBtn, TimePicker, TimePickerForm } from "../components/bu
 import { MonthView, YearView } from "../components/calendar.jsx";
 import { HabitHex } from "../components/charts.jsx";
 import { useApp } from "../lib/appContext.js";
+import { TabIntro } from "../components/TabIntro.jsx";
 import GoalsView from "./Goals.jsx";
 
 // Dwa widoki zakładki: nawyki (codzienne kroki) i cele (kierunek, pod który
@@ -31,6 +32,9 @@ export default function HabitsTab(){
   const { habView }=useApp();
   return(
     <div>
+      <TabIntro eyebrow="NAWYKI I CELE" color="#4ade80">
+        Odhaczaj nawyki każdego dnia — sześciokąt pokazuje, ile już za Tobą. Cele zbierają nawyki pod jeden kierunek.
+      </TabIntro>
       <ViewSwitch/>
       {habView==="cele"?<GoalsView/>:<HabitsView/>}
     </div>
