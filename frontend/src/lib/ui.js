@@ -164,6 +164,13 @@ export const mixHex = (a, b, t) => {
   return fromOklch([A[0] + (B[0] - A[0]) * u, A[1] + (B[1] - A[1]) * u, hA + d * u]);
 };
 
+// Liczby dziesiętne wpisywane z klawiatury. `type="number"` zależy od języka
+// przeglądarki: na komputerze z angielskim (i w Firefoksie) przecinek po prostu
+// znika, a pole zostaje puste. Dlatego pole tekstowe z `inputMode="decimal"`,
+// które przepuszcza cyfry z jednym separatorem — kropką albo przecinkiem.
+export const DECIMAL_RE = /^\d*[.,]?\d*$/;
+export const parseDecimal = v => Number(String(v).replace(",", "."));
+
 export const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 export const MINUTES = ["00","15","30","45"];
 export const TILE = 36;

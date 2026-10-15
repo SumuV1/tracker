@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "./api.js";
 import { STATE_MAP } from "./stability.js";
-import { MOBILE, NARROW, WIDE, XWIDE, useMedia, CATEGORIES, FONT, INK, toISO, today, getLast7, getBMILabel, bfColor, plDate } from "./lib/ui.js";
+import { MOBILE, NARROW, WIDE, XWIDE, useMedia, CATEGORIES, FONT, INK, toISO, today, getLast7, getBMILabel, bfColor, plDate, parseDecimal } from "./lib/ui.js";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { AppContext } from "./lib/appContext.js";
 import { TABS, HOME, START_OPTIONS, useRoute, calPath, habPath } from "./lib/router.js";
@@ -587,10 +587,13 @@ export default function App() {
   };
   const saveCustomFood=()=>run(async()=>{
     const {name,cal,p,c,f,fb,s}=customForm;
-    if(!name.trim()||cal==="")return;
+    const kcal=parseDecimal(cal);
+    if(!name.trim()||cal===""||!Number.isFinite(kcal))return;
     // Błonnik i sól mają własne pierścienie i dzienne cele, więc produkt bez
     // nich zaniżałby dzienną sumę zamiast po prostu jej nie ruszać.
-    const body={name,kcal:+cal,proteinG:+p||0,carbsG:+c||0,fatG:+f||0,fiberG:+fb||0,saltG:+s||0};
+    // Pola przyjmują kropkę i przecinek; puste albo samo „," liczy się jako zero.
+    const g=v=>parseDecimal(v)||0;
+    const body={name,kcal,proteinG:g(p),carbsG:g(c),fatG:g(f),fiberG:g(fb),saltG:g(s)};
     // Poprawka katalogu nie rusza wpisów w dzienniku — te trzymają wartości
     // z chwili dodania i opisują zjedzony posiłek, a nie dzisiejszy katalog.
     if(editFoodId)await api.patchFood(editFoodId,body);

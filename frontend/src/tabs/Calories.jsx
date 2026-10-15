@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { INK, NUTRIENT, toISO, today, BF_SCALE, ACTIVITY, plDate , kb } from "../lib/ui.js";
+import { INK, NUTRIENT, toISO, today, BF_SCALE, ACTIVITY, plDate , kb, DECIMAL_RE, parseDecimal } from "../lib/ui.js";
 import { IconBtn, DeleteBtn } from "../components/buttons.jsx";
 import { FormulaPanel } from "../components/FormulaPanel.jsx";
 import { NutrientRings, MeasurementChart } from "../components/charts.jsx";
@@ -16,6 +16,8 @@ export default function CaloriesTab(){
   const { foodCats, addFood, addMeasurement, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, closeCustomForm, closeModal, customForm, dailyTotals, dayGroups, dayLoading, deleteCustomFood, deleteMeasurement, editFoodId, editGramsId, deleteRecipe, dishes, editGramsVal, ensureYear, error, filtered, foodTab, foodsTruncated, grams, gramsNum, toggleDish, isMobile, isWide, measForm, measurements, modal, n1, offInfo, offLoading, offQuery, offResults, openGroups, profile, removeEntry, saveCustomFood, saveGrams, search, searchOff, selCat, selFood, serverProfile, setBmiTab, setCalDate, setChartMetric, setCustomForm, setEditGramsId, setEditGramsVal, setError, setGrams, setMeasForm, setFoodTab, setModal, setOffInfo, setOffQuery, setOffResults, setOpenGroups, setProfile, setSearch, setSelCat, setSelFood, setShowCustomForm, setShowMeasForm, showCustomForm, showMeasForm, startEditFood, tdee, todayEntries, totToday }=useApp();
   // Edytor przepisu: null = zamknięty, {} = nowy, obiekt dania = edycja.
   const [recipeEd,setRecipeEd]=useState(null);
+  // Samo „," albo „." przechodzi przez filtr pola, ale liczbą nie jest.
+  const customOk=customForm.name.trim()!==""&&customForm.cal!==""&&Number.isFinite(parseDecimal(customForm.cal));
   const entryActions=e=>editGramsId===e.id?(
     <div style={{display:"flex",alignItems:"center",gap:4}}>
       <input autoFocus type="number" step="any" min={0} inputMode="decimal" value={editGramsVal}
@@ -451,17 +453,17 @@ export default function CaloriesTab(){
                 {[["Kalorie (kcal)","cal",NUTRIENT.kcal],["Białko (g)","p",NUTRIENT.protein],
                   ["Węglowodany (g)","c",NUTRIENT.carbs],["Tłuszcze (g)","f",NUTRIENT.fat],
                   ["Błonnik (g)","fb",NUTRIENT.fiber],["Sól (g)","s",NUTRIENT.salt]].map(([label,key,color])=>(
-                  <input key={key} type="number" step="any" inputMode="decimal" placeholder={label} value={customForm[key]}
-                    onChange={e=>setCustomForm(f=>({...f,[key]:e.target.value}))}
+                  <input key={key} type="text" inputMode="decimal" autoComplete="off" placeholder={label} aria-label={label} value={customForm[key]}
+                    onChange={e=>{const v=e.target.value;if(DECIMAL_RE.test(v))setCustomForm(f=>({...f,[key]:v}));}}
                     style={{padding:"8px 12px",borderRadius:8,border:`1px solid ${customForm[key]!==""?color+"66":"#333"}`,background:"#161616",color:"#fff",fontSize:13,outline:"none"}}/>
                 ))}
               </div>
               <div style={{display:"flex",gap:8,marginTop:10}}>
-                <button onClick={saveCustomFood} disabled={!customForm.name.trim()||customForm.cal===""}
+                <button onClick={saveCustomFood} disabled={!customOk}
                   style={{flex:1,padding:"9px",borderRadius:8,border:"none",
-                    background:customForm.name&&customForm.cal!==""?"#c084fc":"#333",
-                    color:customForm.name&&customForm.cal!==""?"#000":INK.soft,fontWeight:700,fontSize:13,
-                    cursor:customForm.name&&customForm.cal!==""?"pointer":"not-allowed"}}>
+                    background:customOk?"#c084fc":"#333",
+                    color:customOk?"#000":INK.soft,fontWeight:700,fontSize:13,
+                    cursor:customOk?"pointer":"not-allowed"}}>
                   {editFoodId?"💾 Zapisz zmiany":"✅ Zapisz"}
                 </button>
                 {editFoodId&&(
