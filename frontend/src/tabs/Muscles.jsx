@@ -737,7 +737,9 @@ export function MuscleMap({profile}){
     </div>
   );
   return(
-    <div>
+    // Na szerokim ekranie 90% szerokości, jak Stabilizacja — na pełnej
+    // szerokości prawy panel rozciągał listę ćwiczeń na ~1000 px.
+    <div style={wide?{maxWidth:"90%",margin:"0 auto"}:undefined}>
       <TabIntro eyebrow="ANATOMIA INTERAKTYWNA" color="#5DCAA5">
         {isMobile?"Dotknij mięśnia, aby zobaczyć ćwiczenia. Plan treningowy podświetla mięśnie z wybranego dnia."
           :"Najedź na mięsień, aby go podejrzeć, i kliknij, aby zobaczyć ćwiczenia. Plan treningowy podświetla mięśnie z wybranego dnia."}
