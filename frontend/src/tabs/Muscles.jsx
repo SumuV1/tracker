@@ -6,6 +6,7 @@ import { exercisesFor } from "../lib/exerciseDb.js";
 import { BODY_VIEW, BODY_OUTLINE, BODY_PARTS, BODY_HAIR, MUSCLE_PATHS } from "../lib/bodyArt.js";
 import { useApp } from "../lib/appContext.js";
 import { DeleteBtn } from "../components/buttons.jsx";
+import { TabIntro } from "../components/TabIntro.jsx";
 import { MeasurementChart } from "../components/charts.jsx";
 import PlanEditor, { downloadPlan, EXAMPLE, ACC } from "./PlanEditor.jsx";
 
@@ -389,7 +390,11 @@ export function MuscleMap({profile}){
   const [selected,setSelected]=useState(null);
   const [side,setSide]=useState("front");
   const [layer,setLayer]=useState("surface");
-  const {plans,savePlan,deletePlan}=useApp();
+  const {plans,savePlan,deletePlan,isWide}=useApp();
+  const wide=isWide;
+  // Panel planu w wąskiej kolumnie (obok mapy) albo na telefonie: dni po cztery
+  // w rzędzie — siedem w 290 px dawało kafelki po 36 px z uciętymi nazwami.
+  const narrowPlan=isMobile||wide;
   const [planId,setPlanId]=useState(null);
   const [dayKey,setDayKey]=useState(todayKey);
   const [showRules,setShowRules]=useState(false);
@@ -448,168 +453,172 @@ export function MuscleMap({profile}){
   const countIn=l=>Object.values(MUSCLE_LAYER).filter(x=>x===l).length;
   return(
     <div>
-      <div style={{textAlign:"center",marginBottom:16}}>
-        <div style={{fontSize:11,letterSpacing:"0.2em",color:"#5DCAA5",fontWeight:600,fontFamily:MONO,marginBottom:6}}>ANATOMIA INTERAKTYWNA</div>
-        <div style={{fontSize:isMobile?18:22,fontWeight:700,color:"#f5f5f0"}}>Mapa Mięśni Człowieka</div>
-        <div style={{marginTop:6,fontSize:12,color:INK.soft}}>{isMobile?"Dotknij mięśnia, aby zobaczyć ćwiczenia":"Najedź, aby podejrzeć · Kliknij, aby zobaczyć ćwiczenia"}</div>
-      </div>
-      <div style={{background:"#13161f",border:"1px solid #1e2130",borderRadius:14,padding:isMobile?"12px 12px 14px":"14px 16px 16px",marginBottom:16}}>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:"#5DCAA5",fontFamily:MONO,marginBottom:9}}>PLAN TRENINGOWY</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-          {plans.map(p=>(
-            <button key={p.id} onClick={()=>pickPlan(p.id)} aria-pressed={planId===p.id} style={{background:planId===p.id?"#5DCAA522":"#0d0f16",
-              border:`1px solid ${planId===p.id?"#5DCAA5":"#262a38"}`,borderRadius:10,padding:"8px 14px",minHeight:40,
-              color:planId===p.id?"#5DCAA5":"#9a9a9a",fontWeight:600,fontSize:13,cursor:"pointer"}}>
-              {planId===p.id?"✓ ":""}{p.name}
-            </button>
-          ))}
-          <button onClick={()=>setEditor({initial:null,planId:null,mode:"form"})} style={{background:"transparent",border:"1px dashed #3a3f52",borderRadius:10,
-            padding:"8px 14px",minHeight:40,color:INK.soft,fontWeight:600,fontSize:13,cursor:"pointer"}}>＋ Nowy</button>
-          <button onClick={()=>setEditor({initial:null,planId:null,mode:"import"})} style={{background:"transparent",border:"1px dashed #3a3f52",borderRadius:10,
-            padding:"8px 14px",minHeight:40,color:INK.soft,fontWeight:600,fontSize:13,cursor:"pointer"}}>⤓ Import</button>
-        </div>
-        {!plans.length&&(
-          <div style={{marginTop:12,fontSize:12.5,color:"#9a9a9a",lineHeight:1.6}}>
-            Nie masz jeszcze planu. Zacznij od przykładowego — jest też wzorem pliku do importu.
-            <div style={{marginTop:8}}>
-              <button onClick={loadExample} disabled={exampleBusy} style={{background:ACC+"22",border:`1px solid ${ACC}`,borderRadius:10,padding:"9px 14px",minHeight:40,color:ACC,fontWeight:600,fontSize:13,cursor:"pointer"}}>
-                {exampleBusy?"Wgrywam…":"★ Wgraj przykład: Tyler Durden"}
+      <TabIntro eyebrow="ANATOMIA INTERAKTYWNA" color="#5DCAA5">
+        {isMobile?"Dotknij mięśnia, aby zobaczyć ćwiczenia. Plan treningowy podświetla mięśnie z wybranego dnia."
+          :"Najedź na mięsień, aby go podejrzeć, i kliknij, aby zobaczyć ćwiczenia. Plan treningowy podświetla mięśnie z wybranego dnia."}
+      </TabIntro>
+      {/* Od 1000 px plan stoi w lewej kolumnie obok mapy — na górze spychał
+          sylwetkę pod zgięcie ekranu. Na węższym ekranie zostaje nad mapą. */}
+      <div style={wide?{display:"grid",gridTemplateColumns:"minmax(280px,320px) minmax(0,1fr)",gap:16,alignItems:"start"}:undefined}>
+        <div style={{background:"#13161f",border:"1px solid #1e2130",borderRadius:14,padding:isMobile?"12px 12px 14px":"14px 16px 16px",marginBottom:wide?0:16}}>
+          <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:"#5DCAA5",fontFamily:MONO,marginBottom:9}}>PLAN TRENINGOWY</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+            {plans.map(p=>(
+              <button key={p.id} onClick={()=>pickPlan(p.id)} aria-pressed={planId===p.id} style={{background:planId===p.id?"#5DCAA522":"#0d0f16",
+                border:`1px solid ${planId===p.id?"#5DCAA5":"#262a38"}`,borderRadius:10,padding:"8px 14px",minHeight:40,
+                color:planId===p.id?"#5DCAA5":"#9a9a9a",fontWeight:600,fontSize:13,cursor:"pointer"}}>
+                {planId===p.id?"✓ ":""}{p.name}
               </button>
-            </div>
+            ))}
+            <button onClick={()=>setEditor({initial:null,planId:null,mode:"form"})} style={{background:"transparent",border:"1px dashed #3a3f52",borderRadius:10,
+              padding:"8px 14px",minHeight:40,color:INK.soft,fontWeight:600,fontSize:13,cursor:"pointer"}}>＋ Nowy</button>
+            <button onClick={()=>setEditor({initial:null,planId:null,mode:"import"})} style={{background:"transparent",border:"1px dashed #3a3f52",borderRadius:10,
+              padding:"8px 14px",minHeight:40,color:INK.soft,fontWeight:600,fontSize:13,cursor:"pointer"}}>⤓ Import</button>
           </div>
-        )}
-        {plan&&(
-          <>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginTop:10}}>
-              <button onClick={()=>setEditor({initial:planRow.data,planId:planRow.id,mode:"form"})} style={{background:"transparent",border:"1px solid #262a38",borderRadius:8,padding:"7px 12px",minHeight:36,color:"#c9c9c9",fontWeight:600,fontSize:12,cursor:"pointer"}}>✎ Edytuj</button>
-              <button onClick={()=>downloadPlan(planRow.data)} style={{background:"transparent",border:"1px solid #262a38",borderRadius:8,padding:"7px 12px",minHeight:36,color:"#c9c9c9",fontWeight:600,fontSize:12,cursor:"pointer"}}>⤒ Eksportuj JSON</button>
-              <button onClick={()=>pickPlan(planId)} style={{background:"transparent",border:"1px solid #262a38",borderRadius:8,padding:"7px 12px",minHeight:36,color:INK.soft,fontWeight:600,fontSize:12,cursor:"pointer"}}>Wyłącz</button>
-              <span style={{marginLeft:"auto"}}><DeleteBtn onDelete={()=>removePlan(planId)} title="Usuń plan"/></span>
-            </div>
-            {plan.summary&&<div style={{fontSize:11.5,color:"#7a7a7a",marginTop:10,lineHeight:1.5}}>{plan.summary}</div>}
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(4,1fr)":"repeat(7,1fr)",gap:6,marginTop:12}}>
-              {WEEKDAYS.map(w=>{
-                const d=plan.days[w.key];
-                const on=dayKey===w.key, isToday=todayKey()===w.key;
-                const c=MUSCLES[d.primary[0]]?.color||"#5a5a5a";
-                return(
-                  <button key={w.key} onClick={()=>{setDayKey(w.key);setSelected(null);}}
-                    style={{background:on?c+"26":"#0d0f16",border:`1px solid ${on?c:"#262a38"}`,borderRadius:10,
-                      padding:"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                    <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.08em",fontFamily:MONO,color:on?c:INK.muted}}>
-                      {w.short.toUpperCase()}{isToday?" •":""}
-                    </span>
-                    <span style={{fontSize:11,fontWeight:600,color:on?"#f0f0f0":d.rest?INK.faint:"#8a8a8a"}}>{d.short}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{fontSize:10.5,color:INK.faint,marginTop:7}}>Kropka oznacza dzisiejszy dzień.</div>
-            {plan.rules&&(
-              <div style={{marginTop:10,borderTop:"1px solid #1e2130",paddingTop:10}}>
-                <button onClick={()=>setShowRules(v=>!v)} style={{background:"none",border:"none",padding:"8px 0",minHeight:36,cursor:"pointer",
-                  color:"#5DCAA5",fontSize:11,fontWeight:700,letterSpacing:"0.1em",fontFamily:MONO}}>
-                  {showRules?"▾":"▸"} ZASADY WSPÓLNE
+          {!plans.length&&(
+            <div style={{marginTop:12,fontSize:12.5,color:"#9a9a9a",lineHeight:1.6}}>
+              Nie masz jeszcze planu. Zacznij od przykładowego — jest też wzorem pliku do importu.
+              <div style={{marginTop:8}}>
+                <button onClick={loadExample} disabled={exampleBusy} style={{background:ACC+"22",border:`1px solid ${ACC}`,borderRadius:10,padding:"9px 14px",minHeight:40,color:ACC,fontWeight:600,fontSize:13,cursor:"pointer"}}>
+                  {exampleBusy?"Wgrywam…":"★ Wgraj przykład: Tyler Durden"}
                 </button>
-                {showRules&&(
-                  <div style={{marginTop:10,display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,1fr)",gap:10}}>
-                    {plan.rules.map((r,i)=>(
-                      <div key={i} style={{background:"#0d0f16",border:"1px solid #1e2130",borderRadius:10,padding:"10px 12px"}}>
-                        <div style={{fontSize:12,fontWeight:600,color:"#e0e0e0",marginBottom:4}}>{r.title}</div>
-                        <div style={{fontSize:11.5,color:"#8a8a8a",lineHeight:1.6}}>{r.text}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
-            )}
-          </>
-        )}
-      </div>
-
-      <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:14,maxWidth:420,marginLeft:"auto",marginRight:"auto"}}>
-        {[["surface","Powierzchowne"],["deep","Głębokie"]].map(([k,l])=>(
-          <button key={k} onClick={()=>switchLayer(k)} style={{flex:1,background:layer===k?"#2a2a2a":"transparent",
-            border:"none",borderRadius:8,padding:"9px 6px",color:layer===k?"#fff":INK.soft,fontWeight:600,
-            cursor:"pointer",fontSize:12.5,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-            {l}<span style={{fontSize:10,color:layer===k?INK.soft:INK.faint}}>{countIn(k)}</span>
-          </button>
-        ))}
-      </div>
-      <div style={{fontSize:11,color:INK.muted,textAlign:"center",marginBottom:14,lineHeight:1.5}}>
-        {layer==="surface"
-          ? "Warstwa powierzchowna — mięśnie widoczne bezpośrednio pod skórą."
-          : "Warstwa głęboka — mięśnie leżące pod powierzchownymi, te przygaszone są nad nimi."}
-        {hiddenPrimary.length>0&&(
-          <div style={{marginTop:6,color:"#c8a24a"}}>
-            {hiddenPrimary.length===1?"Jeden mięsień":`${hiddenPrimary.length} mięśnie`} z tego dnia leży w drugiej warstwie —{" "}
-            <button onClick={()=>switchLayer(layer==="surface"?"deep":"surface")}
-              style={{background:"none",border:"none",padding:"6px 2px",color:"#c8a24a",textDecoration:"underline",cursor:"pointer",font:"inherit"}}>
-              przełącz warstwę
-            </button>.
-          </div>
-        )}
-      </div>
-
-      <div style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
-        <div style={{flex:"1 1 340px",minWidth:0}}>
-          {isMobile?(
-            <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:8}}>
-              {[["front","PRZÓD"],["back","TYŁ"]].map(([k,l])=>(
-                <button key={k} onClick={()=>setSide(k)} style={{flex:1,background:side===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"8px",color:side===k?"#fff":INK.soft,fontWeight:700,fontSize:11,letterSpacing:"0.15em",fontFamily:MONO,cursor:"pointer"}}>{l}</button>
-              ))}
-            </div>
-          ):(
-            <div style={{display:"flex",justifyContent:"space-around",marginBottom:6}}>
-              <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:INK.faint,fontFamily:MONO}}>PRZÓD</span>
-              <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:INK.faint,fontFamily:MONO}}>TYŁ</span>
             </div>
           )}
-          <div style={{borderRadius:12,border:"1px solid #1e2130",overflow:"hidden"}}>
-            <BodySVG viewBox={viewBox} layer={layer} plan={planHl} selected={selected} hovered={hovered} onHover={setHovered} onClick={id=>setSelected(p=>p===id?null:id)}/>
-          </div>
-        </div>
-        <div style={{flex:"1 1 260px",minWidth:0,minHeight:isMobile?0:460,background:"#13161f",border:`1px solid ${selected?MUSCLES[selected]?.color+"55":day?(MUSCLES[day.primary[0]]?.color||"#5DCAA5")+"44":"#1e2130"}`,borderRadius:14,position:"relative",overflow:"hidden"}}>
-          {!selected&&day&&(
-            <PlanDayPanel plan={plan} dayKey={dayKey} day={day} age={profile?.ageYears??null}
-              hovered={hovered} onPickMuscle={pickMuscle} isMobile={isMobile}/>
-          )}
-          {!selected&&!day&&(
-            <div style={{padding:"20px 18px"}}>
-              {hoveredMuscle?(
-                <div>
-                  <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:hoveredMuscle.color,marginBottom:6,fontFamily:MONO}}>{hoveredMuscle.side==="front"?"▶ PRZÓD":"◀ TYŁ"}</div>
-                  <div style={{fontSize:18,fontWeight:700,color:"#f0f0f0",marginBottom:4}}>{hoveredMuscle.name}</div>
-                  <div style={{fontSize:11.5,color:INK.soft,fontStyle:"italic",marginBottom:14}}>{hoveredMuscle.latin}</div>
-                  <div style={{width:40,height:2,background:hoveredMuscle.color,borderRadius:2,marginBottom:14}}/>
-                  <div style={{fontSize:12,color:"#888",lineHeight:1.6,marginBottom:8}}><span style={{color:INK.muted,fontSize:10,fontWeight:700,letterSpacing:"0.08em"}}>FUNKCJA</span><br/>{hoveredMuscle.function}</div>
-                  <div style={{fontSize:12,color:"#888",lineHeight:1.6}}><span style={{color:INK.muted,fontSize:10,fontWeight:700,letterSpacing:"0.08em"}}>LOKALIZACJA</span><br/>{hoveredMuscle.location}</div>
-                  <div style={{marginTop:20,fontSize:11,color:INK.faint,display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:14}}>👆</span> Kliknij, aby zobaczyć ćwiczenia</div>
-                </div>
-              ):(
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:isMobile?130:400,color:INK.faint,textAlign:"center",gap:12}}>
-                  <div style={{fontSize:isMobile?28:36}}>🫀</div>
-                  <div style={{fontSize:13,lineHeight:1.7,maxWidth:180}}>
-                    {isMobile
-                      ?<>Dotknij mięśnia na sylwetce, aby otworzyć plan ćwiczeń.</>
-                      :<>Najedź na mięsień na sylwetce, aby zobaczyć szczegóły.<br/><br/><span style={{color:INK.faint}}>Kliknij, aby otworzyć plan ćwiczeń.</span></>}
-                  </div>
+          {plan&&(
+            <>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginTop:10}}>
+                <button onClick={()=>setEditor({initial:planRow.data,planId:planRow.id,mode:"form"})} style={{background:"transparent",border:"1px solid #262a38",borderRadius:8,padding:"7px 12px",minHeight:36,color:"#c9c9c9",fontWeight:600,fontSize:12,cursor:"pointer"}}>✎ Edytuj</button>
+                <button onClick={()=>downloadPlan(planRow.data)} style={{background:"transparent",border:"1px solid #262a38",borderRadius:8,padding:"7px 12px",minHeight:36,color:"#c9c9c9",fontWeight:600,fontSize:12,cursor:"pointer"}}>⤒ Eksportuj JSON</button>
+                <button onClick={()=>pickPlan(planId)} style={{background:"transparent",border:"1px solid #262a38",borderRadius:8,padding:"7px 12px",minHeight:36,color:INK.soft,fontWeight:600,fontSize:12,cursor:"pointer"}}>Wyłącz</button>
+                <span style={{marginLeft:"auto"}}><DeleteBtn onDelete={()=>removePlan(planId)} title="Usuń plan"/></span>
+              </div>
+              {plan.summary&&<div style={{fontSize:11.5,color:"#7a7a7a",marginTop:10,lineHeight:1.5}}>{plan.summary}</div>}
+              <div style={{display:"grid",gridTemplateColumns:narrowPlan?"repeat(4,1fr)":"repeat(7,1fr)",gap:6,marginTop:12}}>
+                {WEEKDAYS.map(w=>{
+                  const d=plan.days[w.key];
+                  const on=dayKey===w.key, isToday=todayKey()===w.key;
+                  const c=MUSCLES[d.primary[0]]?.color||"#5a5a5a";
+                  return(
+                    <button key={w.key} onClick={()=>{setDayKey(w.key);setSelected(null);}}
+                      style={{background:on?c+"26":"#0d0f16",border:`1px solid ${on?c:"#262a38"}`,borderRadius:10,
+                        padding:"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                      <span style={{fontSize:9.5,fontWeight:700,letterSpacing:"0.08em",fontFamily:MONO,color:on?c:INK.muted}}>
+                        {w.short.toUpperCase()}{isToday?" •":""}
+                      </span>
+                      <span style={{fontSize:11,fontWeight:600,color:on?"#f0f0f0":d.rest?INK.faint:"#8a8a8a"}}>{d.short}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{fontSize:10.5,color:INK.faint,marginTop:7}}>Kropka oznacza dzisiejszy dzień.</div>
+              {plan.rules&&(
+                <div style={{marginTop:10,borderTop:"1px solid #1e2130",paddingTop:10}}>
+                  <button onClick={()=>setShowRules(v=>!v)} style={{background:"none",border:"none",padding:"8px 0",minHeight:36,cursor:"pointer",
+                    color:"#5DCAA5",fontSize:11,fontWeight:700,letterSpacing:"0.1em",fontFamily:MONO}}>
+                    {showRules?"▾":"▸"} ZASADY WSPÓLNE
+                  </button>
+                  {showRules&&(
+                    <div style={{marginTop:10,display:"grid",gridTemplateColumns:narrowPlan?"1fr":"repeat(2,1fr)",gap:10}}>
+                      {plan.rules.map((r,i)=>(
+                        <div key={i} style={{background:"#0d0f16",border:"1px solid #1e2130",borderRadius:10,padding:"10px 12px"}}>
+                          <div style={{fontSize:12,fontWeight:600,color:"#e0e0e0",marginBottom:4}}>{r.title}</div>
+                          <div style={{fontSize:11.5,color:"#8a8a8a",lineHeight:1.6}}>{r.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
+            </>
+          )}
+        </div>
+        <div style={{minWidth:0}}>
+          <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:14,maxWidth:420,marginLeft:"auto",marginRight:"auto"}}>
+            {[["surface","Powierzchowne"],["deep","Głębokie"]].map(([k,l])=>(
+              <button key={k} onClick={()=>switchLayer(k)} style={{flex:1,background:layer===k?"#2a2a2a":"transparent",
+                border:"none",borderRadius:8,padding:"9px 6px",color:layer===k?"#fff":INK.soft,fontWeight:600,
+                cursor:"pointer",fontSize:12.5,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                {l}<span style={{fontSize:10,color:layer===k?INK.soft:INK.faint}}>{countIn(k)}</span>
+              </button>
+            ))}
+          </div>
+          <div style={{fontSize:11,color:INK.muted,textAlign:"center",marginBottom:14,lineHeight:1.5}}>
+            {layer==="surface"
+              ? "Warstwa powierzchowna — mięśnie widoczne bezpośrednio pod skórą."
+              : "Warstwa głęboka — mięśnie leżące pod powierzchownymi, te przygaszone są nad nimi."}
+            {hiddenPrimary.length>0&&(
+              <div style={{marginTop:6,color:"#c8a24a"}}>
+                {hiddenPrimary.length===1?"Jeden mięsień":`${hiddenPrimary.length} mięśnie`} z tego dnia leży w drugiej warstwie —{" "}
+                <button onClick={()=>switchLayer(layer==="surface"?"deep":"surface")}
+                  style={{background:"none",border:"none",padding:"6px 2px",color:"#c8a24a",textDecoration:"underline",cursor:"pointer",font:"inherit"}}>
+                  przełącz warstwę
+                </button>.
+              </div>
+            )}
+          </div>
+
+          <div style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
+            <div style={{flex:"1 1 340px",minWidth:0}}>
+              {isMobile?(
+                <div style={{display:"flex",gap:4,background:"#161616",borderRadius:10,padding:4,marginBottom:8}}>
+                  {[["front","PRZÓD"],["back","TYŁ"]].map(([k,l])=>(
+                    <button key={k} onClick={()=>setSide(k)} style={{flex:1,background:side===k?"#2a2a2a":"transparent",border:"none",borderRadius:8,padding:"8px",color:side===k?"#fff":INK.soft,fontWeight:700,fontSize:11,letterSpacing:"0.15em",fontFamily:MONO,cursor:"pointer"}}>{l}</button>
+                  ))}
+                </div>
+              ):(
+                <div style={{display:"flex",justifyContent:"space-around",marginBottom:6}}>
+                  <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:INK.faint,fontFamily:MONO}}>PRZÓD</span>
+                  <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:INK.faint,fontFamily:MONO}}>TYŁ</span>
+                </div>
+              )}
+              <div style={{borderRadius:12,border:"1px solid #1e2130",overflow:"hidden"}}>
+                <BodySVG viewBox={viewBox} layer={layer} plan={planHl} selected={selected} hovered={hovered} onHover={setHovered} onClick={id=>setSelected(p=>p===id?null:id)}/>
+              </div>
+            </div>
+            <div style={{flex:"1 1 260px",minWidth:0,minHeight:isMobile?0:460,background:"#13161f",border:`1px solid ${selected?MUSCLES[selected]?.color+"55":day?(MUSCLES[day.primary[0]]?.color||"#5DCAA5")+"44":"#1e2130"}`,borderRadius:14,position:"relative",overflow:"hidden"}}>
+              {!selected&&day&&(
+                <PlanDayPanel plan={plan} dayKey={dayKey} day={day} age={profile?.ageYears??null}
+                  hovered={hovered} onPickMuscle={pickMuscle} isMobile={isMobile}/>
+              )}
+              {!selected&&!day&&(
+                <div style={{padding:"20px 18px"}}>
+                  {hoveredMuscle?(
+                    <div>
+                      <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:hoveredMuscle.color,marginBottom:6,fontFamily:MONO}}>{hoveredMuscle.side==="front"?"▶ PRZÓD":"◀ TYŁ"}</div>
+                      <div style={{fontSize:18,fontWeight:700,color:"#f0f0f0",marginBottom:4}}>{hoveredMuscle.name}</div>
+                      <div style={{fontSize:11.5,color:INK.soft,fontStyle:"italic",marginBottom:14}}>{hoveredMuscle.latin}</div>
+                      <div style={{width:40,height:2,background:hoveredMuscle.color,borderRadius:2,marginBottom:14}}/>
+                      <div style={{fontSize:12,color:"#888",lineHeight:1.6,marginBottom:8}}><span style={{color:INK.muted,fontSize:10,fontWeight:700,letterSpacing:"0.08em"}}>FUNKCJA</span><br/>{hoveredMuscle.function}</div>
+                      <div style={{fontSize:12,color:"#888",lineHeight:1.6}}><span style={{color:INK.muted,fontSize:10,fontWeight:700,letterSpacing:"0.08em"}}>LOKALIZACJA</span><br/>{hoveredMuscle.location}</div>
+                      <div style={{marginTop:20,fontSize:11,color:INK.faint,display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:14}}>👆</span> Kliknij, aby zobaczyć ćwiczenia</div>
+                    </div>
+                  ):(
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:isMobile?130:400,color:INK.faint,textAlign:"center",gap:12}}>
+                      <div style={{fontSize:isMobile?28:36}}>🫀</div>
+                      <div style={{fontSize:13,lineHeight:1.7,maxWidth:180}}>
+                        {isMobile
+                          ?<>Dotknij mięśnia na sylwetce, aby otworzyć plan ćwiczeń.</>
+                          :<>Najedź na mięsień na sylwetce, aby zobaczyć szczegóły.<br/><br/><span style={{color:INK.faint}}>Kliknij, aby otworzyć plan ćwiczeń.</span></>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {selected&&!isMobile&&<ExercisePanel muscleId={selected} onClose={()=>setSelected(null)}/>}
+            </div>
+          </div>
+          {editor&&<PlanEditor initial={editor.initial} planId={editor.planId} mode={editor.mode} onClose={closeEditor}/>}
+          {isMobile&&selected&&(
+            <div onClick={e=>{if(e.target===e.currentTarget)setSelected(null);}}
+              style={{position:"fixed",inset:0,zIndex:998,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"flex-end"}}>
+              <div style={{width:"100%"}}>
+                <ExercisePanel sheet muscleId={selected} onClose={()=>setSelected(null)}/>
+              </div>
             </div>
           )}
-          {selected&&!isMobile&&<ExercisePanel muscleId={selected} onClose={()=>setSelected(null)}/>}
         </div>
       </div>
-      {editor&&<PlanEditor initial={editor.initial} planId={editor.planId} mode={editor.mode} onClose={closeEditor}/>}
-      {isMobile&&selected&&(
-        <div onClick={e=>{if(e.target===e.currentTarget)setSelected(null);}}
-          style={{position:"fixed",inset:0,zIndex:998,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"flex-end"}}>
-          <div style={{width:"100%"}}>
-            <ExercisePanel sheet muscleId={selected} onClose={()=>setSelected(null)}/>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
