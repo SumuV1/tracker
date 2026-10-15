@@ -344,9 +344,10 @@ export function niceStep(raw) {
 // krawędzie u góry i u dołu): szerokość to 2R, wysokość 1,73R, czyli figura
 // wykorzystuje szerokość telefonu, a nie jego wysokość.
 const HEX_R0 = 0.36;           // wewnętrzny promień — tu zaczynają się wycinki
-const HEX_GAP = 1.6;           // odstęp między wycinkami w stopniach
+const HEX_GAP = 0.03;          // szerokość przerwy między wycinkami, ułamek R
 const HEX_PAD = 3;             // zapas w viewBoxie na obrys wycinka
 const HEX_LUZ = 6;             // odstęp koła ze statystyką od podstaw wycinków
+const TAN30 = Math.tan(Math.PI / 6);
 
 // Ten sam rysunek służy nawykom (dzisiejsze odhaczenia) i celom (regularność
 // podpiętych nawyków z tygodnia). Różnią się tylko podpisami — `center` to
@@ -357,50 +358,60 @@ export function HabitHex({ stats, selected, onSelect, size = 300, center, descri
   // wierzchołki leżały dokładnie na krawędzi, więc obrys (do 2 px) wychodził
   // poza kadr i był obcinany przez kontener.
   const R = size / 2 - HEX_PAD;
-  // Narożniki wycinków leżą na OKRĘGU o promieniu R, nie na prostych bokach
-  // sześciokąta — przez odstęp kątowy wypadają o kawałek wyżej niż wierzchołki
-  // (sin 118,4° = 0,880 wobec sin 120° = 0,866). Wysokość kadru liczymy więc
-  // z faktycznego zasięgu, inaczej zapas u góry i u dołu schodzi do 0,9 px
-  // i obrys zaznaczonego wycinka jest obcinany.
-  const SIN_MAX = Math.sin((120 - HEX_GAP) * Math.PI / 180);
-  const cx = size / 2, cy = HEX_PAD + R * SIN_MAX;
-  const pt = (deg, r) => {
-    const a = deg * Math.PI / 180;
-    return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
-  };
+  const A = R * Math.cos(Math.PI / 6);   // apotema: odległość boku od środka
+  const cx = size / 2, cy = HEX_PAD + A;
   const f = ([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`;
-  // Wycinek i: od kąta -120+i*60 do -60+i*60, czyli pierwszy siedzi na górnej
-  // krawędzi, a kolejne idą zgodnie z ruchem wskazówek zegara.
-  //
-  // Podstawa wycinka jest ŁUKIEM współśrodkowym z kołem w środku, nie cięciwą.
-  // Cięciwa w najbliższym punkcie schodzi do r₀·cos30° = 0,87·r₀, więc koło
-  // ze statystyką wchodziło w podstawy wycinków, choć jego promień był mniejszy
-  // od r₀. Łuk daje wszędzie ten sam odstęp (HEX_LUZ).
-  //
-  // Wypełnienie liczone po POLU, nie po promieniu: wycinek rozszerza się ku
-  // krawędzi, więc pole rośnie z kwadratem promienia. Przy prostym r₀+(R−r₀)·f
-  // połowa odhaczonych zajmowałaby trzy czwarte wycinka i rysunek kłamałby na
-  // korzyść.
+  // Wycinek i ma oś pod kątem -90+i*60, czyli pierwszy siedzi na górnej
+  // krawędzi, a kolejne idą zgodnie z ruchem wskazówek zegara. Punkty liczymy
+  // we współrzędnych wycinka: u wzdłuż osi od środka, v w poprzek.
+  const at = (i, u, v) => {
+    const a = (-90 + i * 60) * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
+    return [cx + u * c - v * sn, cy + u * sn + v * c];
+  };
+  // Wycinek to trójkąt sześciokąta PRZESUNIĘTY od środka o g wzdłuż swojej
+  // osi: boki to v = ±(u−g)·tg30°. Każdy bok odsuwa się wtedy od wspólnej
+  // granicy o g/2, więc boki sąsiadów są równoległe, a przerwa ma wszędzie
+  // szerokość g. Wcześniej boki były promieniami odchylonymi o stały kąt —
+  // przerwa rozszerzała się ku krawędzi, a narożniki leżały na okręgu R i
+  // sterczały poza boki sześciokąta. Teraz zewnętrzna krawędź to bok (u = A).
+  const g = R * HEX_GAP;
+  const half = u => (u - g) * TAN30;
+  // Podstawa wycinka jest ŁUKIEM współśrodkowym z kołem w środku, nie cięciwą:
+  // cięciwa w najbliższym punkcie schodziła pod promień r₀ i koło ze statystyką
+  // wchodziło w podstawy. Łuk przecina boki pod kątem φ od osi, gdzie
+  // r₀·sin φ = (r₀·cos φ − g)·tg30°, czyli sin(30° − φ) = g / (2r₀).
+  const r0 = R * HEX_R0;
+  const phi = Math.PI / 6 - Math.asin(g / (2 * r0));
+  const [u0, v0] = [r0 * Math.cos(phi), r0 * Math.sin(phi)];
+  // Wypełnienie liczone po POLU, nie po wysokości: wycinek rozszerza się ku
+  // krawędzi, więc przy liniowym u połowa odhaczonych zajmowałaby trzy
+  // czwarte wycinka i rysunek kłamałby na korzyść. Pole wycinka do poziomu u
+  // to tg30°·(u−g)² (trójkąt od wierzchołka u = g) minus część schowana pod
+  // łukiem: trójkąt do narożników łuku plus odcinek koła za jego cięciwą.
+  const T = u => TAN30 * (u - g) ** 2;
+  const under = (u0 - g) * v0 + r0 * r0 / 2 * (2 * phi - Math.sin(2 * phi));
   const wedge = (i, frac) => {
-    const a1 = -120 + i * 60 + HEX_GAP, a2 = -60 + i * 60 - HEX_GAP;
-    const r0 = R * HEX_R0, r1 = Math.sqrt(r0 * r0 + (R * R - r0 * r0) * frac);
-    return `M ${f(pt(a1, r0))} L ${f(pt(a1, r1))} L ${f(pt(a2, r1))} L ${f(pt(a2, r0))}`
-         + ` A ${r0.toFixed(1)} ${r0.toFixed(1)} 0 0 0 ${f(pt(a1, r0))} Z`;
+    // Poziom nie schodzi poniżej r₀ — inaczej łuk podstawy wystawałby ponad
+    // górną krawędź. Dotyczy to tylko ułamków poniżej ~3% (np. 1 z 40).
+    const u1 = Math.max(r0, g + Math.sqrt((under + frac * (T(A) - under)) / TAN30));
+    return `M ${f(at(i, u0, -v0))} L ${f(at(i, u1, -half(u1)))} L ${f(at(i, u1, half(u1)))} L ${f(at(i, u0, v0))}`
+         + ` A ${r0.toFixed(1)} ${r0.toFixed(1)} 0 0 0 ${f(at(i, u0, -v0))} Z`;
   };
   const suma = stats.reduce((a, s) => ({ done: a.done + s.done, total: a.total + s.total }), { done: 0, total: 0 });
-  const rIkony = R * (HEX_R0 + 1) / 2;
+  // Ikona w połowie pasa między łukiem podstawy a bokiem sześciokąta.
+  const rIkony = (r0 + A) / 2;
   // Ikony i liczba w środku rosną razem z figurą (od 300 px w górę) — przy
   // 420 px stałe 17 px zostawiało drobne kropki na dużych wycinkach.
   const k = Math.max(1, size / 300);
   const rKola = R * HEX_R0 - HEX_LUZ;
   return (
-    <svg viewBox={`0 0 ${size} ${(2 * R * SIN_MAX + HEX_PAD * 2).toFixed(1)}`} width="100%"
+    <svg viewBox={`0 0 ${size} ${(2 * A + HEX_PAD * 2).toFixed(1)}`} width="100%"
       style={{ display: "block", maxWidth: size, margin: "0 auto" }}
       role="group" aria-label={ariaLabel || "Sześć kategorii nawyków — dzisiejsze odhaczenia"}>
       {stats.map((s, i) => {
         const frac = s.total ? s.done / s.total : 0;
         const dim = selected && selected !== s.cat.label;
-        const [ix, iy] = pt(-90 + i * 60, rIkony);
+        const [ix, iy] = at(i, rIkony, 0);
         return (
           <g key={s.cat.label} onClick={() => onSelect(selected === s.cat.label ? null : s.cat.label)}
             onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(selected === s.cat.label ? null : s.cat.label); } }}
