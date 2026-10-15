@@ -462,17 +462,22 @@ export function MuscleMap({profile}){
       <div style={wide?{display:"grid",gridTemplateColumns:"minmax(280px,320px) minmax(0,1fr)",gap:16,alignItems:"start"}:undefined}>
         <div style={{background:"#13161f",border:"1px solid #1e2130",borderRadius:14,padding:isMobile?"12px 12px 14px":"14px 16px 16px",marginBottom:wide?0:16}}>
           <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.12em",color:"#5DCAA5",fontFamily:MONO,marginBottom:9}}>PLAN TRENINGOWY</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {/* Plany jeden pod drugim na całą szerokość kolumny — w rzędzie
+              z zawijaniem długie nazwy rozjeżdżały listę na nierówne wiersze. */}
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {plans.map(p=>(
-              <button key={p.id} onClick={()=>pickPlan(p.id)} aria-pressed={planId===p.id} style={{background:planId===p.id?"#5DCAA522":"#0d0f16",
-                border:`1px solid ${planId===p.id?"#5DCAA5":"#262a38"}`,borderRadius:10,padding:"8px 14px",minHeight:40,
-                color:planId===p.id?"#5DCAA5":"#9a9a9a",fontWeight:600,fontSize:13,cursor:"pointer"}}>
+              <button key={p.id} onClick={()=>pickPlan(p.id)} aria-pressed={planId===p.id} title={p.name} style={{background:planId===p.id?"#5DCAA522":"#0d0f16",
+                border:`1px solid ${planId===p.id?"#5DCAA5":"#262a38"}`,borderRadius:10,padding:"8px 14px",minHeight:40,width:"100%",textAlign:"left",
+                color:planId===p.id?"#5DCAA5":"#9a9a9a",fontWeight:600,fontSize:13,cursor:"pointer",
+                whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                 {planId===p.id?"✓ ":""}{p.name}
               </button>
             ))}
-            <button onClick={()=>setEditor({initial:null,planId:null,mode:"form"})} style={{background:"transparent",border:"1px dashed #3a3f52",borderRadius:10,
+          </div>
+          <div style={{display:"flex",gap:8,marginTop:plans.length?8:0}}>
+            <button onClick={()=>setEditor({initial:null,planId:null,mode:"form"})} style={{flex:1,background:"transparent",border:"1px dashed #3a3f52",borderRadius:10,
               padding:"8px 14px",minHeight:40,color:INK.soft,fontWeight:600,fontSize:13,cursor:"pointer"}}>＋ Nowy</button>
-            <button onClick={()=>setEditor({initial:null,planId:null,mode:"import"})} style={{background:"transparent",border:"1px dashed #3a3f52",borderRadius:10,
+            <button onClick={()=>setEditor({initial:null,planId:null,mode:"import"})} style={{flex:1,background:"transparent",border:"1px dashed #3a3f52",borderRadius:10,
               padding:"8px 14px",minHeight:40,color:INK.soft,fontWeight:600,fontSize:13,cursor:"pointer"}}>⤓ Import</button>
           </div>
           {!plans.length&&(
