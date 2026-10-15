@@ -72,6 +72,7 @@ tracker/
 │       │   ├── muscles.js    # słownik mięśni sylwetki (MUSCLES, warstwy)
 │       │   ├── bodyArt.js    # ścieżki sylwetki i mięśni (generowane, MIT)
 │       │   ├── muscleGuess.js # podpowiedź mięśni z nazw dnia i ćwiczeń
+│       │   ├── exerciseDb.js # ćwiczenia dodatkowe z free-exercise-db (domena publiczna)
 │       │   └── appContext.js # kontekst: stan i akcje z App dla zakładek
 │       ├── components/       # buttons, charts, calendar, FormulaPanel, LoginScreen
 │       └── tabs/             # Stability, Habits (+ Goals), Calories, Muscles (+ PlanEditor, RecipeEditor)
@@ -547,6 +548,17 @@ Dwie rzeczy, których nie widać z samego wyniku:
   kolejności niż po lewej — przypisanie po numerze dawało po jednej stronie
   najszerszy w miejscu podgrzebieniowego.
 
+**Ćwiczenia.** Panel mięśnia pokazuje sześć ćwiczeń z `MUSCLES` plus
+dodatkowe z `frontend/src/lib/exerciseDb.js` — 66 popularnych ćwiczeń
+wybranych z [free-exercise-db](https://github.com/yuhonas/free-exercise-db)
+(Unlicense, domena publiczna). Polskie nazwy, serie i wskazówki są nasze;
+`en` to nazwa w zbiorze. Mięśnie główne (`p`) i wspomagające (`s`) są
+przypisane ręcznie do naszych 24 identyfikatorów, bo zbiór ma tylko 17
+ogólnych grup („shoulders" nie odróżnia przedniego aktonu od tylnego).
+Ćwiczenie trafia do panelu każdego mięśnia z `p`. Ćwiczeń z MuscleWiki nie
+da się wziąć: strona blokuje automatyczne pobieranie, a regulamin zabrania
+kopiowania treści.
+
 **Licencja MIT wymaga zachowania noty w kopiach**, a minifikator usuwa zwykłe
 komentarze. Nota jest więc komentarzem „prawnym" `/*! … */`, który przechodzi do
 zbudowanego bundla — sprawdzone grepem po `public/assets/*.js` w obrazie.
@@ -620,7 +632,8 @@ przed zapisem obejrzeć dni, ćwiczenia i mięśnie. Dni edytuje się pojedynczo
 dotknięcie przełącza brak → partia główna → wspomagający. Przycisk
 „Podpowiedz z nazw" bierze mięśnie ze słownika
 `frontend/src/lib/muscleGuess.js` (nazwa dnia decyduje o partii, nazwy
-ćwiczeń dokładają wspomagające). Nieznane mięśnie z importowanego pliku
+ćwiczeń dokładają wspomagające; ćwiczenie o dokładnej nazwie z
+`exerciseDb.js` bierze stamtąd mięśnie przypisane ręcznie). Nieznane mięśnie z importowanego pliku
 wypadają z komunikatem — walidator by je odrzucił, a w formularzu nie
 dałoby się ich poprawić. „Eksportuj JSON" pobiera plan w tym samym formacie;
 `Anuluj` przy niezapisanych zmianach wymaga drugiego dotknięcia.

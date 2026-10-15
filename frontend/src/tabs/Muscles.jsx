@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { MOBILE, useMedia, INK, MONO, plDate } from "../lib/ui.js";
 import { WEEKDAYS, todayKey, maxHeartRate } from "../plans.js";
 import { MUSCLES, MUSCLE_LAYER } from "../lib/muscles.js";
+import { exercisesFor } from "../lib/exerciseDb.js";
 import { BODY_VIEW, BODY_OUTLINE, BODY_PARTS, BODY_HAIR, MUSCLE_PATHS } from "../lib/bodyArt.js";
 import { useApp } from "../lib/appContext.js";
 import { DeleteBtn } from "../components/buttons.jsx";
@@ -69,8 +70,9 @@ function BodySVG({selected,hovered,onHover,onClick,layer,viewBox=BODY_VIEW.both,
 function ExercisePanel({muscleId,onClose,sheet=false}){
   const m=MUSCLES[muscleId];
   if(!m)return null;
-  const machine=m.exercises.filter(e=>e.icon==="⚙️");
-  const free=m.exercises.filter(e=>e.icon!=="⚙️");
+  const all=exercisesFor(m,muscleId);
+  const machine=all.filter(e=>e.icon==="⚙️");
+  const free=all.filter(e=>e.icon!=="⚙️");
   const renderGroup=(list,title,badge)=>(
     <div style={{marginBottom:16}}>
       <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:m.color,marginBottom:10,fontFamily:MONO,display:"flex",alignItems:"center",gap:6}}><span>{badge}</span> {title}</div>

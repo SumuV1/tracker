@@ -16,3 +16,8 @@ from react-muscle-highlighter 1.2.0 (https://github.com/soroojshehryar/react-mus
 Copyright (c) 2024 My Muscle Contributors, used under the MIT License.
 The full MIT License text is reproduced in that file. The restrictions above
 do not apply to that component.
+
+The exercise selection in frontend/src/lib/exerciseDb.js is based on
+free-exercise-db (https://github.com/yuhonas/free-exercise-db), released
+into the public domain under the Unlicense. The Polish names, set schemes,
+tips and muscle assignments in that file are original to this project.

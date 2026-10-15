@@ -7,6 +7,8 @@
 //
 // Każdy wpis: [fragmenty…, { p: mięśnie główne, s: wspomagające }].
 
+import { exerciseMuscles } from "./exerciseDb.js";
+
 const LEGS = { p: ["quadriceps", "hamstrings", "gluteus", "gastrocnemius"], s: ["adductors", "erector_spinae", "sartorius"] };
 const CARDIO = { p: ["quadriceps", "hamstrings", "gastrocnemius", "gluteus"], s: ["tibialis"] };
 
@@ -79,7 +81,9 @@ export function guessMuscles(day) {
   if (fromTitle) { add(primary, fromTitle.p); add(support, fromTitle.s); }
 
   for (const ex of day.exercises || []) {
-    const m = match(EXERCISE_RULES, ex.name || "");
+    // Ćwiczenie z bazy (exerciseDb.js) ma mięśnie przypisane ręcznie —
+    // dokładniejsze niż reguła ze słowa kluczowego.
+    const m = exerciseMuscles(ex.name) || match(EXERCISE_RULES, ex.name || "");
     if (!m) continue;
     // Dzień bez rozpoznanej partii: ćwiczenia ją definiują. Z partią — tylko
     // dokładają wspomagające, żeby jedno wiosłowanie nie zamieniło „klatki"
