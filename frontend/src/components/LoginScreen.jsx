@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api.js";
 import { INK, FONT } from "../lib/ui.js";
+import { Herring } from "./Herring.jsx";
 
 export function LoginScreen({onLogged,notice=""}){
   const [login,setLogin]=useState("");
@@ -31,7 +32,7 @@ export function LoginScreen({onLogged,notice=""}){
       justifyContent:"center",padding:20,fontFamily:FONT,color:"#f1f1f1"}}>
       <form onSubmit={submit} style={{width:"100%",maxWidth:360,background:"#161616",
         border:"1px solid #1e1e1e",borderRadius:16,padding:28}}>
-        <h1 style={{margin:"0 0 4px",fontSize:24,fontWeight:700}}>🐟 Śledzik 🐠</h1>
+        <h1 style={{margin:"0 0 4px",fontSize:24,fontWeight:700,display:"flex",alignItems:"center",gap:"0.35em"}}><Herring flip/>Śledzik<Herring/></h1>
         <p style={{margin:"0 0 22px",color:"#888",fontSize:13}}>Zaloguj się, aby zobaczyć swoje dane.</p>
 
         <label style={{fontSize:12,color:"#888",display:"block",marginBottom:6}}>Login</label>

@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import { STATE_MAP } from "./stability.js";
 import { MOBILE, NARROW, WIDE, XWIDE, useMedia, CATEGORIES, FONT, INK, toISO, today, getLast7, getBMILabel, bfColor, plDate, parseDecimal } from "./lib/ui.js";
 import { LoginScreen } from "./components/LoginScreen.jsx";
+import { Herring } from "./components/Herring.jsx";
 import { AppContext } from "./lib/appContext.js";
 import { TABS, HOME, START_OPTIONS, useRoute, calPath, habPath } from "./lib/router.js";
 import HabitsTab from "./tabs/Habits.jsx";
@@ -685,6 +686,10 @@ export default function App() {
   if(loading)return splash("Ładowanie…");
 
   const ctx={ goals, goalCat, setGoalCat, goalsByHabit, addGoal, patchGoal, deleteGoal, linkHabit, addHabitToGoal, habView, setHabView, addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteRecipe, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, dishes, editTimeId, ensureYear, error, exEntry, exHistory, exLast, expandedHabit, filtered, foodCats, foodTab, foods, foodsTruncated, getStreak, getView, getWeeklyRate, grams, gramsNum, habCat, setHabCat, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, offInfo, offLoading, offQuery, offResults, openGroups, philOpen, philRule, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, openExHistory, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, saveEx, savePlan, saveRecipe, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setFoodTab, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffInfo, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPhilOpen, setPhilRule, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleDish, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
+  // Ten sam przycisk ustawień stoi po lewej (telefon) albo po prawej (komputer).
+  const gearBtn=(<button onClick={()=>setShowSettings(v=>!v)} aria-expanded={showSettings} aria-label="Ustawienia" title="Ustawienia"
+      style={{background:showSettings?"#2a2a2a":"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,minWidth:44,minHeight:isMobile?44:36,
+        padding:"0 10px",color:showSettings?"#fff":"#888",fontSize:16,cursor:"pointer"}}>⚙</button>);
   return(
     <AppContext.Provider value={ctx}>
     <div style={{background:"#0a0a0a",minHeight:"100vh",fontFamily:FONT,color:"#f1f1f1",padding:isMobile?"16px 12px 32px":"24px 16px"}}>
@@ -693,22 +698,31 @@ export default function App() {
           przeskakiwały przy każdej zmianie zakładki. */}
       <div style={{maxWidth:680,margin:"0 auto"}}>
 
-        {/* Header */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:isMobile?16:24}}>
-          <div style={{minWidth:0}}>
-            <h1 style={{margin:0,fontSize:isMobile?20:24,fontWeight:700}}>🐟 Śledzik 🐠</h1>
+        {/* Header — tytuł na środku. Boczne kolumny mają równą szerokość
+            (minmax(0,1fr)), więc przyciski po prawej nie spychają go w lewo.
+            Na telefonie ⚙ idzie na lewo, a ⏻ zostaje po prawej: obie strony
+            po 44 px, a dwa przyciski obok siebie nie zmieściłyby się obok
+            daty przy 320 px. „Zapisywanie…" wisi pod nagłówkiem w marginesie,
+            żeby nie zabierać miejsca w rzędzie ani nie przesuwać tytułu. */}
+        <div style={{position:"relative",display:"grid",gridTemplateColumns:"minmax(0,1fr) auto minmax(0,1fr)",alignItems:"center",columnGap:8,marginBottom:isMobile?16:24}}>
+          <div style={{justifySelf:"start"}}>
+            {isMobile&&gearBtn}
+          </div>
+          <div style={{minWidth:0,textAlign:"center"}}>
+            <h1 style={{margin:0,fontSize:isMobile?20:24,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:"0.35em"}}>
+              <Herring flip/>Śledzik<Herring/>
+            </h1>
             <p style={{margin:0,color:"#888",fontSize:isMobile?12:13,textTransform:"capitalize"}}>{new Date().toLocaleDateString("pl-PL",{weekday:"long",month:"long",day:"numeric"})}</p>
           </div>
-          <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
-            {saving&&<span style={{fontSize:12,color:"#888"}}>Zapisywanie…</span>}
-            <button onClick={()=>setShowSettings(v=>!v)} aria-expanded={showSettings} aria-label="Ustawienia" title="Ustawienia"
-              style={{background:showSettings?"#2a2a2a":"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,minWidth:44,minHeight:isMobile?44:36,
-                padding:"0 10px",color:showSettings?"#fff":"#888",fontSize:16,cursor:"pointer"}}>⚙</button>
-            <button onClick={logout} title={`Zalogowany jako ${user.login}`}
-              style={{background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,padding:"8px 12px",color:"#888",fontSize:13,cursor:"pointer"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",justifyContent:"flex-end",minWidth:0}}>
+            {!isMobile&&gearBtn}
+            <button onClick={logout} title={`Zalogowany jako ${user.login}`} aria-label={isMobile?"Wyloguj":undefined}
+              style={{background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,padding:"8px 12px",minWidth:isMobile?44:0,minHeight:isMobile?44:undefined,
+                maxWidth:"100%",color:"#888",fontSize:13,cursor:"pointer",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
               {isMobile?"⏻":`${user.login} · Wyloguj`}
             </button>
           </div>
+          {saving&&<span role="status" style={{position:"absolute",top:"100%",right:0,fontSize:11,color:"#888",lineHeight:"16px"}}>Zapisywanie…</span>}
         </div>
 
         {showSettings&&(
