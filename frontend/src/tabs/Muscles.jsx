@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MOBILE, useMedia, INK, MONO, plDate, useFitHeight } from "../lib/ui.js";
 import { WEEKDAYS, todayKey, maxHeartRate } from "../plans.js";
 import { MUSCLES, MUSCLE_LAYER } from "../lib/muscles.js";
@@ -484,22 +484,11 @@ export function MuscleMap({profile}){
   const countIn=l=>Object.values(MUSCLE_LAYER).filter(x=>x===l).length;
 
   // ── Szeroki ekran: trzy kolumny dopasowane do okna ──
-  // Wysokość siatki to reszta okna pod opisem zakładki; sylwetka bierze z niej
-  // wysokość, a szerokość wynika z proporcji grafiki. Środkowa kolumna jest
-  // dokładnie tak szeroka jak sylwetka (bez pustych pasów po bokach), a resztę
-  // ekranu dostaje panel po prawej.
-  const gridRef=useRef(null), bodyRef=useRef(null);
+  // Wysokość siatki to reszta okna pod opisem zakładki. Przełącznik warstw
+  // i dni planu stoją nad sylwetką i panelem razem, a sylwetka i panel
+  // ćwiczeń dzielą jeden wiersz i dwie równe kolumny — są tej samej wielkości.
+  const gridRef=useRef(null);
   const fitH=useFitHeight(gridRef,wide,{min:520});
-  const [bodyH,setBodyH]=useState(0);
-  useLayoutEffect(()=>{
-    const el=bodyRef.current;
-    if(!wide||!el)return;
-    const ro=new ResizeObserver(()=>setBodyH(el.clientHeight));
-    ro.observe(el);
-    return()=>ro.disconnect();
-  },[wide]);
-  const [,,vbW,vbH]=BODY_VIEW.both.split(" ").map(Number);
-  const bodyW=bodyH?Math.round(bodyH*vbW/vbH):640;
 
   const planCard=(
     <div style={{background:"#13161f",border:"1px solid #1e2130",borderRadius:14,padding:isMobile?"12px 12px 14px":"14px 16px 16px",marginBottom:16}}>
@@ -703,7 +692,7 @@ export function MuscleMap({profile}){
   );
   const body=<BodySVG viewBox={viewBox} layer={layer} plan={planHl} selected={selected} hovered={hovered} onHover={setHovered} onClick={id=>setSelected(p=>p===id?null:id)} fill={wide}/>;
   const detail=(
-    <div style={{...(wide?{minHeight:0}:{flex:"1 1 260px",minHeight:isMobile?0:460}),minWidth:0,background:"#13161f",border:`1px solid ${selected?MUSCLES[selected]?.color+"55":day?(MUSCLES[day.primary[0]]?.color||"#5DCAA5")+"44":"#1e2130"}`,borderRadius:14,position:"relative",overflow:"hidden"}}>
+    <div style={{...(wide?{minHeight:0,flex:1}:{flex:"1 1 260px",minHeight:isMobile?0:460}),minWidth:0,background:"#13161f",border:`1px solid ${selected?MUSCLES[selected]?.color+"55":day?(MUSCLES[day.primary[0]]?.color||"#5DCAA5")+"44":"#1e2130"}`,borderRadius:14,position:"relative",overflow:"hidden"}}>
       {!selected&&wide&&showRules&&plan&&<PlanInfoPanel plan={plan} onClose={()=>setShowRules(false)}/>}
       {!selected&&!(wide&&showRules&&plan)&&day&&(
         <PlanDayPanel plan={plan} dayKey={dayKey} day={day} age={profile?.ageYears??null}
@@ -745,19 +734,16 @@ export function MuscleMap({profile}){
           :"Najedź na mięsień, aby go podejrzeć, i kliknij, aby zobaczyć ćwiczenia. Plan treningowy podświetla mięśnie z wybranego dnia."}
       </TabIntro>
       {wide?(
-        <div ref={gridRef} style={{display:"grid",gap:16,height:fitH??undefined,gridTemplateRows:"minmax(0,1fr)",
-          gridTemplateColumns:`auto minmax(0,${bodyW}px) minmax(320px,1fr)`}}>
-          {planColumn}
-          <div style={{display:"flex",flexDirection:"column",minWidth:0,minHeight:0}}>
-            {layerSwitch}
-            {layerNote}
-            {planDays}
-            {sideLabels}
-            <div ref={bodyRef} style={{flex:1,minHeight:0,borderRadius:12,border:"1px solid #1e2130",overflow:"hidden",background:"#121215"}}>
-              {body}
-            </div>
+        <div ref={gridRef} style={{display:"grid",columnGap:16,height:fitH??undefined,
+          gridTemplateColumns:"auto minmax(0,1fr) minmax(0,1fr)",gridTemplateRows:"auto auto auto minmax(0,1fr)"}}>
+          <div style={{gridColumn:1,gridRow:"1 / -1",display:"flex",minHeight:0}}>{planColumn}</div>
+          <div style={{gridColumn:"2 / 4",gridRow:1}}>{layerSwitch}{layerNote}</div>
+          <div style={{gridColumn:"2 / 4",gridRow:2}}>{planDays}</div>
+          <div style={{gridColumn:2,gridRow:3}}>{sideLabels}</div>
+          <div style={{gridColumn:2,gridRow:4,minHeight:0,borderRadius:12,border:"1px solid #1e2130",overflow:"hidden",background:"#121215"}}>
+            {body}
           </div>
-          {detail}
+          <div style={{gridColumn:3,gridRow:4,minHeight:0,display:"flex"}}>{detail}</div>
         </div>
       ):(
         <>
