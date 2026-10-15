@@ -451,12 +451,14 @@ export default function CaloriesTab(){
                   ?"Zmiana dotyczy katalogu. Wpisy już dodane do dziennika zostają z wartościami z chwili dodania."
                   :"Wymagane są nazwa i kalorie. Puste pole składnika liczy się jako zero."}
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8}}>
+              {/* Dwa pola w rzędzie, w kolejności jak na etykiecie produktu:
+                  kcal, tłuszcze / węglowodany, błonnik / białko, sól */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>
                 <input placeholder="Nazwa" value={customForm.name} onChange={e=>setCustomForm(f=>({...f,name:e.target.value}))}
                   style={{gridColumn:"1/-1",padding:"8px 12px",borderRadius:8,border:"1px solid #333",background:"#161616",color:"#fff",fontSize:13,outline:"none"}}/>
-                {[["Kalorie (kcal)","cal",NUTRIENT.kcal],["Białko (g)","p",NUTRIENT.protein],
-                  ["Węglowodany (g)","c",NUTRIENT.carbs],["Tłuszcze (g)","f",NUTRIENT.fat],
-                  ["Błonnik (g)","fb",NUTRIENT.fiber],["Sól (g)","s",NUTRIENT.salt]].map(([label,key,color])=>(
+                {[["Kalorie (kcal)","cal",NUTRIENT.kcal],["Tłuszcze (g)","f",NUTRIENT.fat],
+                  ["Węglowodany (g)","c",NUTRIENT.carbs],["Błonnik (g)","fb",NUTRIENT.fiber],
+                  ["Białko (g)","p",NUTRIENT.protein],["Sól (g)","s",NUTRIENT.salt]].map(([label,key,color])=>(
                   <input key={key} type="text" inputMode="decimal" autoComplete="off" placeholder={label} aria-label={label} value={customForm[key]}
                     onChange={e=>{const v=e.target.value;if(DECIMAL_RE.test(v))setCustomForm(f=>({...f,[key]:v}));}}
                     style={{padding:"8px 12px",borderRadius:8,border:`1px solid ${customForm[key]!==""?color+"66":"#333"}`,background:"#161616",color:"#fff",fontSize:13,outline:"none"}}/>
