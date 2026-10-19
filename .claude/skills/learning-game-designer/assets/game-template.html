@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root{
+  --accent:#2f6f5e; --accent-ink:#ffffff;
+  --bg:#fafaf7; --fg:#1d1d1b; --muted:#66665f; --card:#ffffff; --line:#e0dfd8;
+  --ok:#2e7d32; --ok-bg:#e8f3e9; --bad:#b3261e; --bad-bg:#fbe9e7; --warn:#8a5a00; --warn-bg:#fdf3dc;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16171a; --fg:#ececea; --muted:#9d9d96; --card:#202226; --line:#34373c;
+    --ok:#7bc67e; --ok-bg:#1d2e1e; --bad:#f28b82; --bad-bg:#35201e; --warn:#f2bd5b; --warn-bg:#33290f;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16171a; --fg:#ececea; --muted:#9d9d96; --card:#202226; --line:#34373c;
+  --ok:#7bc67e; --ok-bg:#1d2e1e; --bad:#f28b82; --bad-bg:#35201e; --warn:#f2bd5b; --warn-bg:#33290f;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#app{max-width:680px;margin:0 auto;padding:16px 16px 48px}
+h1{font-size:1.5rem;margin:8px 0 2px;line-height:1.2}
+h2{font-size:1.1rem;margin:20px 0 8px}
+.sub{color:var(--muted);margin:0 0 4px}
+.fiction{margin:12px 0;padding:10px 12px;border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0}
+.fiction b{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row.between{justify-content:space-between}
+.stat{flex:1 1 100px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stat span{display:block;color:var(--muted);font-size:.78rem}
+.stat b{font-size:1.2rem}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 14px;min-height:44px}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.link{border:0;background:none;color:var(--muted);text-decoration:underline;min-height:36px;padding:6px}
+button[disabled]{opacity:.5;cursor:not-allowed}
+select,input[type=text],textarea{width:100%;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 12px;min-height:44px}
+textarea{min-height:90px;resize:vertical}
+.opts{display:grid;gap:8px;margin:12px 0 0}
+.opt{display:flex;gap:10px;text-align:left;align-items:flex-start;width:100%}
+.opt kbd{flex:none;min-width:1.6em;text-align:center;border:1px solid var(--line);border-radius:6px;font:600 .8rem/1.6 system-ui;color:var(--muted)}
+div.opt{padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.card > button.primary{margin-bottom:14px}
+.opt.chosen{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.opt.right{background:var(--ok-bg);border-color:var(--ok)}
+.opt.wrong{background:var(--bad-bg);border-color:var(--bad)}
+.chip{display:inline-block;font-size:.78rem;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted);margin-right:6px}
+.chip.warn{color:var(--warn);background:var(--warn-bg);border-color:transparent}
+.q{font-size:1.15rem;margin:10px 0 0;white-space:pre-wrap}
+.banner{padding:10px 12px;border-radius:10px;font-weight:600;margin:0 0 10px}
+.banner.ok{background:var(--ok-bg);color:var(--ok)}
+.banner.bad{background:var(--bad-bg);color:var(--bad)}
+.banner.warn{background:var(--warn-bg);color:var(--warn)}
+.fb p{margin:6px 0}
+.bar{position:relative;height:10px;background:var(--line);border-radius:6px;overflow:hidden}
+.bar .band{position:absolute;top:0;bottom:0;left:80%;width:10%;background:color-mix(in srgb,var(--accent) 35%,transparent)}
+.bar .fill{position:absolute;top:0;bottom:0;left:0;background:var(--accent);border-radius:6px}
+.prog{height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin:4px 0 10px}
+.prog i{display:block;height:100%;background:var(--accent)}
+.topic{margin:10px 0}
+.tiles{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.tile{width:18px;height:18px;border-radius:4px;border:1px solid var(--accent);position:relative;overflow:hidden}
+.tile i{position:absolute;inset:0;background:var(--accent)}
+.tile.due{outline:2px solid var(--warn);outline-offset:1px}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);font-size:.92rem}
+.muted{color:var(--muted)}
+.sr{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+details{margin-top:20px}
+summary{cursor:pointer;color:var(--muted)}
+@media (prefers-reduced-motion: no-preference){ .prog i,.bar .fill{transition:width .25s ease} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="live" class="sr" aria-live="polite"></div>
+<noscript>Ta gra wymaga JavaScript.</noscript>
+<script>
+(function(){
+'use strict';
+
+/* ===================== BANK (wstrzykiwany przez scripts/build_game.py) ===================== */
+const BANK = /*BANK_START*/{
+  "meta": {
+    "title": "Demo: błędy w rozumowaniu",
+    "subtitle": "10 minut dziennie",
+    "lang": "pl",
+    "interleave": true,
+    "accent": "#2f6f5e",
+    "fiction": {
+      "name": "Biuro Detektywa Argumentów",
+      "intro": "Każda odpowiedź to trop. Zamykaj sprawy, a stare akta wrócą, gdy będziesz je zapominać.",
+      "ranks": ["Praktykant", "Detektyw", "Inspektor", "Mistrz"]
+    },
+    "ui": {}
+  },
+  "topics": [
+    {"id": "t1", "name": "Błędy relewancji"},
+    {"id": "t2", "name": "Błędy przyczyn i struktury"}
+  ],
+  "items": [
+    {"id": "i1", "topic": "t1", "q": "„Jego plan podatkowy jest zły, bo to bankrut.” Jak nazywa się ten błąd?", "a": "ad hominem", "accept": ["argumentum ad hominem"], "distractors": ["fałszywa dychotomia", "post hoc", "argument z autorytetu"], "why": "Atakuje osobę zamiast argumentu. Wartość planu nie zależy od tego, kto go przedstawia."},
+    {"id": "i2", "topic": "t1", "q": "Ktoś przedstawia przekręconą, uproszczoną wersję Twojego argumentu i obala właśnie ją. Jaki to błąd?", "a": "chochoł", "accept": ["argument chochoła", "strawman"], "distractors": ["ad hominem", "błędne koło", "poślizg"], "why": "Obalana jest karykatura, nie Twoja teza, więc właściwy argument zostaje nietknięty."},
+    {"id": "i3", "topic": "t1", "q": "Zapytany o wyniki firmy, prezes zaczyna mówić o sukcesach sponsorowanego klubu sportowego. Jaki to błąd?", "a": "czerwony śledź", "accept": ["red herring"], "distractors": ["chochoł", "błędne koło", "fałszywa analogia"], "why": "Temat poboczny odwraca uwagę od pytania, na które nie ma dobrej odpowiedzi."},
+    {"id": "i4", "topic": "t2", "q": "„Włożyłem nowe buty i wygrałem mecz, więc to buty dały zwycięstwo.” Jaki to błąd?", "a": "post hoc", "accept": ["post hoc ergo propter hoc"], "distractors": ["ad hominem", "fałszywa dychotomia", "chochoł"], "why": "Następstwo w czasie nie dowodzi związku przyczynowego."},
+    {"id": "i5", "topic": "t2", "q": "„Albo jesteś z nami, albo przeciwko nam.” Jaki to błąd?", "a": "fałszywa dychotomia", "accept": ["fałszywy dylemat"], "distractors": ["post hoc", "chochoł", "błędne koło"], "why": "Pomija opcje pośrednie, np. neutralność lub częściową zgodę."},
+    {"id": "i6", "topic": "t2", "q": "„Ta gazeta jest wiarygodna, bo sama pisze, że jest wiarygodna.” Jaki to błąd?", "a": "błędne koło", "accept": ["petitio principii"], "distractors": ["post hoc", "czerwony śledź", "argument z autorytetu"], "why": "Wniosek jest użyty jako przesłanka, więc nic nowego nie zostaje uzasadnione."},
+    {"id": "i7", "topic": "t2", "q": "Dlaczego korelacja dwóch zjawisk nie dowodzi, że jedno powoduje drugie?", "a": "Może działać trzecia, wspólna przyczyna, kierunek zależności może być odwrotny albo związek bywa przypadkowy.", "why": "Dopiero wykluczenie tych alternatyw (np. eksperyment z losowym przydziałem) uzasadnia wniosek przyczynowy.", "grade": "self"}
+  ]
+}/*BANK_END*/;
+
+/* ===================== Stałe i teksty ===================== */
+const UI0 = {
+  startSession:'Zacznij sesję', sessionLength:'Długość sesji', focus:'Temat', allTopics:'Wszystkie tematy',
+  due:'Do powtórki', newItems:'Nowe', mastered:'Opanowane', rank:'Ranga', xp:'Punkty',
+  check:'Sprawdź', typeAnswer:'Wpisz odpowiedź', typeExplain:'Napisz własnymi słowami (opcjonalnie)',
+  reveal:'Pokaż wzorcową odpowiedź', hint:'Wskazówka', howSure:'Jak bardzo jesteś pewny?',
+  sure:'Pewny', think:'Chyba tak', guess:'Zgaduję',
+  correct:'Poprawnie', wrong:'Niepoprawnie', notYet:'Porównaj z wzorcem',
+  correctAnswer:'Poprawna odpowiedź', yourAnswer:'Twoja odpowiedź', why:'Dlaczego',
+  sameMeaning:'Czy Twoja odpowiedź znaczyła to samo?', yesCount:'Tak, zalicz', no:'Nie',
+  selfGrade:'Jak oceniasz swoją odpowiedź względem wzorca?', selfYes:'Zgadzała się', selfPart:'Częściowo', selfNo:'Nie',
+  next:'Dalej', finish:'Zakończ', abort:'Przerwij (postęp zapisany)',
+  summary:'Podsumowanie sesji', accuracy:'Trafność', calibration:'Kalibracja pewności',
+  calibNote:'„Pewny” powinno oznaczać ok. 90% lub więcej poprawnych.',
+  level:'Poziom', answers:'Odpowiedzi', confErrors:'Błędy popełnione z pewnością (najłatwiej je teraz poprawić)',
+  nextReturn:'Następny powrót', today:'dziś', tomorrow:'jutro', inDays:'za {n} dni',
+  nothingDue:'Brak pozycji do powtórki i nowych. Wróć {when}.',
+  extra:'Ćwicz dodatkowo (nie zmienia harmonogramu)', home:'Menu',
+  retryTag:'Wróci za kilka pytań', extraTag:'Praktyka dodatkowa', itemOf:'Pozycja {i} z {n}',
+  zone:'Strefa trudności', zoneNone:'za mało danych (min. 5 odpowiedzi)', zoneHard:'za trudno',
+  zoneSlightHard:'lekko trudno', zoneOk:'w strefie (80-90%)', zoneEasy:'za łatwo - tempo rośnie',
+  tools:'Narzędzia', export:'Eksport postępu', importBtn:'Wczytaj postęp', importHint:'Wklej JSON z eksportu',
+  reset:'Zeruj postęp', resetConfirm:'Na pewno wyzerować cały postęp?', shiftDay:'Symuluj +1 dzień (test)',
+  copy:'Kopiuj', copied:'Skopiowano', importOk:'Wczytano.', importBad:'Nieprawidłowy plik.',
+  confidence:'Pytaj o pewność odpowiedzi', mapTitle:'Mapa opanowania', mapHelp:'Ciemniejszy kafelek = wyższe pudełko. Ramka = do powtórki.',
+  points:'pkt', newCap:'Nowe pozycje: max 6-8 na sesję.',
+};
+const M = BANK.meta || {};
+const UI = Object.assign({}, UI0, M.ui || {});
+const t = (k, v) => String(UI[k] == null ? k : UI[k]).replace(/\{(\w+)\}/g, (_, n) => (v && v[n] != null ? v[n] : ''));
+if (M.accent) document.documentElement.style.setProperty('--accent', M.accent);
+if (M.lang) document.documentElement.lang = M.lang;
+document.title = M.title || document.title;
+
+const DAY = 86400000;
+const INT = [1, 1, 3, 7, 16, 35];      // dni do powrotu wg pudełka 0..5
+const MAXBOX = 5;
+const INTERLEAVE = M.interleave !== false;
+const items = BANK.items || [];
+const topics = BANK.topics || [];
+const topicName = id => (topics.find(x => x.id === id) || {}).name || id;
+const topicIdx = id => Math.max(0, topics.findIndex(x => x.id === id));
+
+/* ===================== Stan i zapis ===================== */
+function hash(s){ let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return String(h >>> 0); }
+const KEY = 'lgd1:' + hash((M.title || 'game') + '|' + items.length);
+let mem = null;
+function fresh(){ return {v:1, shift:0, xp:0, sessions:0, items:{}, log:[], conf:{sure:[0,0], think:[0,0], guess:[0,0]}, settings:{confidence:true, len:12}}; }
+function load(){
+  try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch (e) {}
+  return mem ? JSON.parse(mem) : null;
+}
+function save(){
+  const s = JSON.stringify(S); mem = s;
+  try { localStorage.setItem(KEY, s); } catch (e) {}
+}
+function valid(o){ return o && o.v === 1 && o.items && typeof o.items === 'object' && Array.isArray(o.log); }
+let S = load();
+if (!valid(S)) S = fresh();
+S.settings = Object.assign({confidence:true, len:12}, S.settings || {});
+if (M.confidence === false) S.settings.confidence = false;
+
+const now = () => Date.now() + S.shift * DAY;
+const sod = ts => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const isUnseen = id => !S.items[id] || !S.items[id].seen;
+const isDue = id => { const r = S.items[id]; return !!(r && r.seen > 0 && r.due <= now()); };
+const boxOf = id => (S.items[id] ? S.items[id].box : 0);
+function rec(id){ return S.items[id] || (S.items[id] = {box:0, due:0, seen:0, ok:0, lapse:0}); }
+
+/* ===================== Silnik: dobór, format, ocena ===================== */
+function rollingAcc(){
+  const a = S.log.slice(-10);
+  if (a.length < 5) return null;
+  return a.reduce((s, x) => s + x.ok, 0) / a.length;
+}
+function zoneLabel(acc){
+  if (acc === null) return t('zoneNone');
+  if (acc < 0.70) return t('zoneHard');
+  if (acc < 0.80) return t('zoneSlightHard');
+  if (acc <= 0.90) return t('zoneOk');
+  return t('zoneEasy');
+}
+function shuffle(a){ a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function orderItems(list){
+  if (!INTERLEAVE) return list.slice().sort((a, b) => topicIdx(a.topic) - topicIdx(b.topic));
+  const rest = list.slice(), out = []; let last = null;
+  while (rest.length) {
+    let k = rest.findIndex(x => x.topic !== last);
+    if (k < 0) k = 0;
+    const [x] = rest.splice(k, 1); out.push(x); last = x.topic;
+  }
+  return out;
+}
+function pickNew(fresh_, n){
+  if (n <= 0) return [];
+  if (!INTERLEAVE) return fresh_.slice(0, n);
+  const by = {}; fresh_.forEach(x => (by[x.topic] = by[x.topic] || []).push(x));
+  const keys = Object.keys(by), out = [];
+  while (out.length < n && keys.some(k => by[k].length)) {
+    for (const k of keys) { if (by[k].length && out.length < n) out.push(by[k].shift()); }
+  }
+  return out;
+}
+function buildSession(len, topic, extra){
+  const pool = items.filter(it => !topic || it.topic === topic);
+  if (extra) {
+    const seen = pool.filter(it => !isUnseen(it.id) && !isDue(it.id)).sort((a, b) => boxOf(a.id) - boxOf(b.id));
+    return orderItems(seen.slice(0, len));
+  }
+  const due = pool.filter(it => isDue(it.id)).sort((a, b) => S.items[a.id].due - S.items[b.id].due);
+  const unseen = pool.filter(it => isUnseen(it.id));
+  const acc = rollingAcc();
+  let maxNew = 6;
+  if (acc !== null) { if (acc > 0.90) maxNew = 8; else if (acc < 0.75) maxNew = 3; }
+  if (due.length > len * 0.7) maxNew = Math.min(maxNew, 2);
+  const chosenDue = due.slice(0, len);
+  const nNew = Math.min(maxNew, Math.max(len - chosenDue.length, 0), unseen.length);
+  return orderItems(chosenDue.concat(pickNew(unseen, nNew)));
+}
+function hasMc(it){ return Array.isArray(it.distractors) && it.distractors.length >= 2; }
+function pickFormat(it){
+  if (it.grade === 'self') return 'self';
+  if (!hasMc(it)) return 'recall';
+  if (it.mc_only) return 'mc';
+  const acc = rollingAcc();
+  let thr = 3;
+  if (acc !== null) { if (acc > 0.90) thr = 2; else if (acc < 0.75) thr = 5; }
+  return boxOf(it.id) >= thr ? 'recall' : 'mc';
+}
+function buildOptions(it){
+  const d = shuffle(it.distractors).slice(0, 3);
+  return shuffle([it.a].concat(d));
+}
+function norm(s){
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l')
+    .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function lev(a, b){
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let prev = Array.from({length:n + 1}, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function matches(text, it){
+  const x = norm(text); if (!x) return false;
+  const keys = [it.a].concat(it.accept || []).map(norm).filter(Boolean);
+  return keys.some(k => x === k || (k.length >= 6 && lev(x, k) <= 1));
+}
+
+/* ===================== Punkty, ranga ===================== */
+const FMT_XP = {mc:4, recall:8, self:8};
+function gainXp(fmt, boxBefore, factor){ return Math.round(FMT_XP[fmt] * (1 + 0.25 * Math.min(boxBefore, 4)) * factor); }
+function avgMastery(){
+  if (!items.length) return 0;
+  return items.reduce((s, it) => s + Math.min(boxOf(it.id), MAXBOX), 0) / (MAXBOX * items.length);
+}
+function rankName(){
+  const r = (M.fiction && M.fiction.ranks) || ['Poziom 1', 'Poziom 2', 'Poziom 3', 'Poziom 4'];
+  return r[Math.min(r.length - 1, Math.floor(avgMastery() * r.length))];
+}
+
+/* ===================== DOM ===================== */
+const app = document.getElementById('app');
+const live = document.getElementById('live');
+function h(tag, attrs, ...kids){
+  const el = document.createElement(tag);
+  if (attrs) for (const k in attrs) {
+    const v = attrs[k];
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const kid of kids.flat(Infinity)) { if (kid == null || kid === false) continue; el.append(kid.nodeType ? kid : String(kid)); }
+  return el;
+}
+function mount(...nodes){
+  app.replaceChildren(...nodes.flat());
+  const af = app.querySelector('[data-af]'); if (af) af.focus();
+}
+function announce(s){ live.textContent = ''; setTimeout(() => { live.textContent = s; }, 30); }
+function whenLabel(ts){
+  const d = Math.max(0, Math.round((sod(ts) - sod(now())) / DAY));
+  return d <= 0 ? t('today') : d === 1 ? t('tomorrow') : t('inDays', {n:d});
+}
+
+/* ===================== Ekrany ===================== */
+let mode = 'home', run = null, turn = null;
+
+function zoneBar(){
+  const acc = rollingAcc();
+  return h('div', null,
+    h('div', {class:'row between'}, h('span', {class:'muted'}, t('zone')), h('span', null, zoneLabel(acc))),
+    h('div', {class:'bar', 'aria-hidden':'true'}, h('div', {class:'band'}), acc === null ? null : h('div', {class:'fill', style:'width:' + Math.round(acc * 100) + '%'})));
+}
+
+function masteryMap(){
+  return h('div', {class:'card'},
+    h('b', null, t('mapTitle')),
+    h('div', {class:'muted', style:'font-size:.85rem'}, t('mapHelp')),
+    topics.map(tp => h('div', {class:'topic'},
+      h('div', null, tp.name),
+      h('div', {class:'tiles'}, items.filter(it => it.topic === tp.id).map(it => {
+        const b = boxOf(it.id), seen = !isUnseen(it.id);
+        return h('span', {class:'tile' + (isDue(it.id) ? ' due' : ''), title:'#' + b},
+          seen ? h('i', {style:'opacity:' + (0.18 + 0.164 * b).toFixed(2)}) : null);
+      })))));
+}
+
+function renderHome(){
+  mode = 'home'; run = null; turn = null;
+  const dueN = items.filter(it => isDue(it.id)).length;
+  const newN = items.filter(it => isUnseen(it.id)).length;
+  const masN = items.filter(it => boxOf(it.id) >= 4).length;
+  const f = M.fiction || {};
+  const lenSel = h('select', {id:'len', 'aria-label':t('sessionLength')},
+    [8, 12, 20].map(n => h('option', {value:n, selected:n === S.settings.len}, n)));
+  const topSel = h('select', {id:'focus', 'aria-label':t('focus')},
+    h('option', {value:''}, t('allTopics')), topics.map(tp => h('option', {value:tp.id}, tp.name)));
+  const nothing = dueN === 0 && newN === 0;
+  let nextDue = null;
+  items.forEach(it => { const r = S.items[it.id]; if (r && r.seen && (nextDue === null || r.due < nextDue)) nextDue = r.due; });
+  const start = () => startSession(parseInt(lenSel.value, 10), topSel.value || null, false);
+  const startExtra = () => startSession(parseInt(lenSel.value, 10), topSel.value || null, true);
+
+  const exportBox = h('textarea', {readonly:true, 'aria-label':t('export'), style:'display:none'});
+  const importBox = h('textarea', {placeholder:t('importHint'), 'aria-label':t('importBtn')});
+  const msg = h('div', {class:'muted', role:'status'});
+
+  mount(
+    h('h1', null, M.title || 'Gra do nauki'),
+    M.subtitle ? h('p', {class:'sub'}, M.subtitle) : null,
+    f.name ? h('div', {class:'fiction'}, h('b', null, f.name), f.intro || '') : null,
+    h('div', {class:'row'},
+      h('div', {class:'stat'}, h('span', null, t('due')), h('b', null, dueN)),
+      h('div', {class:'stat'}, h('span', null, t('newItems')), h('b', null, newN)),
+      h('div', {class:'stat'}, h('span', null, t('mastered')), h('b', null, masN + '/' + items.length)),
+      h('div', {class:'stat'}, h('span', null, t('rank')), h('b', null, rankName())),
+      h('div', {class:'stat'}, h('span', null, t('xp')), h('b', null, S.xp))),
+    h('div', {class:'card'},
+      h('div', {class:'row'},
+        h('label', {style:'flex:1 1 120px'}, h('span', {class:'muted'}, t('sessionLength')), lenSel),
+        h('label', {style:'flex:2 1 200px'}, h('span', {class:'muted'}, t('focus')), topSel)),
+      h('p', {class:'muted', style:'font-size:.85rem;margin:8px 0'}, t('newCap')),
+      nothing
+        ? h('div', null, h('p', null, t('nothingDue', {when: nextDue ? whenLabel(nextDue) : t('tomorrow')})),
+            items.some(it => !isUnseen(it.id)) ? h('button', {onclick:startExtra, 'data-af':true}, t('extra')) : null)
+        : h('button', {class:'primary', onclick:start, 'data-af':true}, t('startSession')),
+      zoneBar()),
+    masteryMap(),
+    h('details', null,
+      h('summary', null, t('tools')),
+      h('div', {class:'card'},
+        h('label', {class:'row'}, h('input', {type:'checkbox', checked:S.settings.confidence && M.confidence !== false, onchange:e => { S.settings.confidence = e.target.checked; save(); }}), t('confidence')),
+        h('div', {class:'row', style:'margin-top:10px'},
+          h('button', {onclick:() => { exportBox.value = JSON.stringify(S); exportBox.style.display = 'block'; exportBox.select();
+            try { navigator.clipboard.writeText(exportBox.value).then(() => { msg.textContent = t('copied'); }, () => {}); } catch (e) {} }}, t('export')),
+          h('button', {onclick:() => { S.shift++; save(); renderHome(); }}, t('shiftDay')),
+          h('button', {onclick:() => { if (confirm(t('resetConfirm'))) { S = fresh(); save(); renderHome(); } }}, t('reset'))),
+        exportBox,
+        h('div', {style:'margin-top:10px'}, importBox,
+          h('button', {style:'margin-top:6px', onclick:() => {
+            try { const o = JSON.parse(importBox.value); if (!valid(o)) throw 0; S = o; S.settings = Object.assign({confidence:true, len:12}, S.settings || {}); save(); renderHome(); }
+            catch (e) { msg.textContent = t('importBad'); } }}, t('importBtn'))),
+        msg)));
+}
+
+function startSession(len, topic, extra){
+  S.settings.len = len;
+  const list = buildSession(len, topic, extra);
+  if (!list.length) return renderHome();
+  run = {queue:list.map(it => ({it, retry:false, retries:0})), i:0, answers:[], xp:0, extra:!!extra, startAcc:rollingAcc()};
+  if (!extra) S.sessions++;
+  save();
+  renderQuestion();
+}
+
+function header(){
+  const total = run.queue.length, i = Math.min(run.i + 1, total);
+  return h('div', null,
+    h('div', {class:'row between'}, h('span', {class:'muted'}, t('itemOf', {i, n:total})), h('button', {class:'link', onclick:renderHome}, t('abort'))),
+    h('div', {class:'prog', 'aria-hidden':'true'}, h('i', {style:'width:' + Math.round(run.i / total * 100) + '%'})));
+}
+function qCard(extraNodes){
+  const it = turn.it;
+  return h('div', {class:'card'},
+    h('div', null, h('span', {class:'chip'}, topicName(it.topic)),
+      turn.retry ? h('span', {class:'chip warn'}, t('retryTag')) : null,
+      run.extra ? h('span', {class:'chip'}, t('extraTag')) : null),
+    h('p', {class:'q'}, it.q), extraNodes);
+}
+
+function renderQuestion(){
+  const q = run.queue[run.i];
+  if (!q) return renderSummary();
+  const it = q.it, fmt = pickFormat(it);
+  turn = {it, fmt, retry:q.retry, retries:q.retries, hintUsed:false, choice:null, text:'', conf:null, ok:null, done:false, gained:0, opts: fmt === 'mc' ? buildOptions(it) : null};
+  const hintBox = h('div', {class:'muted', role:'status'});
+  const hintBtn = it.hint ? h('button', {class:'link', onclick:() => { turn.hintUsed = true; hintBox.textContent = it.hint; hintBtn.remove(); }}, t('hint')) : null;
+  let body;
+  if (fmt === 'mc') {
+    mode = 'mc';
+    body = h('div', {class:'opts', role:'group', 'aria-label':it.q}, turn.opts.map((o, k) =>
+      h('button', {class:'opt', onclick:() => pickOption(o), 'data-af':k === 0 ? true : null}, h('kbd', null, k + 1), h('span', null, o))));
+  } else if (fmt === 'recall') {
+    mode = 'recall';
+    const inp = h('input', {type:'text', autocomplete:'off', autocapitalize:'off', spellcheck:'false', 'aria-label':t('typeAnswer'), placeholder:t('typeAnswer'), 'data-af':true,
+      onkeydown:e => { if (e.key === 'Enter' && inp.value.trim()) commitText(inp.value); }});
+    body = h('div', {class:'row', style:'margin-top:12px'}, h('div', {style:'flex:1 1 220px'}, inp),
+      h('button', {class:'primary', onclick:() => { if (inp.value.trim()) commitText(inp.value); }}, t('check')));
+  } else {
+    mode = 'selfin';
+    const ta = h('textarea', {'aria-label':t('typeExplain'), placeholder:t('typeExplain'), 'data-af':true});
+    body = h('div', {style:'margin-top:12px'}, ta, h('button', {class:'primary', style:'margin-top:8px', onclick:() => commitText(ta.value)}, t('reveal')));
+  }
+  mount(header(), qCard([body, h('div', {style:'margin-top:8px'}, hintBtn, hintBox)]));
+}
+
+function pickOption(o){ if (mode !== 'mc') return; turn.choice = o; goConfidence(); }
+function commitText(v){ if (mode !== 'recall' && mode !== 'selfin') return; turn.text = String(v || '').trim(); goConfidence(); }
+
+function goConfidence(){
+  if (!S.settings.confidence) { turn.conf = 'think'; return evaluate(); }
+  mode = 'conf';
+  const shown = turn.fmt === 'mc' ? turn.choice : (turn.text || '-');
+  const mk = (key, n) => h('button', {onclick:() => setConf(key), 'data-af':n === 1 ? true : null}, h('kbd', {style:'margin-right:8px;color:var(--muted)'}, n), t(key));
+  mount(header(), qCard([
+    h('p', {class:'muted'}, t('yourAnswer') + ': ', h('b', {style:'color:var(--fg)'}, shown)),
+    h('p', null, t('howSure')),
+    h('div', {class:'row'}, mk('sure', 1), mk('think', 2), mk('guess', 3))]));
+}
+function setConf(c){ if (mode !== 'conf') return; turn.conf = c; evaluate(); }
+
+function evaluate(){
+  const it = turn.it;
+  if (turn.fmt === 'mc') turn.ok = turn.choice === it.a ? 'yes' : 'no';
+  else if (turn.fmt === 'recall') turn.ok = matches(turn.text, it) ? 'yes' : null;
+  else turn.ok = null;
+  if (turn.ok) commitResult(turn.ok);
+  renderFeedback();
+}
+
+function commitResult(res){
+  if (turn.done) return;
+  turn.done = true; turn.ok = res;
+  const it = turn.it, r = rec(it.id), boxBefore = r.box;
+  const conf = turn.conf || 'think';
+  if (turn.retry) {
+    if (res === 'yes') { turn.gained = 2; }
+  } else if (run.extra) {
+    if (res !== 'no') turn.gained = gainXp(turn.fmt, boxBefore, 0.5);
+  } else {
+    r.seen++;
+    if (res === 'yes') {
+      r.ok++;
+      if (!(conf === 'guess' || turn.hintUsed)) r.box = Math.min(MAXBOX, r.box + 1);
+      turn.gained = gainXp(turn.fmt, boxBefore, turn.hintUsed ? 0.5 : 1);
+    } else if (res === 'partial') {
+      turn.gained = gainXp(turn.fmt, boxBefore, 0.5);
+    } else { r.lapse++; r.box = 0; }
+    r.due = sod(now()) + INT[r.box] * DAY;
+    S.log.push({t:now(), id:it.id, ok:res === 'yes' ? 1 : res === 'partial' ? 0.5 : 0, conf});
+    if (S.log.length > 300) S.log = S.log.slice(-300);
+    const c = S.conf[conf]; c[0]++; if (res === 'yes') c[1]++;
+  }
+  S.xp += turn.gained; run.xp += turn.gained;
+  if (!turn.retry && !run.extra) run.answers.push({id:it.id, res, conf, fmt:turn.fmt});
+  if (res === 'no' && turn.retries < 2 && !run.extra) {
+    const at = Math.min(run.queue.length, run.i + 1 + 3);
+    run.queue.splice(at, 0, {it, retry:true, retries:turn.retries + 1});
+    turn.requeued = true;
+  }
+  save();
+}
+
+function renderFeedback(){
+  const it = turn.it;
+  const pending = turn.ok === null;
+  mode = pending ? 'grade' : 'fb';
+  const shown = turn.fmt === 'mc' ? turn.choice : turn.text;
+  const banner = pending ? h('div', {class:'banner warn'}, t('notYet'))
+    : turn.ok === 'yes' ? h('div', {class:'banner ok'}, t('correct') + (turn.gained ? '  +' + turn.gained + ' ' + t('points') : ''))
+    : turn.ok === 'partial' ? h('div', {class:'banner warn'}, t('selfPart') + (turn.gained ? '  +' + turn.gained + ' ' + t('points') : ''))
+    : h('div', {class:'banner bad'}, t('wrong') + (turn.requeued ? ' · ' + t('retryTag') : ''));
+  const wrongWhy = turn.fmt === 'mc' && turn.choice !== it.a && it.why_wrong && it.why_wrong[turn.choice];
+  let controls;
+  if (pending && turn.fmt === 'recall') {
+    controls = h('div', null, h('p', null, t('sameMeaning')),
+      h('div', {class:'row'}, h('button', {class:'primary', 'data-af':true, onclick:() => { commitResult('yes'); renderFeedback(); }}, '1  ' + t('yesCount')),
+        h('button', {onclick:() => { commitResult('no'); renderFeedback(); }}, '2  ' + t('no'))));
+  } else if (pending) {
+    controls = h('div', null, h('p', null, t('selfGrade')),
+      h('div', {class:'row'}, h('button', {class:'primary', 'data-af':true, onclick:() => { commitResult('yes'); renderFeedback(); }}, '1  ' + t('selfYes')),
+        h('button', {onclick:() => { commitResult('partial'); renderFeedback(); }}, '2  ' + t('selfPart')),
+        h('button', {onclick:() => { commitResult('no'); renderFeedback(); }}, '3  ' + t('selfNo'))));
+  } else {
+    controls = h('button', {class:'primary', 'data-af':true, onclick:nextQ}, run.i + 1 >= run.queue.length ? t('finish') : t('next'));
+  }
+  const choiceView = turn.fmt === 'mc'
+    ? h('div', {class:'opts'}, turn.opts.map(o => h('div', {class:'opt ' + (o === it.a ? 'right' : o === turn.choice ? 'wrong' : ''), style:'cursor:default'}, h('span', null, (o === it.a ? '\u2713 ' : o === turn.choice ? '\u2717 ' : '') + o))))
+    : null;
+  mount(header(), qCard(h('div', {class:'fb', style:'margin-top:12px'},
+    banner, choiceView,
+    turn.fmt !== 'mc' ? h('p', null, h('span', {class:'muted'}, t('yourAnswer') + ': '), shown || '-') : null,
+    turn.fmt !== 'mc' ? h('p', null, h('span', {class:'muted'}, t('correctAnswer') + ': '), h('b', null, it.a)) : null,
+    wrongWhy ? h('p', null, h('span', {class:'muted'}, t('wrong') + ': '), wrongWhy) : null,
+    it.why ? h('p', null, h('span', {class:'muted'}, t('why') + ': '), it.why) : null,
+    controls)));
+  announce(pending ? t('notYet') : (turn.ok === 'yes' ? t('correct') : t('wrong')) + '. ' + t('correctAnswer') + ': ' + it.a);
+}
+
+function nextQ(){ if (mode !== 'fb') return; run.i++; renderQuestion(); }
+
+function renderSummary(){
+  mode = 'summary';
+  const A = run.answers, n = A.length;
+  const okN = A.filter(a => a.res === 'yes').length;
+  const calib = ['sure', 'think', 'guess'].map(k => {
+    const sub = A.filter(a => a.conf === k);
+    return {k, n:sub.length, ok:sub.filter(a => a.res === 'yes').length};
+  });
+  const confErr = A.filter(a => a.conf === 'sure' && a.res === 'no').map(a => items.find(x => x.id === a.id)).filter(Boolean);
+  let nextDue = null, dueCount = 0;
+  items.forEach(it => { const r = S.items[it.id]; if (r && r.seen && (nextDue === null || r.due < nextDue)) nextDue = r.due; });
+  if (nextDue !== null) items.forEach(it => { const r = S.items[it.id]; if (r && r.seen && sod(r.due) === sod(nextDue)) dueCount++; });
+  mount(
+    h('h1', null, t('summary')),
+    h('div', {class:'row'},
+      h('div', {class:'stat'}, h('span', null, t('accuracy')), h('b', null, n ? Math.round(okN / n * 100) + '%' : '-')),
+      h('div', {class:'stat'}, h('span', null, t('answers')), h('b', null, n)),
+      h('div', {class:'stat'}, h('span', null, t('xp')), h('b', null, '+' + run.xp)),
+      h('div', {class:'stat'}, h('span', null, t('rank')), h('b', null, rankName()))),
+    h('div', {class:'card'}, zoneBar()),
+    S.settings.confidence ? h('div', {class:'card'}, h('b', null, t('calibration')),
+      h('table', null, h('tbody', null, calib.map(c => h('tr', null, h('td', null, t(c.k)), h('td', null, c.n ? c.ok + '/' + c.n : '-'), h('td', null, c.n ? Math.round(c.ok / c.n * 100) + '%' : ''))))),
+      h('div', {class:'muted', style:'font-size:.85rem'}, t('calibNote'))) : null,
+    confErr.length ? h('div', {class:'card'}, h('b', null, t('confErrors')),
+      confErr.map(it => h('p', null, it.q, h('br'), h('b', null, it.a)))) : null,
+    nextDue !== null && !run.extra ? h('p', null, t('nextReturn') + ': ', h('b', null, whenLabel(nextDue)), ' (' + dueCount + ')') : null,
+    h('div', {class:'row'},
+      h('button', {class:'primary', onclick:renderHome, 'data-af':true}, t('home')),
+      items.some(it => !isUnseen(it.id)) ? h('button', {onclick:() => startSession(S.settings.len, null, true)}, t('extra')) : null));
+}
+
+/* ===================== Klawiatura ===================== */
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  const typing = tag === 'input' || tag === 'textarea' || tag === 'select';
+  if (typing) return;
+  const onBtn = tag === 'button';
+  if (mode === 'mc') { const n = parseInt(e.key, 10); if (turn && n >= 1 && n <= turn.opts.length) { e.preventDefault(); pickOption(turn.opts[n - 1]); } }
+  else if (mode === 'conf') { const m = {'1':'sure', '2':'think', '3':'guess'}; if (m[e.key]) { e.preventDefault(); setConf(m[e.key]); } }
+  else if (mode === 'grade') {
+    const m = turn.fmt === 'recall' ? {'1':'yes', '2':'no'} : {'1':'yes', '2':'partial', '3':'no'};
+    if (m[e.key]) { e.preventDefault(); commitResult(m[e.key]); renderFeedback(); }
+  }
+  else if (mode === 'fb' && !onBtn && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); nextQ(); }
+});
+
+renderHome();
+
+/* Hook testowy (nie wpływa na grę) */
+window.__lgd = {get S(){ return S; }, buildSession, pickFormat, matches, norm, rollingAcc, INT};
+})();
+</script>
+</body>
+</html>
