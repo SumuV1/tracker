@@ -261,6 +261,20 @@ CREATE TABLE IF NOT EXISTS technique_uses (
 );
 CREATE INDEX IF NOT EXISTS technique_uses_user_at_idx ON technique_uses (user_id, at);
 
+-- Gra „Przekonania" (druga strona Stabilizacji): cały postęp jednego konta
+-- w jednym dokumencie — pudełka Leitnera per pozycja, ostatnie odpowiedzi,
+-- kalibracja pewności. Aplikacja zawsze czyta i zapisuje go w całości, a treść
+-- pytań żyje w kodzie (frontend/src/beliefsBank.json), więc tabela per pozycja
+-- nic by nie dała. `version` rośnie przy każdym zapisie: zapis ze starszą
+-- wersją dostaje 409 i klient scala stan, zamiast nadpisać grę z innego
+-- urządzenia.
+CREATE TABLE IF NOT EXISTS belief_game (
+  user_id    bigint PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  data       jsonb NOT NULL,
+  version    int NOT NULL DEFAULT 1,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- Kotwice: rzeczy, które historycznie pomagały. Trafiają do sekcji „rozruch".
 CREATE TABLE IF NOT EXISTS anchors (
   id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

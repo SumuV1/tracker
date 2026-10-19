@@ -3,9 +3,12 @@
 const BASE = "/api";
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  // `body` — ciało odpowiedzi błędu; 409 z gry „Przekonania" niesie w nim
+  // aktualny stan do scalenia.
+  constructor(message, status, body = null) {
     super(message);
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -23,7 +26,7 @@ async function request(path, { method = "GET", body } = {}) {
   } catch {
     // odpowiedź bez ciała — dla części metod to poprawne
   }
-  if (!res.ok) throw new ApiError(data?.error || `Błąd ${res.status}`, res.status);
+  if (!res.ok) throw new ApiError(data?.error || `Błąd ${res.status}`, res.status, data);
   return data;
 }
 
@@ -91,6 +94,8 @@ export const api = {
   deleteCheckin: id => request(`/stability/checkins/${id}`, { method: "DELETE" }),
   techniqueUses: days => request(`/stability/uses?${qs({ days })}`),
   addTechniqueUse: technique => request("/stability/uses", { method: "POST", body: { technique } }),
+  beliefs: () => request("/stability/beliefs"),
+  saveBeliefs: (data, base) => request("/stability/beliefs", { method: "PUT", body: { data, base } }),
 
   avoid: () => request("/avoid"),
   addAvoid: body => request("/avoid", { method: "POST", body }),

@@ -174,3 +174,40 @@ stabilityRoutes.post("/uses", wrap(async (req, res) => {
   );
   res.status(201).json(rows[0]);
 }));
+
+// ── Gra „Przekonania" ───────────────────────────────────────────────────
+// Postęp gry to jeden dokument JSON na konto. Serwer pilnuje tylko kształtu
+// i rozmiaru — znaczenie pól zna frontend/src/lib/beliefsEngine.js.
+const BELIEFS_MAX_BYTES = 400_000;
+
+function reqBeliefState(d) {
+  if (!d || typeof d !== "object" || Array.isArray(d) || d.v !== 1
+      || !d.items || typeof d.items !== "object" || Array.isArray(d.items) || !Array.isArray(d.log)) {
+    throw new BadRequest("Nieprawidłowy stan gry.");
+  }
+  if (JSON.stringify(d).length > BELIEFS_MAX_BYTES) throw new BadRequest("Stan gry jest za duży.");
+  return d;
+}
+
+stabilityRoutes.get("/beliefs", wrap(async (req, res) => {
+  const { rows } = await query("SELECT data, version FROM belief_game WHERE user_id = $1", [req.user.id]);
+  res.json(rows[0] || { data: null, version: 0 });
+}));
+
+// `base` to wersja, od której klient zaczynał. Niezgodna = ktoś zapisał w
+// międzyczasie (drugie urządzenie): 409 z aktualnym stanem do scalenia.
+stabilityRoutes.put("/beliefs", wrap(async (req, res) => {
+  const data = reqBeliefState(req.body?.data);
+  const base = reqNumber(req.body?.base ?? 0, "base", { min: 0, max: 2_000_000_000 });
+  const { rows } = await query(
+    base === 0
+      ? `INSERT INTO belief_game (user_id, data) VALUES ($1, $2)
+         ON CONFLICT (user_id) DO NOTHING RETURNING version`
+      : `UPDATE belief_game SET data = $2, version = version + 1, updated_at = now()
+          WHERE user_id = $1 AND version = $3 RETURNING version`,
+    base === 0 ? [req.user.id, data] : [req.user.id, data, base]
+  );
+  if (rows.length) return res.json({ version: rows[0].version });
+  const cur = await query("SELECT data, version FROM belief_game WHERE user_id = $1", [req.user.id]);
+  res.status(409).json({ error: "Stan gry zmienił się na innym urządzeniu.", ...(cur.rows[0] || { data: null, version: 0 }) });
+}));

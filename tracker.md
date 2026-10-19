@@ -65,17 +65,19 @@ tracker/
 │       ├── plans.js          # dni tygodnia, HRmax — pomocniki planów
 │       ├── stability.js      # stany, techniki i grupy zakładki Stabilizacja
 │       ├── philosophy.js     # kanon filozofii: cztery filary, 21 zasad
+│       ├── beliefsBank.json  # bank gry „Przekonania" (generowany, nie edytować ręcznie)
 │       ├── App.jsx           # stan, akcje, ładowanie danych, szkielet strony
 │       ├── lib/
 │       │   ├── ui.js         # breakpointy, tokeny kolorów i czcionek, daty, kb()
 │       │   ├── router.js     # zakładki jako ścieżki (history.pushState)
+│       │   ├── beliefsEngine.js # silnik gry „Przekonania" (Leitner, ocena, scalanie)
 │       │   ├── muscles.js    # słownik mięśni sylwetki (MUSCLES)
 │       │   ├── bodyArt.js    # ścieżki sylwetki i mięśni (generowane, MIT)
 │       │   ├── muscleGuess.js # podpowiedź mięśni z nazw dnia i ćwiczeń
 │       │   ├── exerciseDb.js # ćwiczenia dodatkowe z free-exercise-db (domena publiczna)
 │       │   └── appContext.js # kontekst: stan i akcje z App dla zakładek
-│       ├── components/       # buttons, charts, calendar, FormulaPanel, LoginScreen
-│       └── tabs/             # Stability, Habits (+ Goals), Calories, Muscles (+ PlanEditor, RecipeEditor)
+│       ├── components/       # buttons, charts, calendar, FormulaPanel, LoginScreen, ViewSwitch
+│       └── tabs/             # Stability (+ Beliefs), Habits (+ Goals), Calories, Muscles (+ PlanEditor, RecipeEditor)
 ├── shared/
 │   ├── planSchema.mjs            # format sledzik-plan/1: walidator wspólny dla przeglądarki i API
 │   └── plans/tyler-durden.json   # przykładowy plan = wzór pliku do importu
@@ -86,6 +88,7 @@ tracker/
     ├── create-user.sh           # zakłada konto (rejestracja jest zamknięta)
     ├── migrate-kv.sh            # kv_store → tabele, dla wskazanego konta
     ├── gen-body-art.mjs         # frontend/src/lib/bodyArt.js z grafiki MIT (ręcznie)
+    ├── beliefs/                 # gen-bank.py + content.json → frontend/src/beliefsBank.json
     └── gen-self-signed-cert.sh
 ```
 
@@ -187,7 +190,7 @@ kilkudziesięciu propsów: sięgają po stan i akcje przez `useApp()` z
 **bez zmiany zachowania**; przeniesienie stanu do zakładek to osobna decyzja.
 
 **Każda zakładka ma własny adres** (`lib/router.js`, bez zależności, na
-`history.pushState`): `/stabilizacja`, `/nawyki` (z widokiem `/nawyki/cele`),
+`history.pushState`): `/stabilizacja` (z widokiem `/stabilizacja/przekonania`), `/nawyki` (z widokiem `/nawyki/cele`),
 `/kalorie` (z podstronami `/kalorie/profil` i `/kalorie/licznik`), `/miesnie`.
 Konsekwencje:
 
@@ -336,6 +339,36 @@ nie jest kluczem w bazie, a z wypełnionym `id` zapis poszedłby `PATCH`-em na
 nieistniejący wiersz. Każda zasada ma stały `key` (ten sam wzorzec co klucze
 technik), więc dopisanie albo przestawienie zasady nie zmienia znaczenia niczego,
 co już zapisano.
+
+#### Przekonania — `frontend/src/tabs/Beliefs.jsx`
+
+Drugi widok Stabilizacji (`/stabilizacja/przekonania`, przełącznik pod opisem
+zakładki): gra do nauki błędów poznawczych (kodeks bias.wiki, 188 pozycji)
+i modeli mentalnych (fs.blog, 101), zbudowana skillem `learning-game-designer`.
+Przekonania wykrzywiają te same błędy, które w drugim widoku łapie się po fakcie.
+
+- **Bank** generuje `scripts/beliefs/gen-bank.py` z dwóch tabel xlsx w katalogu
+  głównym repo i z `scripts/beliefs/content.json` (scenariusze, pytania
+  „dlaczego", kolejność wprowadzania, poprawki opisów). Synonimy i duplikaty
+  między tabelami są scalone (`MERGE`), a pary zbyt bliskie nie bywają dla
+  siebie dystraktorami (`EXCLUDE_GROUPS`). Trzy rodzaje pozycji: opis z tabeli
+  z nazwą zamienioną na „___" → nazwa; scenariusz → pojęcie (transfer, ok. 1/3
+  banku); „dlaczego" z wzorcem i samooceną. Po zmianie treści:
+  `python3 scripts/beliefs/gen-bank.py`, potem walidator skilla na
+  `scripts/beliefs/bank.expanded.json`.
+- **Pętla** (`lib/beliefsEngine.js`, przeniesiona z szablonu skilla): pytanie
+  przed odpowiedzią → pewność → feedback z wyjaśnieniem i opisem pojęcia, które
+  wybrano → błąd wraca po trzech innych pozycjach → pudełka Leitnera 1/3/7/16/35
+  dni. Ruchoma trafność z 10 odpowiedzi steruje liczbą nowych (3–8 na sesję)
+  i przejściem z wyboru na wpisywanie nazwy. Trafienie przy „zgaduję" nie
+  awansuje pozycji.
+- **Stan** to jeden dokument JSON na konto (`belief_game`) z licznikiem
+  `version`: zapis ze starszą wersją dostaje `409` z aktualnym stanem, klient
+  scala (`merge`: pozycja z większą liczbą odpowiedzi wygrywa, log sumowany)
+  i zapisuje ponownie — gra z telefonu i komputera nie nadpisuje się nawzajem.
+  Kopia w `localStorage` (klucz per konto) na czas bez sieci.
+- Bank (~80 kB po gzipie) i komponent ładują się leniwie, dopiero przy wejściu
+  na widok.
 
 #### Zakładka nawyków
 
@@ -794,6 +827,7 @@ w ogóle istnieje.
 | GET/POST/PATCH/DELETE | `/api/stability/principles[/:id]`, `POST …/seed` | zasady użytkownika |
 | GET/POST/DELETE | `/api/stability/checkins[/:id]?days=` | check-iny stanu |
 | GET/POST | `/api/stability/uses?days=` | użycia technik (liczniki per klucz) |
+| GET/PUT | `/api/stability/beliefs` | stan gry „Przekonania" `{data, version}`; `PUT {data, base}` przy niezgodnej wersji → `409` z aktualnym stanem |
 | GET | `/api/off/search?q=` | wyszukiwanie w Open Food Facts |
 | POST | `/api/off/import` | pobranie produktu po kodzie i zapis do katalogu |
 
@@ -1011,6 +1045,7 @@ dwóch równoległych kliknięć.
 | `principles` | zasady użytkownika: tekst, źródło, do jakich stanów pasują |
 | `mood_checkins` | check-iny: stan + natężenie 1–5 z godziną |
 | `technique_uses` | użycia technik, po stałym kluczu z `stability.js` |
+| `belief_game` | postęp gry „Przekonania": jeden dokument JSONB na konto + `version` do wykrywania zapisu z innego urządzenia |
 | `avoid_items` | lista niewolnika — rzeczy, od których użytkownik trzyma się z daleka |
 | `training_plans` | plany treningowe: `name` + cały plan w `data` (JSONB, format `sledzik-plan/1`) |
 | `plan_exercise_logs` | dziennik pozycji planu: (plan, dzień tygodnia, rodzaj, numer) + data, `done` i `max_load`; brak wiersza = nic do zapamiętania |

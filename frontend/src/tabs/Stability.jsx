@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, lazy, Suspense } from "react";
 import { MONO, INK, today, plDate, plTime, useFitHeight } from "../lib/ui.js";
 import { kb } from "../lib/ui.js";
 import { IconBtn, DeleteBtn } from "../components/buttons.jsx";
@@ -7,12 +7,42 @@ import { MeasurementChart } from "../components/charts.jsx";
 import { STATES, STATE_MAP, GROUPS, TECHNIQUES, dailyPick } from "../stability.js";
 import { PILLARS, CANON, CANON_PRINCIPLES, canonAsPrinciple } from "../philosophy.js";
 import { useApp } from "../lib/appContext.js";
+import { ViewSwitch } from "../components/ViewSwitch.jsx";
+
+// Gra „Przekonania" ładuje się dopiero przy wejściu na nią — bank pytań
+// waży więcej niż cała reszta zakładki.
+const BeliefsGame=lazy(()=>import("./Beliefs.jsx"));
+const STAB_VIEWS=[["stabilizacja","⚖️ Stabilizacja"],["przekonania","🧠 Przekonania"]];
 
 // Poniżej tej wysokości kolumny nie mają sensu — strona zwyczajnie się
 // przewija. STAB_BOTTOM to dolny padding kontenera w App.
 const STAB_MIN_H=480, STAB_BOTTOM=24;
 
+// Dwa widoki zakładki: stabilizacja (check-in, techniki, zasady) i gra
+// „Przekonania". Widok wynika z adresu — /stabilizacja albo
+// /stabilizacja/przekonania.
 export default function StabilityTab(){
+  const { stabView, setStabView, isMobile }=useApp();
+  const intro=(
+    <TabIntro eyebrow="STABILIZACJA EMOCJONALNA" color="#e8b84b">
+      {stabView==="przekonania"
+        ?"Przekonania wykrzywiają te same błędy myślenia. Rozpoznawaj je z pamięci, w odstępach — z powrotami wtedy, gdy zaczynasz zapominać."
+        :"Nie chodzi o kierunek emocji, tylko o jej amplitudę. Nie da się regulować czegoś, czego się nie mierzy."}
+    </TabIntro>
+  );
+  const sw=<ViewSwitch opts={STAB_VIEWS} value={stabView} onChange={setStabView} isMobile={isMobile}/>;
+  if(stabView==="przekonania")return(
+    <div>
+      {intro}{sw}
+      <Suspense fallback={<div style={{maxWidth:720,margin:"0 auto",color:INK.soft,fontSize:13,padding:18}}>Wczytuję…</div>}>
+        <BeliefsGame/>
+      </Suspense>
+    </div>
+  );
+  return <StabilityView intro={intro} sw={sw}/>;
+}
+
+function StabilityView({intro,sw}){
   const { addCheckin, addKotwica, checkins, ciIntensity, ciNote, ciSaved, ciState, currentState, delKotwica, deleteCheckin, isWide, isXWide, deletePrinciple, editPrinciple, isMobile, kotwicaEmoji, kotwicaInput, kotwice, philOpen, philRule, principleForm, principleOffset, principles, savePrinciple, seedPrinciples, setCiIntensity, setCiNote, setCiState, setKotwicaEmoji, setKotwicaInput, setPhilOpen, setPhilRule, setPrincipleForm, setPrincipleOffset, setShowAllTech, setShowPrinciples, setTechExpanded, showAllTech, showPrinciples, techExpanded, techUses, todayCheckins, useTechnique }=useApp();
 
   const ACC="#e8b84b";                       // akcent zakładki (nie seria danych)
@@ -358,9 +388,7 @@ export default function StabilityTab(){
   const col=kids=><div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0,minHeight:0,overflowY:"auto"}}>{kids}</div>;
   return(
     <div style={wide?{maxWidth:"90%",margin:"0 auto"}:undefined}>
-      <TabIntro eyebrow="STABILIZACJA EMOCJONALNA" color={ACC}>
-        Nie chodzi o kierunek emocji, tylko o jej amplitudę. Nie da się regulować czegoś, czego się nie mierzy.
-      </TabIntro>
+      {intro}{sw}
 
       {wide?(
         <div ref={gridRef} style={{display:"grid",gap:14,height:fitH??undefined,gridTemplateRows:"minmax(0,1fr)",

@@ -5,37 +5,20 @@ import { HabitHex } from "../components/charts.jsx";
 import { useApp } from "../lib/appContext.js";
 import { TabIntro } from "../components/TabIntro.jsx";
 import GoalsView from "./Goals.jsx";
+import { ViewSwitch } from "../components/ViewSwitch.jsx";
 
 // Dwa widoki zakładki: nawyki (codzienne kroki) i cele (kierunek, pod który
 // się je podpina). Widok wynika z adresu — /nawyki albo /nawyki/cele.
-// Pasek wygląda i stoi tak jak główna nawigacja (680 px, wyśrodkowany) —
-// wcześniej siedział przyklejony do lewej krawędzi szerokiej zakładki.
-function ViewSwitch(){
-  const { habView, setHabView, isMobile }=useApp();
-  const opts=[["nawyki","🌱 Nawyki"],["cele","🎯 Cele"]];
-  return(
-    <div role="tablist" aria-label="Widok zakładki" style={{display:"flex",gap:4,background:"#161616",
-      borderRadius:10,padding:4,margin:"0 auto 16px",maxWidth:680}}>
-      {opts.map(([k,label])=>{
-        const on=habView===k;
-        return(
-          <button key={k} role="tab" aria-selected={on} onClick={()=>setHabView(k)}
-            style={{flex:1,minHeight:isMobile?44:36,border:"none",borderRadius:8,cursor:"pointer",fontSize:isMobile?13:14,fontWeight:600,
-              background:on?"#2a2a2a":"transparent",color:on?"#fff":INK.soft,transition:"background .15s"}}>{label}</button>
-        );
-      })}
-    </div>
-  );
-}
+const HAB_VIEWS=[["nawyki","🌱 Nawyki"],["cele","🎯 Cele"]];
 
 export default function HabitsTab(){
-  const { habView }=useApp();
+  const { habView, setHabView, isMobile }=useApp();
   return(
     <div>
       <TabIntro eyebrow="NAWYKI I CELE" color="#4ade80">
         Odhaczaj nawyki każdego dnia — sześciokąt pokazuje, ile już za Tobą. Cele zbierają nawyki pod jeden kierunek.
       </TabIntro>
-      <ViewSwitch/>
+      <ViewSwitch opts={HAB_VIEWS} value={habView} onChange={setHabView} isMobile={isMobile}/>
       {habView==="cele"?<GoalsView/>:<HabitsView/>}
     </div>
   );
