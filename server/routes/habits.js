@@ -1,6 +1,6 @@
 import express from "express";
 import { query } from "../db.js";
-import { wrap, reqText, optText, optTime, reqId, reqDate, BadRequest } from "../http.js";
+import { wrap, reqText, optText, optTime, optInt, optBool, reqId, reqDate, BadRequest } from "../http.js";
 
 export const habitRoutes = express.Router();
 
@@ -8,6 +8,7 @@ export const habitRoutes = express.Router();
 const SELECT_HABIT = `
   SELECT id, name, category,
          to_char(reminder_time, 'HH24:MI') AS "reminderTime",
+         duration_min AS "durationMin", required,
          position
     FROM habits`;
 
@@ -23,11 +24,14 @@ habitRoutes.post("/", wrap(async (req, res) => {
   const name = reqText(req.body?.name, "name", { max: 120 });
   const category = reqText(req.body?.category, "category", { max: 60 });
   const reminderTime = optTime(req.body?.reminderTime, "reminderTime");
+  const durationMin = optInt(req.body?.durationMin, "durationMin", { min: 5, max: 720 }) ?? 30;
+  const required = optBool(req.body?.required, "required") ?? true;
   const { rows } = await query(
-    `INSERT INTO habits (user_id, name, category, reminder_time, position)
-     VALUES ($1, $2, $3, $4, COALESCE((SELECT max(position) + 1 FROM habits WHERE user_id = $1), 0))
-     RETURNING id, name, category, to_char(reminder_time,'HH24:MI') AS "reminderTime", position`,
-    [req.user.id, name, category, reminderTime]
+    `INSERT INTO habits (user_id, name, category, reminder_time, duration_min, required, position)
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE((SELECT max(position) + 1 FROM habits WHERE user_id = $1), 0))
+     RETURNING id, name, category, to_char(reminder_time,'HH24:MI') AS "reminderTime",
+               duration_min AS "durationMin", required, position`,
+    [req.user.id, name, category, reminderTime, durationMin, required]
   );
   res.status(201).json(rows[0]);
 }));
@@ -43,15 +47,20 @@ habitRoutes.patch("/:id", wrap(async (req, res) => {
     `UPDATE habits SET
         name          = COALESCE($3, name),
         category      = COALESCE($4, category),
-        reminder_time = CASE WHEN $5 THEN $6::time ELSE reminder_time END
+        reminder_time = CASE WHEN $5 THEN $6::time ELSE reminder_time END,
+        duration_min  = COALESCE($7, duration_min),
+        required      = COALESCE($8, required)
       WHERE id = $1 AND user_id = $2
-      RETURNING id, name, category, to_char(reminder_time,'HH24:MI') AS "reminderTime", position`,
+      RETURNING id, name, category, to_char(reminder_time,'HH24:MI') AS "reminderTime",
+               duration_min AS "durationMin", required, position`,
     [
       id, req.user.id,
       optText(b.name, "name", { max: 120 }),
       optText(b.category, "category", { max: 60 }),
       clearTime,
       clearTime ? optTime(b.reminderTime, "reminderTime") : null,
+      optInt(b.durationMin, "durationMin", { min: 5, max: 720 }),
+      optBool(b.required, "required"),
     ]
   );
   if (!rows.length) return res.status(404).json({ error: "Nie ma takiego nawyku." });

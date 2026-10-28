@@ -33,13 +33,13 @@ export function parseRoute(pathname) {
   const tab = TABS.find(t => t.key === seg1);
   if (!tab) return { tab: null, sub: null };
   const sub = tab.key === "kalorie" ? (CAL_SUB[seg2] || null)
-            : tab.key === "nawyki" && seg2 === "cele" ? "cele"
+            : tab.key === "nawyki" && (seg2 === "cele" || seg2 === "plan") ? seg2
             : tab.key === "stabilizacja" && seg2 === "przekonania" ? "przekonania" : null;
   return { tab: tab.key, sub };
 }
 export const calPath = bmiTab => CAL_PATH[bmiTab] || "/kalorie";
-// /nawyki ma dwa widoki: listę nawyków i cele.
-export const habPath = view => (view === "cele" ? "/nawyki/cele" : "/nawyki");
+// /nawyki ma trzy widoki: listę nawyków, plan dnia i cele.
+export const habPath = view => (view === "cele" || view === "plan" ? `/nawyki/${view}` : "/nawyki");
 // /stabilizacja ma dwa widoki: stabilizację (check-in, techniki) i grę „Przekonania".
 export const stabPath = view => (view === "przekonania" ? "/stabilizacja/przekonania" : "/stabilizacja");
 

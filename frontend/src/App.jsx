@@ -26,6 +26,10 @@ export default function App() {
   const [newName,setNewName]=useState("");
   const [newCat,setNewCat]=useState("Zdrowie");
   const [newTime,setNewTime]=useState("");
+  // Plan dnia: długość bloku i to, czy nawyk jest obowiązkowy (pełny blok)
+  // czy opcjonalny (blok w paski).
+  const [newDuration,setNewDuration]=useState(30);
+  const [newRequired,setNewRequired]=useState(true);
   const [progressView,setProgressView]=useState({});
   // Kategoria wybrana w sześciokącie nawyków; null = wszystkie.
   const [habCat,setHabCat]=useState(null);
@@ -85,9 +89,9 @@ export default function App() {
   const { navigate, route }=useRoute(user?(user.startTab||HOME):null);
   const mainTab=route.tab||"stabilizacja";
   const setMainTab=k=>navigate(TABS.find(t=>t.key===k)?.path||"/stabilizacja");
-  // Nawyki mają dwa widoki — lista nawyków i cele — rozróżniane adresem,
-  // żeby wstecz wracało z celów do nawyków, a cele dało się ustawić jako start.
-  const habView=route.tab==="nawyki"&&route.sub==="cele"?"cele":"nawyki";
+  // Nawyki mają trzy widoki — lista nawyków, plan dnia i cele — rozróżniane
+  // adresem, żeby wstecz wracało z celów do nawyków, a cele dało się ustawić jako start.
+  const habView=route.tab==="nawyki"&&(route.sub==="cele"||route.sub==="plan")?route.sub:"nawyki";
   const setHabView=v=>navigate(habPath(v));
   // Stabilizacja też ma dwa widoki: stabilizację i grę „Przekonania".
   const stabView=route.tab==="stabilizacja"&&route.sub==="przekonania"?"przekonania":"stabilizacja";
@@ -408,8 +412,9 @@ export default function App() {
   // ── Nawyki ──
   const addHabit=()=>run(async()=>{
     if(!newName.trim())return;
-    const h=await api.addHabit({name:newName.trim(),category:newCat,reminderTime:newTime||null});
-    setHabits(x=>[...x,h]);setNewName("");setNewTime("");setShowForm(false);
+    const h=await api.addHabit({name:newName.trim(),category:newCat,reminderTime:newTime||null,
+      durationMin:newDuration,required:newRequired});
+    setHabits(x=>[...x,h]);setNewName("");setNewTime("");setNewDuration(30);setNewRequired(true);setShowForm(false);
   });
   const deleteHabit=id=>run(async()=>{
     await api.deleteHabit(id);
@@ -419,9 +424,14 @@ export default function App() {
     setGoals(g=>g.map(x=>x.habitIds.includes(id)?{...x,habitIds:x.habitIds.filter(i=>i!==id)}:x));
     await reloadLogs();
   });
-  const updateTime=(id,time)=>run(async()=>{
-    const h=await api.patchHabit(id,{reminderTime:time||null});
+  // Godzina i długość bloku zapisują się razem — to jedno „kiedy" w planie dnia.
+  const updateTime=(id,time,durationMin)=>run(async()=>{
+    const h=await api.patchHabit(id,{reminderTime:time||null,...(durationMin?{durationMin}:{})});
     setHabits(x=>x.map(o=>o.id===id?h:o));setEditTimeId(null);
+  });
+  const updateRequired=(id,required)=>run(async()=>{
+    const h=await api.patchHabit(id,{required});
+    setHabits(x=>x.map(o=>o.id===id?h:o));
   });
   const updateName=(id,name)=>run(async()=>{
     if(!name.trim())return;
@@ -688,7 +698,7 @@ export default function App() {
   if(!user)return <LoginScreen notice={loginNotice} onLogged={u=>{setLoginNotice("");setUser(u);setLoading(true);}}/>;
   if(loading)return splash("Ładowanie…");
 
-  const ctx={ goals, goalCat, setGoalCat, goalsByHabit, addGoal, patchGoal, deleteGoal, linkHabit, addHabitToGoal, habView, setHabView, stabView, setStabView, addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteRecipe, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, dishes, editTimeId, ensureYear, error, exEntry, exHistory, exLast, expandedHabit, filtered, foodCats, foodTab, foods, foodsTruncated, getStreak, getView, getWeeklyRate, grams, gramsNum, habCat, setHabCat, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, offInfo, offLoading, offQuery, offResults, openGroups, philOpen, philRule, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, openExHistory, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, saveEx, savePlan, saveRecipe, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setFoodTab, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffInfo, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPhilOpen, setPhilRule, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleDish, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
+  const ctx={ goals, goalCat, setGoalCat, goalsByHabit, addGoal, patchGoal, deleteGoal, linkHabit, addHabitToGoal, habView, setHabView, stabView, setStabView, addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteRecipe, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, dishes, editTimeId, ensureYear, error, exEntry, exHistory, exLast, expandedHabit, filtered, foodCats, foodTab, foods, foodsTruncated, getStreak, getView, getWeeklyRate, grams, gramsNum, habCat, setHabCat, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, newDuration, setNewDuration, newRequired, setNewRequired, updateRequired, offInfo, offLoading, offQuery, offResults, openGroups, philOpen, philRule, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, openExHistory, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, saveEx, savePlan, saveRecipe, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setFoodTab, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffInfo, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPhilOpen, setPhilRule, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleDish, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
   // Ten sam przycisk ustawień stoi po lewej (telefon) albo po prawej (komputer).
   const gearBtn=(<button onClick={()=>setShowSettings(v=>!v)} aria-expanded={showSettings} aria-label="Ustawienia" title="Ustawienia"
       style={{background:showSettings?"#2a2a2a":"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,minWidth:44,minHeight:isMobile?44:36,

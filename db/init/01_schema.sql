@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS habits (
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS habits_user_idx ON habits (user_id);
+-- Plan dnia: nawyk z godziną to blok na osi doby, od reminder_time przez
+-- duration_min minut. Obowiązkowy rysuje się pełnym kolorem, opcjonalny
+-- w paski. Starym nawykom domyślne wartości dają pół godziny i obowiązek.
+ALTER TABLE habits ADD COLUMN IF NOT EXISTS duration_min smallint NOT NULL DEFAULT 30 CHECK (duration_min BETWEEN 5 AND 720);
+ALTER TABLE habits ADD COLUMN IF NOT EXISTS required boolean NOT NULL DEFAULT true;
 
 -- Obecność wiersza = nawyk odhaczony tego dnia. Klucz złożony zastępuje
 -- klucze postaci "<idNawyku>_<data>" z modelu klucz–wartość i sprawia, że

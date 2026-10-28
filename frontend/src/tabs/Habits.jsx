@@ -1,31 +1,34 @@
 import { CATEGORIES, DAY_LABELS, INK , kb, habLayout } from "../lib/ui.js";
-import { IconBtn, DeleteBtn, TimePicker, TimePickerForm } from "../components/buttons.jsx";
+import { IconBtn, DeleteBtn, TimePickerForm } from "../components/buttons.jsx";
+import { Swatch, DurationChips, RequiredSwitch, HabitTimeEditor, fmtDuration } from "../components/habitTime.jsx";
 import { MonthView, YearView } from "../components/calendar.jsx";
 import { HabitHex } from "../components/charts.jsx";
 import { useApp } from "../lib/appContext.js";
 import { TabIntro } from "../components/TabIntro.jsx";
 import GoalsView from "./Goals.jsx";
+import DayPlan from "./DayPlan.jsx";
 import { ViewSwitch } from "../components/ViewSwitch.jsx";
 
-// Dwa widoki zakładki: nawyki (codzienne kroki) i cele (kierunek, pod który
-// się je podpina). Widok wynika z adresu — /nawyki albo /nawyki/cele.
-const HAB_VIEWS=[["nawyki","🌱 Nawyki"],["cele","🎯 Cele"]];
+// Trzy widoki zakładki: nawyki (codzienne kroki), plan dnia (te same nawyki
+// na osi doby) i cele (kierunek, pod który się je podpina). Widok wynika
+// z adresu — /nawyki, /nawyki/plan albo /nawyki/cele.
+const HAB_VIEWS=[["nawyki","🌱 Nawyki"],["plan","🗓 Plan dnia"],["cele","🎯 Cele"]];
 
 export default function HabitsTab(){
   const { habView, setHabView, isMobile }=useApp();
   return(
     <div>
       <TabIntro eyebrow="NAWYKI I CELE" color="#4ade80">
-        Odhaczaj nawyki każdego dnia — sześciokąt pokazuje, ile już za Tobą. Cele zbierają nawyki pod jeden kierunek.
+        Odhaczaj nawyki każdego dnia — sześciokąt pokazuje, ile już za Tobą. Plan dnia rozkłada je na godziny, cele zbierają pod jeden kierunek.
       </TabIntro>
       <ViewSwitch opts={HAB_VIEWS} value={habView} onChange={setHabView} isMobile={isMobile}/>
-      {habView==="cele"?<GoalsView/>:<HabitsView/>}
+      {habView==="cele"?<GoalsView/>:habView==="plan"?<DayPlan/>:<HabitsView/>}
     </div>
   );
 }
 
 function HabitsView(){
-  const { goalsByHabit, addAvoid, addHabit, avoidItems, avoidName, avoidNote, days7, deleteAvoid, deleteHabit, editAvoidId, editAvoidNote, editAvoidVal, editNameId, editNameVal, editTimeId, ensureYear, expandedHabit, getStreak, habCat, setHabCat, getView, getWeeklyRate, habitLogs, habits, habitsByCat, isChecked, isMobile, isWide, isXWide, newCat, newName, newTime, saveAvoid, setAvoidName, setAvoidNote, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditNameId, setEditNameVal, setEditTimeId, setExpandedHabit, setNewCat, setNewName, setNewTime, setShowAvoidForm, setShowForm, setView, showAvoidForm, showForm, startEditAvoid, todayStr, toggleHabit, updateName, updateTime }=useApp();
+  const { goalsByHabit, addAvoid, addHabit, avoidItems, avoidName, avoidNote, days7, deleteAvoid, deleteHabit, editAvoidId, editAvoidNote, editAvoidVal, editNameId, editNameVal, editTimeId, ensureYear, newDuration, setNewDuration, newRequired, setNewRequired, updateRequired, expandedHabit, getStreak, habCat, setHabCat, getView, getWeeklyRate, habitLogs, habits, habitsByCat, isChecked, isMobile, isWide, isXWide, newCat, newName, newTime, saveAvoid, setAvoidName, setAvoidNote, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditNameId, setEditNameVal, setEditTimeId, setExpandedHabit, setNewCat, setNewName, setNewTime, setShowAvoidForm, setShowForm, setView, showAvoidForm, showForm, startEditAvoid, todayStr, toggleHabit, updateName, updateTime }=useApp();
   const renderHabitCard=(habit,cat)=>{
     const checked=isChecked(habit.id,todayStr);
     const streak=getStreak(habit.id);
@@ -69,10 +72,18 @@ function HabitsView(){
                   padding:"1px 6px",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🎯 {g.name}</span>
               ))}
               {streak>0&&<span style={{fontSize:11,color:checked?"#888":INK.faint}} title={checked?`${streak} dni z rzędu`:`${streak} dni z rzędu — dziś jeszcze nie`}>🔥 {streak}{!checked&&<span style={{color:INK.faint}}> · dziś jeszcze nie</span>}</span>}
-              <button onClick={()=>setEditTimeId(isEditingTime?null:habit.id)} title="Godzina przypomnienia"
+              <button onClick={()=>setEditTimeId(isEditingTime?null:habit.id)} title="Godzina i długość w planie dnia"
                 style={{background:habit.reminderTime?"#222":"none",border:"none",borderRadius:6,
                   padding:habit.reminderTime?"2px 7px":"2px 2px",color:habit.reminderTime?"#aaa":INK.faint,fontSize:11,cursor:"pointer"}}>
-                🕐{habit.reminderTime?` ${habit.reminderTime}`:""}
+                🕐{habit.reminderTime?` ${habit.reminderTime} · ${fmtDuration(habit.durationMin||30)}`:""}
+              </button>
+              {/* Jedno tapnięcie przełącza: obowiązkowy (pełny blok w planie
+                  dnia) ↔ opcjonalny (blok w paski). */}
+              <button onClick={()=>updateRequired(habit.id,!habit.required)} aria-label={`${habit.required?"Obowiązkowy":"Opcjonalny"} — przełącz`}
+                title="Obowiązkowy czy opcjonalny — przełącz"
+                style={{display:"inline-flex",alignItems:"center",gap:5,background:"#1f1f1f",border:"none",borderRadius:6,
+                  padding:"2px 7px",color:INK.soft,fontSize:11,cursor:"pointer"}}>
+                <Swatch color={cat.color} required={habit.required} size={9}/>{habit.required?"obowiązkowy":"opcjonalny"}
               </button>
             </div>
           </div>
@@ -81,7 +92,7 @@ function HabitsView(){
         {isEditingTime&&(
           <div style={{marginTop:9}}>
             {/* stacked: w wąskim kaflu siatka godzin i przyciski nie zmieszczą się obok siebie */}
-            <TimePicker stacked value={habit.reminderTime} onChange={t=>updateTime(habit.id,t)}
+            <HabitTimeEditor stacked habit={habit} onSave={(t,d)=>updateTime(habit.id,t,d)}
               onClose={()=>setEditTimeId(null)} onRemove={habit.reminderTime?()=>updateTime(habit.id,""):null}/>
           </div>
         )}
@@ -225,13 +236,23 @@ function HabitsView(){
               })}
             </div>
             <div style={{marginBottom:14}}>
-              <label style={{fontSize:12,color:"#888",display:"block",marginBottom:8}}>Godzina przypomnienia (opcjonalnie)</label>
+              <label style={{fontSize:12,color:"#888",display:"block",marginBottom:8}}>Godzina (opcjonalnie) — z nią nawyk staje się blokiem w planie dnia</label>
               <TimePickerForm value={newTime} onChange={setNewTime}/>
               {newTime&&<button onClick={()=>setNewTime("")} style={{marginTop:6,background:"none",border:"none",color:INK.soft,cursor:"pointer",fontSize:12,padding:"8px 0",minHeight:36}}>Usuń godzinę ×</button>}
+              {newTime&&(
+                <div style={{marginTop:8}}>
+                  <div style={{fontSize:12,color:"#888",marginBottom:8}}>Długość</div>
+                  <DurationChips value={newDuration} onChange={setNewDuration}/>
+                </div>
+              )}
+            </div>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:12,color:"#888",marginBottom:8}}>Rodzaj</div>
+              <RequiredSwitch value={newRequired} onChange={setNewRequired} color={(CATEGORIES.find(c=>c.label===newCat)||CATEGORIES[0]).color}/>
             </div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={addHabit} style={{background:"#fff",color:"#000",border:"none",borderRadius:8,padding:"8px 20px",fontWeight:600,cursor:"pointer",flex:1}}>Dodaj</button>
-              <button onClick={()=>{setShowForm(false);setNewName("");setNewTime("");}} style={{background:"#222",color:"#aaa",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>Anuluj</button>
+              <button onClick={()=>{setShowForm(false);setNewName("");setNewTime("");setNewDuration(30);setNewRequired(true);}} style={{background:"#222",color:"#aaa",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>Anuluj</button>
             </div>
           </div>
         )}

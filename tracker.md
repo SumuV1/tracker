@@ -190,7 +190,7 @@ kilkudziesięciu propsów: sięgają po stan i akcje przez `useApp()` z
 **bez zmiany zachowania**; przeniesienie stanu do zakładek to osobna decyzja.
 
 **Każda zakładka ma własny adres** (`lib/router.js`, bez zależności, na
-`history.pushState`): `/stabilizacja` (z widokiem `/stabilizacja/przekonania`), `/nawyki` (z widokiem `/nawyki/cele`),
+`history.pushState`): `/stabilizacja` (z widokiem `/stabilizacja/przekonania`), `/nawyki` (z widokami `/nawyki/plan` i `/nawyki/cele`),
 `/kalorie` (z podstronami `/kalorie/profil` i `/kalorie/licznik`), `/miesnie`.
 Konsekwencje:
 
@@ -476,6 +476,25 @@ Ostatnia trzecia część szerokości to **lista niewolnika**: rzeczy, od który
 użytkownik trzyma się z daleka. To odwrotność nawyku, więc świadomie nie ma tam
 odhaczania ani dziennika — tabela `avoid_items` trzyma samą nazwę, opcjonalne
 uzasadnienie i kolejność.
+
+#### Plan dnia — `frontend/src/tabs/DayPlan.jsx`
+
+Środkowy widok zakładki nawyków (`/nawyki/plan`), wzorowany na widoku dnia
+kalendarza Google na Androidzie: oś doby od 00:00 na górze do 23:59 na samym
+dole, podziałka po lewej, linie godzin wyraźne, kwadransów słabsze (80 px na
+godzinę, więc kwadrans to 20 px). Nawyk z godziną to blok od `reminder_time`
+przez `duration_min` minut (domyślnie 30, ucinany na 23:59). **Obowiązkowy**
+nawyk (`required`) to blok wypełniony kolorem kategorii z czarnym tekstem
+(≥ 4,5:1 na wszystkich sześciu kolorach), **opcjonalny** — blok w paski
+z jasnym tekstem. Bloki nachodzące na siebie dzielą szerokość jak
+w kalendarzu. Cienka czerwona linia to bieżąca godzina z urządzenia
+(odświeżana co 30 s i po powrocie do karty), z etykietą na podziałce; oś
+przewija się do niej przy otwarciu, a przycisk „Teraz" wraca do niej.
+
+Nawyki bez godziny stoją nad osią, jak wydarzenia całodniowe. Tapnięcie bloku
+otwiera panel (na telefonie od dołu) z odhaczeniem na dziś, przełącznikiem
+obowiązkowy/opcjonalny i zmianą godziny lub długości. Te same ustawienia są
+w karcie nawyku i w formularzu dodawania (`components/habitTime.jsx`).
 
 #### Cele — `frontend/src/tabs/Goals.jsx`
 

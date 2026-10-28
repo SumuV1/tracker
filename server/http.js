@@ -59,6 +59,21 @@ export function optNumber(value, field, opts = {}) {
   return reqNumber(value, field, opts);
 }
 
+// Liczba całkowita — kolumny smallint odrzucają 30.5 błędem bazy, czyli 500.
+export function optInt(value, field, opts = {}) {
+  const n = optNumber(value, field, opts);
+  if (n !== null && !Number.isInteger(n)) throw new BadRequest(`Pole "${field}" musi być liczbą całkowitą.`);
+  return n;
+}
+
+// Brak klucza to null (COALESCE zostawia kolumnę); cokolwiek innego niż
+// prawdziwy boolean jest błędem — "false" jako tekst byłby prawdą.
+export function optBool(value, field) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "boolean") throw new BadRequest(`Pole "${field}" musi być true albo false.`);
+  return value;
+}
+
 export function reqId(value, field = "id") {
   const n = Number(value);
   if (!Number.isInteger(n) || n < 1) throw new BadRequest(`Nieprawidłowy identyfikator (${field}).`);
