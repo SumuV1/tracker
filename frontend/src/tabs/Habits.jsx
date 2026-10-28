@@ -1,4 +1,4 @@
-import { CATEGORIES, DAY_LABELS, INK , kb, habLayout } from "../lib/ui.js";
+import { CATEGORIES, DAY_LABELS, INK , BG, kb, habLayout } from "../lib/ui.js";
 import { IconBtn, DeleteBtn, TimePickerForm } from "../components/buttons.jsx";
 import { Swatch, DurationChips, RequiredSwitch, HabitTimeEditor, fmtDuration } from "../components/habitTime.jsx";
 import { MonthView, YearView } from "../components/calendar.jsx";
@@ -258,7 +258,7 @@ function HabitsView(){
         )}
         {!showForm&&(
           <button onClick={()=>{if(habCat)setNewCat(habCat);setShowForm(true);}} style={{width:"100%",marginTop:12,padding:"13px",
-            borderRadius:12,border:"2px dashed #333",background:"transparent",color:"#888",
+            borderRadius:12,border:"2px dashed #333",background:BG.panel,color:INK.soft,
             fontWeight:600,fontSize:14,cursor:"pointer"}}>
             + Dodaj nawyk
           </button>

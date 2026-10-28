@@ -28,7 +28,7 @@ export function LoginScreen({onLogged,notice=""}){
     padding:"12px 14px",color:"#fff",fontSize:15,outline:"none",boxSizing:"border-box"};
 
   return(
-    <div style={{background:"#0a0a0a",minHeight:"100vh",display:"flex",alignItems:"center",
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",
       justifyContent:"center",padding:20,fontFamily:FONT,color:"#f1f1f1"}}>
       <form onSubmit={submit} style={{width:"100%",maxWidth:360,background:"#161616",
         border:"1px solid #1e1e1e",borderRadius:16,padding:28}}>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "./api.js";
 import { STATE_MAP } from "./stability.js";
-import { MOBILE, NARROW, WIDE, XWIDE, useMedia, CATEGORIES, FONT, INK, toISO, today, getLast7, getBMILabel, bfColor, plDate, parseDecimal } from "./lib/ui.js";
+import { MOBILE, NARROW, WIDE, XWIDE, useMedia, CATEGORIES, FONT, INK, BG, toISO, today, getLast7, getBMILabel, bfColor, plDate, parseDecimal } from "./lib/ui.js";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { Herring } from "./components/Herring.jsx";
 import { AppContext } from "./lib/appContext.js";
@@ -693,7 +693,7 @@ export default function App() {
   const bfCol=bf?bfColor(serverProfile.sex,bf.category):null;
   const days7=getLast7();
 
-  const splash=txt=><div style={{background:"#0a0a0a",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:INK.soft,fontFamily:FONT}}>{txt}</div>;
+  const splash=txt=><div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:INK.soft,fontFamily:FONT}}>{txt}</div>;
   if(!authChecked)return splash("");
   if(!user)return <LoginScreen notice={loginNotice} onLogged={u=>{setLoginNotice("");setUser(u);setLoading(true);}}/>;
   if(loading)return splash("Ładowanie…");
@@ -705,7 +705,7 @@ export default function App() {
         padding:"0 10px",color:showSettings?"#fff":"#888",fontSize:16,cursor:"pointer"}}>⚙</button>);
   return(
     <AppContext.Provider value={ctx}>
-    <div style={{background:"#0a0a0a",minHeight:"100vh",fontFamily:FONT,color:"#f1f1f1",padding:isMobile?"16px 12px 32px":"24px 16px"}}>
+    <div style={{minHeight:"100vh",fontFamily:FONT,color:"#f1f1f1",padding:isMobile?"16px 12px 32px":"24px 16px"}}>
       {/* Nagłówek ma własny kontener o stałej szerokości: treść zakładek
           bywa szersza (mapa mięśni), a bez tego tytuł i przycisk wylogowania
           przeskakiwały przy każdej zmianie zakładki. */}
@@ -722,10 +722,10 @@ export default function App() {
             {isMobile&&gearBtn}
           </div>
           <div style={{minWidth:0,textAlign:"center"}}>
-            <h1 style={{margin:0,fontSize:isMobile?20:24,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:"0.35em"}}>
+            <h1 style={{margin:0,fontSize:isMobile?20:24,fontWeight:700,color:BG.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:"0.35em"}}>
               <Herring flip/>Śledzik<Herring/>
             </h1>
-            <p style={{margin:0,color:"#888",fontSize:isMobile?12:13,textTransform:"capitalize"}}>{new Date().toLocaleDateString("pl-PL",{weekday:"long",month:"long",day:"numeric"})}</p>
+            <p style={{margin:0,color:BG.inkSoft,fontSize:isMobile?12:13,textTransform:"capitalize"}}>{new Date().toLocaleDateString("pl-PL",{weekday:"long",month:"long",day:"numeric"})}</p>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center",justifyContent:"flex-end",minWidth:0}}>
             {!isMobile&&gearBtn}
@@ -735,7 +735,7 @@ export default function App() {
               {isMobile?"⏻":`${user.login} · Wyloguj`}
             </button>
           </div>
-          {saving&&<span role="status" style={{position:"absolute",top:"100%",right:0,fontSize:11,color:"#888",lineHeight:"16px"}}>Zapisywanie…</span>}
+          {saving&&<span role="status" style={{position:"absolute",top:"100%",right:0,fontSize:11,color:BG.inkSoft,lineHeight:"16px"}}>Zapisywanie…</span>}
         </div>
 
         {showSettings&&(

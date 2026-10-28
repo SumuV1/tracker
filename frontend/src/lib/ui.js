@@ -114,6 +114,15 @@ export const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 export const MONO = "ui-monospace, Menlo, Consolas, monospace";
 export const INK = { faint: "#8a8a8a", muted: "#9a9a9a", soft: "#aaaaaa" };
 
+// Tło aplikacji (gradient w index.html): jasny niebieski u góry strony,
+// ciemny granat na dole. Tekst postawiony WPROST na tle nie może mieć jednego
+// koloru na całą wysokość — biały na górze ma 1,8:1, granatowy na dole 1,1:1.
+// Dlatego: nagłówek (górne ~10 % strony) pisze granatem `ink` (≥ 8,5:1),
+// a wszystko niżej stoi na własnej ciemnej powierzchni (karta, pasek,
+// `panel`). Szarości INK są liczone na kartach, nie na tym tle.
+export const BG = { top: "#8ec9ff", bottom: "#0a1a3f", ink: "#0b1630", inkSoft: "#1d3460",
+  panel: "#0d1832", panelBorder: "#1d2a4a" };
+
 // Paleta składników odżywczych. Kolejność slotów jest zwalidowana skryptem
 // walidatora dostępności (tryb ciemny, pary sąsiednie): najgorsza para
 // bursztyn↔morski ma ΔE 8,4 przy protanopii, przy progu 8. Nie zmieniać

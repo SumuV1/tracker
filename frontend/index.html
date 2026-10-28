@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="theme-color" content="#8ec9ff" />
     <title>Śledzik</title>
     <!-- SVG dla przeglądarek, które je obsługują; PNG jako zapas.
          Ikona iOS jest bez zaokrągleń — system przycina ją własną maską. -->
@@ -19,9 +19,15 @@
 
       html { -webkit-text-size-adjust: 100%; }
 
+      /* Tło aplikacji: jasny niebieski na szczycie strony przechodzi
+         w ciemny granat na jej dole (BG w lib/ui.js). Gradient rozciąga się
+         na całą wysokość dokumentu, a min-height sprawia, że krótka strona
+         i tak ma go od góry do dołu ekranu. Kolor pod spodem to granat —
+         widać go przy „odbiciu" przewijania poza stronę. */
       body {
         margin: 0;
-        background: #0a0a0a;
+        min-height: 100vh;
+        background: linear-gradient(180deg, #8ec9ff 0%, #0a1a3f 100%) no-repeat #0a1a3f;
         /* żaden element nie może rozpychać strony w poziomie */
         overflow-x: hidden;
       }

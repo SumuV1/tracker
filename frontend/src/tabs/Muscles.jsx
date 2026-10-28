@@ -639,7 +639,8 @@ export function MuscleMap({profile}){
         ))}
       </div>
     ):(
-      <div style={{display:"flex",justifyContent:"space-around",marginBottom:6}}>
+      // Pasek pod podpisami: wprost na gradiencie tła szary podpis miał 1,1:1.
+      <div style={{display:"flex",justifyContent:"space-around",marginBottom:6,background:"#161616",borderRadius:10,padding:"6px 4px"}}>
         <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:INK.faint,fontFamily:MONO}}>PRZÓD</span>
         <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.15em",color:INK.faint,fontFamily:MONO}}>TYŁ</span>
       </div>

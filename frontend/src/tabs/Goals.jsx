@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CATEGORIES, CAT_BY_LABEL, DAY_LABELS, INK, kb, plDate, habLayout } from "../lib/ui.js";
+import { CATEGORIES, CAT_BY_LABEL, DAY_LABELS, INK, BG, kb, plDate, habLayout } from "../lib/ui.js";
 import { IconBtn, DeleteBtn } from "../components/buttons.jsx";
 import { HabitHex } from "../components/charts.jsx";
 import { useApp } from "../lib/appContext.js";
@@ -319,7 +319,8 @@ export default function GoalsView() {
       {/* ── środek: cele w kategoriach ── */}
       <div style={{ minWidth: 0 }}>
         {active.length === 0 && !adding && (
-          <div style={{ textAlign: "center", padding: "48px 12px", color: INK.muted }}>
+          <div style={{ textAlign: "center", padding: "36px 12px", color: INK.muted, background: BG.panel,
+            border: `1px solid ${BG.panelBorder}`, borderRadius: 14 }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
             <p style={{ margin: "0 0 6px" }}>Brak celów w toku.</p>
             <p style={{ margin: 0, fontSize: 12.5, color: INK.faint, lineHeight: 1.5 }}>
@@ -375,7 +376,7 @@ export default function GoalsView() {
             }} />
         ) : (
           <button type="button" onClick={() => setAdding(true)} style={{ width: "100%", marginTop: 12, padding: "13px", minHeight: 48,
-            borderRadius: 12, border: "2px dashed #333", background: "transparent", color: "#888", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+            borderRadius: 12, border: "2px dashed #333", background: BG.panel, color: INK.soft, fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
             + Dodaj cel
           </button>
         )}
