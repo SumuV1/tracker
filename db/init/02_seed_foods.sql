@@ -17,7 +17,7 @@ FROM (VALUES
   ('Indyk pierś', '🥩 Mięso', 155, 30, 0, 3, 0, 0.1),
   ('Boczek', '🥩 Mięso', 541, 17, 0.7, 53, 0, 2),
   ('Szynka gotowana', '🥩 Mięso', 145, 18, 1.5, 7, 0, 2),
-  ('Kiełbasa', '🥩 Mięso', 301, 14, 1.8, 27, 0, 2.2),
+  ('Kiełbasa', '🍟 Przetworzone', 301, 14, 1.8, 27, 0, 2.2),
   ('Łosoś', '🐟 Ryby', 208, 20, 0, 13, 0, 0.1),
   ('Tuńczyk (puszka)', '🐟 Ryby', 116, 26, 0, 1, 0, 0.8),
   ('Dorsz', '🐟 Ryby', 82, 18, 0, 0.7, 0, 0.2),

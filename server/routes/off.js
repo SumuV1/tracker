@@ -1,6 +1,8 @@
 import express from "express";
 import { query } from "../db.js";
 import { wrap, reqText, BadRequest } from "../http.js";
+import { guessFoodCategory } from "../../shared/foodCategories.mjs";
+import { optCategory } from "./foods.js";
 
 export const offRoutes = express.Router();
 
@@ -9,7 +11,7 @@ export const offRoutes = express.Router();
 // przez zwykłe API produktowe.
 const SEARCH_URL = "https://search.openfoodfacts.org/search";
 const PRODUCT_URL = "https://world.openfoodfacts.org/api/v2/product";
-const FIELDS = "code,product_name,brands,quantity,nutriments";
+const FIELDS = "code,product_name,brands,quantity,nutriments,categories_tags";
 
 // Bierzemy więcej trafień, niż pokazujemy, bo zaraz odsiewamy te, które pasują
 // tylko do części zapytania (patrz „Dopasowanie słów”).
@@ -106,6 +108,8 @@ function normalize(p) {
     code: String(p.code),
     name,
     quantity: p.quantity || null,
+    // Podpowiedź do listy rozwijanej — użytkownik może ją zmienić przed importem.
+    category: guessFoodCategory(p.categories_tags, base),
     kcal: num(kcal),
     proteinG: num(n.proteins_100g),
     carbsG: num(n.carbohydrates_100g),
@@ -186,17 +190,20 @@ offRoutes.get("/search", wrap(async (req, res) => {
 // Wartości odżywcze pobieramy z Open Food Facts po kodzie kreskowym, zamiast
 // przyjmować je z przeglądarki — klient wskazuje wyłącznie, który produkt.
 // Tabela foods jest zarazem cache'em: raz zaimportowany produkt nie generuje
-// już ruchu do API.
+// już ruchu do API. Kategorię wybiera użytkownik (domyślnie podpowiedź z tagów
+// OFF); przy produkcie, który już jest w katalogu, wybór ją tylko zmienia.
 offRoutes.post("/import", wrap(async (req, res) => {
   const code = reqText(req.body?.code, "code", { max: 32, min: 4 });
   if (!/^\d+$/.test(code)) throw new BadRequest("Kod kreskowy może zawierać wyłącznie cyfry.");
+  const category = optCategory(req.body?.category);
 
   const existing = await query(
-    `SELECT id, source, name, category, kcal,
-            protein_g AS "proteinG", carbs_g AS "carbsG",
-            fat_g AS "fatG", fiber_g AS "fiberG", salt_g AS "saltG"
-       FROM foods WHERE source = 'off' AND off_barcode = $1`,
-    [code]
+    `UPDATE foods SET category = COALESCE($2, category)
+      WHERE source = 'off' AND off_barcode = $1
+      RETURNING id, source, name, category, kcal,
+                protein_g AS "proteinG", carbs_g AS "carbsG",
+                fat_g AS "fatG", fiber_g AS "fiberG", salt_g AS "saltG"`,
+    [code, category]
   );
   if (existing.rows.length) return res.json({ ...existing.rows[0], cached: true });
 
@@ -214,7 +221,7 @@ offRoutes.post("/import", wrap(async (req, res) => {
 
   const { rows } = await query(
     `INSERT INTO foods (source, off_barcode, name, category, kcal, protein_g, carbs_g, fat_g, fiber_g, salt_g, fetched_at)
-     VALUES ('off', $1, $2, '🌍 Open Food Facts', $3, $4, $5, $6, $7, $8, now())
+     VALUES ('off', $1, $2, $9, $3, $4, $5, $6, $7, $8, now())
      ON CONFLICT (off_barcode) WHERE source = 'off' DO UPDATE SET
        name = EXCLUDED.name, kcal = EXCLUDED.kcal,
        protein_g = EXCLUDED.protein_g, carbs_g = EXCLUDED.carbs_g,
@@ -223,7 +230,8 @@ offRoutes.post("/import", wrap(async (req, res) => {
      RETURNING id, source, name, category, kcal,
                protein_g AS "proteinG", carbs_g AS "carbsG",
                fat_g AS "fatG", fiber_g AS "fiberG", salt_g AS "saltG"`,
-    [food.code, food.name, food.kcal, food.proteinG, food.carbsG, food.fatG, food.fiberG, food.saltG]
+    [food.code, food.name, food.kcal, food.proteinG, food.carbsG, food.fatG, food.fiberG, food.saltG,
+     category ?? food.category]
   );
   res.status(201).json({ ...rows[0], cached: false });
 }));

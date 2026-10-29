@@ -117,5 +117,5 @@ export const api = {
   deleteAnchor: id => request(`/anchors/${id}`, { method: "DELETE" }),
 
   offSearch: q => request(`/off/search?${qs({ q })}`),
-  offImport: code => request("/off/import", { method: "POST", body: { code } }),
+  offImport: (code, category) => request("/off/import", { method: "POST", body: { code, category } }),
 };

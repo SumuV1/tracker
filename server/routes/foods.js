@@ -1,6 +1,7 @@
 import express from "express";
 import { query } from "../db.js";
 import { wrap, reqText, optText, reqNumber, optNumber, reqId, BadRequest } from "../http.js";
+import { FOOD_CATEGORIES, FALLBACK_CATEGORY } from "../../shared/foodCategories.mjs";
 
 export const foodRoutes = express.Router();
 
@@ -11,6 +12,19 @@ const SELECT_FOOD = `
     FROM foods`;
 
 const DEFAULT_LIMIT = 200;
+
+// Kategoria produktu pochodzi wyłącznie z listy — wolny tekst rozmnażałby
+// kafelki filtra („Nabiał", „nabiał", „Nabial").
+export function optCategory(v) {
+  const c = optText(v, "category", { max: 60 });
+  if (c !== null && !FOOD_CATEGORIES.includes(c)) throw new BadRequest("Nieznana kategoria produktu.");
+  return c;
+}
+
+// Poprawiać i kasować można własne produkty oraz te pobrane z Open Food Facts.
+// Te drugie są wspólne dla wszystkich kont instancji — przy jednym
+// użytkowniku to jego katalog, a ponowny import po kodzie i tak je odtworzy.
+const EDITABLE = "id = $1 AND ((source = 'custom' AND user_id = $2) OR source = 'off')";
 
 // W ILIKE „%" i „_" są wieloznacznikami, więc bez tego wpisanie „%" w
 // wyszukiwarkę pasowało do wszystkiego, a nazwa z podkreśleniem szukała za
@@ -50,7 +64,14 @@ foodRoutes.get("/categories", wrap(async (req, res) => {
       GROUP BY category ORDER BY category`,
     [req.user.id]
   );
-  res.json(rows);
+  // Kolejność z listy kategorii, nie alfabetyczna po emoji; puste kategorie
+  // zostają na liście, żeby filtr nie zmieniał kształtu po skasowaniu
+  // ostatniego produktu. Spoza listy (przepisy) dochodzą na końcu.
+  const count = new Map(rows.map(r => [r.category, r.count]));
+  res.json([
+    ...FOOD_CATEGORIES.map(category => ({ category, count: count.get(category) ?? 0 })),
+    ...rows.filter(r => !FOOD_CATEGORIES.includes(r.category)),
+  ]);
 }));
 
 foodRoutes.post("/", wrap(async (req, res) => {
@@ -64,7 +85,7 @@ foodRoutes.post("/", wrap(async (req, res) => {
     [
       req.user.id,
       reqText(b.name, "name", { max: 120 }),
-      optText(b.category, "category", { max: 60 }) ?? "⭐ Własne produkty",
+      optCategory(b.category) ?? FALLBACK_CATEGORY,
       reqNumber(b.kcal, "kcal", { min: 0, max: 9999 }),
       optNumber(b.proteinG, "proteinG", { min: 0, max: 999 }) ?? 0,
       optNumber(b.carbsG, "carbsG", { min: 0, max: 999 }) ?? 0,
@@ -76,7 +97,7 @@ foodRoutes.post("/", wrap(async (req, res) => {
   res.status(201).json(rows[0]);
 }));
 
-// Poprawiać, tak jak kasować, można wyłącznie własne produkty. Zmiana nie
+// Poprawka (własnego albo z Open Food Facts — patrz EDITABLE) nie
 // rusza wpisów w dzienniku: te trzymają wartości odżywcze skopiowane w chwili
 // dodania i mają nimi zostać, bo opisują zjedzony posiłek, a nie dzisiejszą
 // treść katalogu.
@@ -93,7 +114,7 @@ foodRoutes.patch("/:id", wrap(async (req, res) => {
         fat_g     = COALESCE($8, fat_g),
         fiber_g   = COALESCE($9, fiber_g),
         salt_g    = COALESCE($10, salt_g)
-      WHERE id = $1 AND user_id = $2 AND source = 'custom'
+      WHERE ${EDITABLE}
       RETURNING id, source, name, category, kcal,
                 protein_g AS "proteinG", carbs_g AS "carbsG",
                 fat_g AS "fatG", fiber_g AS "fiberG", salt_g AS "saltG"`,
@@ -101,7 +122,7 @@ foodRoutes.patch("/:id", wrap(async (req, res) => {
       reqId(req.params.id),
       req.user.id,
       optText(b.name, "name", { max: 120 }),
-      optText(b.category, "category", { max: 60 }),
+      optCategory(b.category),
       optNumber(b.kcal, "kcal", { min: 0, max: 9999 }),
       optNumber(b.proteinG, "proteinG", { min: 0, max: 999 }),
       optNumber(b.carbsG, "carbsG", { min: 0, max: 999 }),
@@ -110,11 +131,12 @@ foodRoutes.patch("/:id", wrap(async (req, res) => {
       optNumber(b.saltG, "saltG", { min: 0, max: 999 }),
     ]
   );
-  if (!rows.length) return res.status(404).json({ error: "Nie ma takiego własnego produktu." });
+  if (!rows.length) return res.status(404).json({ error: "Tego produktu nie można edytować." });
   res.json(rows[0]);
 }));
 
-// Kasować można wyłącznie własne produkty — wspólnych nie ruszamy.
+// Kasować można to samo, co poprawiać — produktów wbudowanych nie ruszamy.
+// Wpisy w dzienniku zostają (food_id → NULL), bo trzymają własne wartości.
 foodRoutes.delete("/:id", wrap(async (req, res) => {
   // Klucz obcy w recipe_items jest RESTRICT, więc bez tego sprawdzenia
   // skasowanie składnika kończyłoby się błędem bazy i kodem 500.
@@ -127,9 +149,9 @@ foodRoutes.delete("/:id", wrap(async (req, res) => {
     throw new BadRequest("Ten produkt jest składnikiem przepisu: " + used.rows.map(r => r.name).join(", ") + ". Usuń go najpierw z przepisu.");
   }
   const { rowCount } = await query(
-    "DELETE FROM foods WHERE id = $1 AND user_id = $2 AND source = 'custom'",
+    `DELETE FROM foods WHERE ${EDITABLE}`,
     [reqId(req.params.id), req.user.id]
   );
-  if (!rowCount) return res.status(404).json({ error: "Nie ma takiego własnego produktu." });
+  if (!rowCount) return res.status(404).json({ error: "Tego produktu nie można usunąć." });
   res.json({ ok: true });
 }));

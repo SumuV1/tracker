@@ -5,6 +5,7 @@ import { MOBILE, NARROW, WIDE, XWIDE, useMedia, CATEGORIES, FONT, INK, BG, toISO
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { Herring } from "./components/Herring.jsx";
 import { AppContext } from "./lib/appContext.js";
+import { FOOD_CATEGORIES } from "../../shared/foodCategories.mjs";
 import { TABS, HOME, START_OPTIONS, useRoute, calPath, habPath, stabPath } from "./lib/router.js";
 import HabitsTab from "./tabs/Habits.jsx";
 import CaloriesTab from "./tabs/Calories.jsx";
@@ -55,9 +56,12 @@ export default function App() {
   const [serverProfile,setServerProfile]=useState(null);
   const [offQuery,setOffQuery]=useState("");
   // Zakładka w oknie dodawania produktu: katalog / przepisy i gotowe dania /
-  // Open Food Facts. Wcześniej tryb wynikał z tego, czy `offResults` to null —
-  // przy trzech zakładkach to przestało wystarczać.
+  // nowy produkt (ręcznie albo z Open Food Facts). Wcześniej tryb wynikał
+  // z tego, czy `offResults` to null — przy trzech zakładkach to przestało wystarczać.
   const [foodTab,setFoodTab]=useState("local");
+  // Kategoria, z którą produkt z Open Food Facts trafi do katalogu —
+  // na starcie podpowiedź serwera z tagów OFF.
+  const [offCat,setOffCat]=useState("");
   const [offResults,setOffResults]=useState(null);
   const [offInfo,setOffInfo]=useState(null);         // { dropped, need } z ostatniego wyszukiwania
   const [offLoading,setOffLoading]=useState(false);
@@ -80,7 +84,7 @@ export default function App() {
   const [chartMetric,setChartMetric]=useState("weightKg");
   const [showMeasForm,setShowMeasForm]=useState(false);
   const [measForm,setMeasForm]=useState({day:"",weight:"",neck:"",waist:"",hips:""});
-  const [customForm,setCustomForm]=useState({name:"",cal:"",p:"",c:"",f:"",fb:"",s:""});
+  const [customForm,setCustomForm]=useState({name:"",cat:"",cal:"",p:"",c:"",f:"",fb:"",s:""});
 
   // Zakładka i podzakładka wynikają z adresu; "/" idzie na stabilizację —
   // aplikacja pyta „jak jest", zanim pokaże listy.
@@ -545,17 +549,8 @@ export default function App() {
     if(!selFood||!(gramsNum>0))return;
     const ratio=gramsNum/100;
     const r1=v=>Math.round((v||0)*ratio*10)/10;
-    // Produkt z Open Food Facts trafia najpierw do naszego katalogu — serwer
-    // sam pobiera wartości po kodzie kreskowym, nie ufając temu, co przyszło
-    // z przeglądarki.
-    let foodId=selFood.id??null;
-    if(selFood.offCode){
-      const imported=await api.offImport(selFood.offCode);
-      foodId=imported.id;
-      await Promise.all([reloadFoods(foodQuery()),api.foodCategories().then(setFoodCats)]);
-    }
     await api.addMeal({
-      day:calDate,foodId,name:selFood.name,grams:gramsNum,
+      day:calDate,foodId:selFood.id??null,name:selFood.name,grams:gramsNum,
       kcal:Math.round(selFood.kcal*ratio),
       proteinG:r1(selFood.proteinG),carbsG:r1(selFood.carbsG),
       fatG:r1(selFood.fatG),fiberG:r1(selFood.fiberG),saltG:r1(selFood.saltG),
@@ -590,36 +585,59 @@ export default function App() {
     return()=>{document.removeEventListener("keydown",onKey);document.body.style.overflow=prev;};
   },[modal]);
   const closeCustomForm=()=>{
-    setCustomForm({name:"",cal:"",p:"",c:"",f:"",fb:"",s:""});
+    setCustomForm({name:"",cat:"",cal:"",p:"",c:"",f:"",fb:"",s:""});
     setShowCustomForm(false);setEditFoodId(null);
   };
   const startEditFood=food=>{
     setEditFoodId(food.id);
-    setCustomForm({name:food.name,cal:String(food.kcal),p:String(food.proteinG),
+    setCustomForm({name:food.name,cat:FOOD_CATEGORIES.includes(food.category)?food.category:"",cal:String(food.kcal),p:String(food.proteinG),
       c:String(food.carbsG),f:String(food.fatG),fb:String(food.fiberG),s:String(food.saltG)});
     setShowCustomForm(true);
   };
+  // Produkt świeżo dodany do katalogu: przejście do katalogu z nim
+  // zaznaczonym — zostaje tylko wpisać gramaturę.
+  const showInCatalog=row=>{
+    setOffResults(null);setOffQuery("");setOffInfo(null);
+    setSelCat("Wszystkie");setSearch(row.name);setSelFood(row);setFoodTab("local");
+  };
   const saveCustomFood=()=>run(async()=>{
-    const {name,cal,p,c,f,fb,s}=customForm;
+    const {name,cat,cal,p,c,f,fb,s}=customForm;
     const kcal=parseDecimal(cal);
-    if(!name.trim()||cal===""||!Number.isFinite(kcal))return;
+    if(!name.trim()||!cat||cal===""||!Number.isFinite(kcal))return;
     // Błonnik i sól mają własne pierścienie i dzienne cele, więc produkt bez
     // nich zaniżałby dzienną sumę zamiast po prostu jej nie ruszać.
     // Pola przyjmują kropkę i przecinek; puste albo samo „," liczy się jako zero.
     const g=v=>parseDecimal(v)||0;
-    const body={name,kcal,proteinG:g(p),carbsG:g(c),fatG:g(f),fiberG:g(fb),saltG:g(s)};
+    const body={name,category:cat,kcal,proteinG:g(p),carbsG:g(c),fatG:g(f),fiberG:g(fb),saltG:g(s)};
     // Poprawka katalogu nie rusza wpisów w dzienniku — te trzymają wartości
     // z chwili dodania i opisują zjedzony posiłek, a nie dzisiejszy katalog.
-    if(editFoodId)await api.patchFood(editFoodId,body);
-    else await api.addFood(body);
-    await Promise.all([reloadFoods(foodQuery()),api.foodCategories().then(setFoodCats)]);
-    closeCustomForm();
+    if(editFoodId){
+      const row=await api.patchFood(editFoodId,body);
+      // Zaznaczony produkt ma pokazywać poprawione wartości, nie stare.
+      if(selFood?.id===row.id)setSelFood(row);
+      await Promise.all([reloadFoods(foodQuery()),api.foodCategories().then(setFoodCats)]);
+      closeCustomForm();
+    }else{
+      const row=await api.addFood(body);
+      closeCustomForm();
+      showInCatalog(row);
+      await api.foodCategories().then(setFoodCats);
+    }
   });
-  const deleteCustomFood=id=>run(async()=>{
+  // Import wybranego wyniku z Open Food Facts do katalogu. Serwer sam pobiera
+  // wartości po kodzie kreskowym, nie ufając temu, co przyszło z przeglądarki.
+  const importOff=()=>run(async()=>{
+    if(!selFood?.offCode)return;
+    const row=await api.offImport(selFood.offCode,offCat||undefined);
+    showInCatalog(row);
+    await api.foodCategories().then(setFoodCats);
+  });
+  const deleteCatalogFood=id=>run(async()=>{
     await api.deleteFood(id);
     // Kasowanie produktu, który akurat siedzi w formularzu, zostawiłoby
     // otwartą edycję czegoś, czego już nie ma.
     if(editFoodId===id)closeCustomForm();
+    if(selFood?.id===id)setSelFood(null);
     await Promise.all([reloadFoods(foodQuery()),api.foodCategories().then(setFoodCats)]);
   });
 
@@ -682,8 +700,8 @@ export default function App() {
   // Open Food Facts filtruje serwer, dania mieszczą się w pamięci i filtrują
   // się lokalnie, katalog filtruje baza (a lokalnie tylko dla natychmiastowego
   // podglądu w czasie 250 ms opóźnienia).
-  const filtered=foodTab==="off"
-    ?(offResults||[]).map(r=>({...r,offCode:r.code,category:"🌍 Open Food Facts"}))
+  const filtered=foodTab==="new"
+    ?(offResults||[]).map(r=>({...r,offCode:r.code}))
     :foodTab==="dish"
       ?dishes.filter(d=>d.name.toLowerCase().includes(search.toLowerCase()))
       :foods.filter(f=>(selCat==="Wszystkie"||f.category===selCat)
@@ -698,7 +716,7 @@ export default function App() {
   if(!user)return <LoginScreen notice={loginNotice} onLogged={u=>{setLoginNotice("");setUser(u);setLoading(true);}}/>;
   if(loading)return splash("Ładowanie…");
 
-  const ctx={ goals, goalCat, setGoalCat, goalsByHabit, addGoal, patchGoal, deleteGoal, linkHabit, addHabitToGoal, habView, setHabView, stabView, setStabView, addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteRecipe, deleteAvoid, deleteCheckin, deleteCustomFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, dishes, editTimeId, ensureYear, error, exEntry, exHistory, exLast, expandedHabit, filtered, foodCats, foodTab, foods, foodsTruncated, getStreak, getView, getWeeklyRate, grams, gramsNum, habCat, setHabCat, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, newDuration, setNewDuration, newRequired, setNewRequired, updateRequired, offInfo, offLoading, offQuery, offResults, openGroups, philOpen, philRule, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, openExHistory, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, saveEx, savePlan, saveRecipe, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setFoodTab, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffInfo, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPhilOpen, setPhilRule, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleDish, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
+  const ctx={ goals, goalCat, setGoalCat, goalsByHabit, addGoal, patchGoal, deleteGoal, linkHabit, addHabitToGoal, habView, setHabView, stabView, setStabView, addAvoid, addCheckin, addFood, addHabit, addKotwica, addMeasurement, authChecked, avoidItems, avoidName, avoidNote, bf, bfCol, bmiInfo, bmiTab, bmiVal, calDate, calcAll, chartMetric, checkins, ciIntensity, ciNote, ciSaved, ciState, closeCustomForm, closeModal, currentState, customForm, dailyTotals, dayEntries, dayGroups, dayLoading, days7, delKotwica, deleteRecipe, deleteAvoid, deleteCheckin, deleteCatalogFood, deleteHabit, deleteMeasurement, deletePlan, deletePrinciple, editAvoidId, editAvoidNote, editAvoidVal, editFoodId, editGramsId, editGramsVal, editNameId, editNameVal, editPrinciple, dishes, editTimeId, ensureYear, error, exEntry, exHistory, exLast, expandedHabit, filtered, foodCats, foodTab, foods, foodsTruncated, importOff, offCat, setOffCat, getStreak, getView, getWeeklyRate, grams, gramsNum, habCat, setHabCat, habitLogs, habits, habitsByCat, isChecked, isMobile, isNarrow, isWide, isXWide, kotwicaEmoji, kotwicaInput, kotwice, lastCheckin, loadedYears, loading, loginNotice, logout, logsToMap, mainTab, measForm, measurements, modal, n1, newCat, newName, newTime, newDuration, setNewDuration, newRequired, setNewRequired, updateRequired, offInfo, offLoading, offQuery, offResults, openGroups, philOpen, philRule, plans, principleForm, principleOffset, principles, profile, profileToForm, progressView, reloadCheckins, reloadDay, reloadFoods, reloadLogs, reloadTotals, openExHistory, reloadUses, removeEntry, run, saveAvoid, saveCustomFood, saveEx, savePlan, saveRecipe, saveGrams, savePrinciple, saving, savingRef, search, searchOff, seedPrinciples, selCat, selFood, serverProfile, setAuthChecked, setAvoidItems, setAvoidName, setAvoidNote, setBmiTab, setCalDate, setChartMetric, setCheckins, setCiIntensity, setCiNote, setCiSaved, setCiState, setCustomForm, setDailyTotals, setDayEntries, setDayLoading, setEditAvoidId, setEditAvoidNote, setEditAvoidVal, setEditFoodId, setEditGramsId, setEditGramsVal, setEditNameId, setEditNameVal, setEditTimeId, setError, setFoodTab, setExpandedHabit, setFoodCats, setFoods, setGrams, setHabitLogs, setHabits, setKotwicaEmoji, setKotwicaInput, setKotwice, setLoading, setLoginNotice, setMainTab, setMeasForm, setMeasurements, setModal, setNewCat, setNewName, setNewTime, setOffInfo, setOffLoading, setOffQuery, setOffResults, setOpenGroups, setPhilOpen, setPhilRule, setPrincipleForm, setPrincipleOffset, setPrinciples, setProfile, setProgressView, setSaving, setSearch, setSelCat, setSelFood, setServerProfile, setShowAllTech, setShowAvoidForm, setShowCustomForm, setShowForm, setShowMeasForm, setShowPrinciples, setTechExpanded, setTechUses, setUser, setView, showAllTech, showAvoidForm, showCustomForm, showForm, showMeasForm, showPrinciples, sortedHabits, splash, startEditAvoid, startEditFood, tdee, techExpanded, techUses, todayCheckins, todayEntries, todayStr, toggleDish, toggleHabit, totToday, updateName, updateTime, useTechnique, user, year, yearSpan };
   // Ten sam przycisk ustawień stoi po lewej (telefon) albo po prawej (komputer).
   const gearBtn=(<button onClick={()=>setShowSettings(v=>!v)} aria-expanded={showSettings} aria-label="Ustawienia" title="Ustawienia"
       style={{background:showSettings?"#2a2a2a":"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,minWidth:44,minHeight:isMobile?44:36,
